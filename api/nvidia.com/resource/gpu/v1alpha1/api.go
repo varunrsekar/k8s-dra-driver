@@ -20,8 +20,9 @@ const (
 	GroupName = "gpu.resource.nvidia.com"
 	Version   = "v1alpha1"
 
-	GpuClaimParametersKind       = "GpuClaimParameters"
-	MigDeviceClaimParametersKind = "MigDeviceClaimParameters"
+	GpuClaimParametersKind        = "GpuClaimParameters"
+	MigDeviceClaimParametersKind  = "MigDeviceClaimParameters"
+	VfioDeviceClaimParametersKind = "VfioDeviceClaimParameters"
 )
 
 func UpdateDeviceClassParametersSpecWithDefaults(oldspec *DeviceClassParametersSpec) *DeviceClassParametersSpec {
@@ -52,6 +53,18 @@ func UpdateMigDeviceClaimParametersSpecWithDefaults(oldspec *MigDeviceClaimParam
 	newspec := &MigDeviceClaimParametersSpec{}
 	if oldspec != nil {
 		newspec = oldspec.DeepCopy()
+	}
+	return newspec
+}
+
+func UpdateVfioDeviceClaimParametersSpecWithDefaults(oldspec *VfioDeviceClaimParametersSpec) *VfioDeviceClaimParametersSpec {
+	newspec := &VfioDeviceClaimParametersSpec{}
+	if oldspec != nil {
+		newspec = oldspec.DeepCopy()
+	}
+	if newspec.Count == nil {
+		count := 1
+		newspec.Count = &count
 	}
 	return newspec
 }

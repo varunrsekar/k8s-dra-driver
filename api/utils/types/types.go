@@ -19,6 +19,7 @@ package types
 const (
 	GpuDeviceType     = "gpu"
 	MigDeviceType     = "mig"
+	VfioDeviceType    = "vfio"
 	UnknownDeviceType = "unknown"
 )
 

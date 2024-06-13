@@ -25,3 +25,5 @@ type DeviceClassParametersExpansion interface{}
 type GpuClaimParametersExpansion interface{}
 
 type MigDeviceClaimParametersExpansion interface{}
+
+type VfioDeviceClaimParametersExpansion interface{}

@@ -44,6 +44,10 @@ func (c *FakeGpuV1alpha1) MigDeviceClaimParameters(namespace string) v1alpha1.Mi
 	return &FakeMigDeviceClaimParameters{c, namespace}
 }
 
+func (c *FakeGpuV1alpha1) VfioDeviceClaimParameterses(namespace string) v1alpha1.VfioDeviceClaimParametersInterface {
+	return &FakeVfioDeviceClaimParameterses{c, namespace}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeGpuV1alpha1) RESTClient() rest.Interface {

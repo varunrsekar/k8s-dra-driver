@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
+	"github.com/google/uuid"
 	"k8s.io/klog/v2"
 
 	nascrd "github.com/NVIDIA/k8s-dra-driver/api/nvidia.com/resource/gpu/nas/v1alpha1"
@@ -54,6 +55,12 @@ type MigDeviceInfo struct {
 	ciInfo  *nvml.ComputeInstanceInfo
 }
 
+type VfioDeviceInfo struct {
+	uuid    string
+	parent  *GPUInfo
+	profile *VfioProfile
+}
+
 type PreparedGpus struct {
 	Devices []*GpuInfo
 }
@@ -62,9 +69,14 @@ type PreparedMigDevices struct {
 	Devices []*MigDeviceInfo
 }
 
+type PreparedVfioDevices struct {
+	Devices []*VfioDeviceInfo
+}
+
 type PreparedDevices struct {
 	Gpu              *PreparedGpus
 	Mig              *PreparedMigDevices
+	Vfio             *PreparedVfioDevices
 	MpsControlDaemon *MpsControlDaemon
 }
 
@@ -74,6 +86,9 @@ func (d PreparedDevices) Type() string {
 	}
 	if d.Mig != nil {
 		return types.MigDeviceType
+	}
+	if d.Vfio != nil {
+		return types.VfioDeviceType
 	}
 	return types.UnknownDeviceType
 }
@@ -96,6 +111,10 @@ func (d *PreparedDevices) UUIDs() []string {
 			deviceStrings = append(deviceStrings, device.uuid)
 		}
 	case types.MigDeviceType:
+		for _, device := range d.Mig.Devices {
+			deviceStrings = append(deviceStrings, device.uuid)
+		}
+	case types.VfioDeviceType:
 		for _, device := range d.Mig.Devices {
 			deviceStrings = append(deviceStrings, device.uuid)
 		}
@@ -211,6 +230,8 @@ func (s *DeviceState) Prepare(ctx context.Context, claimUID string, allocated na
 		if err != nil {
 			return nil, fmt.Errorf("error setting up sharing: %w", err)
 		}
+	case types.VfioDeviceType:
+		prepared.Vfio, err = s.prepareVfioDevices(claimUID, allocated.Vfio)
 	}
 
 	err = s.cdi.CreateClaimSpecFile(claimUID, prepared)
@@ -245,6 +266,11 @@ func (s *DeviceState) Unprepare(ctx context.Context, claimUID string) error {
 			return fmt.Errorf("unprepare failed: %w", err)
 		}
 	case types.MigDeviceType:
+		err := s.unprepareMigDevices(claimUID, s.prepared[claimUID])
+		if err != nil {
+			return fmt.Errorf("unprepare failed: %w", err)
+		}
+	case types.VfioDeviceType:
 		err := s.unprepareMigDevices(claimUID, s.prepared[claimUID])
 		if err != nil {
 			return fmt.Errorf("unprepare failed: %w", err)
@@ -319,6 +345,20 @@ func (s *DeviceState) prepareMigDevices(claimUID string, allocated *nascrd.Alloc
 	}
 
 	return prepared, nil
+}
+
+func (s *DeviceState) prepareVfioDevices(claimUID string, allocated *nascrd.AllocatedVfioDevices) (*PreparedVfioDevices, error) {
+	prepared := &PreparedVfioDevices{}
+
+	for _, device := range allocated.Devices {
+		if _, exists := s.allocatable[device.ParentUUID]; !exists {
+			return nil, fmt.Errorf("allocated GPU does not exist: %v", device.ParentUUID)
+		}
+		parent := s.allocatable[device.ParentUUID]
+		vfioDeviceInfo := &VfioDeviceInfo{uuid: uuid.NewString(), parent: parent.GpuInfo}
+		prepared.Devices = append(prepared.Devices, vfioDeviceInfo)
+
+	}
 }
 
 func (s *DeviceState) unprepareGpus(claimUID string, devices *PreparedDevices) error {
@@ -497,6 +537,11 @@ func (s *DeviceState) syncPreparedDevicesFromCRDSpec(ctx context.Context, spec *
 			if err != nil {
 				return fmt.Errorf("error setting up sharing: %w", err)
 			}
+		case types.VfioDeviceType:
+			prepared[claim].Vfio = &PreparedVfioDevices{}
+			for _, d := range devices.Vfio.Devices {
+				prepared[claim].Vfio.Devices = append(prepared[claim].Vfio.Devices, gpus[d.UUID].VfioInfo)
+			}
 		}
 	}
 
@@ -535,6 +580,14 @@ func (s *DeviceState) syncPreparedDevicesToCRDSpec(spec *nascrd.NodeAllocationSt
 					Placement:  placement,
 				}
 				prepared.Mig.Devices = append(prepared.Mig.Devices, outdevice)
+			}
+		case types.VfioDeviceType:
+			prepared.Vfio = &nascrd.PreparedVfioDevices{}
+			for _, device := range devices.Vfio.Devices {
+				outdevice := nascrd.PreparedGpu{
+					UUID: device.uuid,
+				}
+				prepared.Vfio.Devices = append(prepared.Vfio.Devices, outdevice)
 			}
 		}
 		outcas[claim] = prepared

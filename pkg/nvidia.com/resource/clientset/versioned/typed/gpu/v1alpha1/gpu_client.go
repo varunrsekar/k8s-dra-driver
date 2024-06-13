@@ -32,6 +32,7 @@ type GpuV1alpha1Interface interface {
 	DeviceClassParametersGetter
 	GpuClaimParametersGetter
 	MigDeviceClaimParametersGetter
+	VfioDeviceClaimParametersesGetter
 }
 
 // GpuV1alpha1Client is used to interact with features provided by the gpu.resource.nvidia.com group.
@@ -53,6 +54,10 @@ func (c *GpuV1alpha1Client) GpuClaimParameters(namespace string) GpuClaimParamet
 
 func (c *GpuV1alpha1Client) MigDeviceClaimParameters(namespace string) MigDeviceClaimParametersInterface {
 	return newMigDeviceClaimParameters(c, namespace)
+}
+
+func (c *GpuV1alpha1Client) VfioDeviceClaimParameterses(namespace string) VfioDeviceClaimParametersInterface {
+	return newVfioDeviceClaimParameterses(c, namespace)
 }
 
 // NewForConfig creates a new GpuV1alpha1Client for the given config.
