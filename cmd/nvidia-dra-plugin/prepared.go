@@ -25,9 +25,10 @@ type PreparedDevices []*PreparedDeviceGroup
 type PreparedClaims map[string]PreparedDevices
 
 type PreparedDevice struct {
-	Gpu         *PreparedGpu         `json:"gpu"`
-	Mig         *PreparedMigDevice   `json:"mig"`
-	ImexChannel *PreparedImexChannel `json:"imexChannel"`
+	Gpu         *PreparedGpu           `json:"gpu"`
+	Mig         *PreparedMigDevice     `json:"mig"`
+	ImexChannel *PreparedImexChannel   `json:"imexChannel"`
+	VfioPci     *PreparedVfioPciDevice `json:"vfioPci"`
 }
 
 type PreparedGpu struct {
@@ -45,6 +46,11 @@ type PreparedImexChannel struct {
 	Device *drapbv1.Device  `json:"device"`
 }
 
+type PreparedVfioPciDevice struct {
+	Info   *VfioPciDeviceInfo `json:"info"`
+	Device *drapbv1.Device    `json:"device"`
+}
+
 type PreparedDeviceGroup struct {
 	Devices     PreparedDeviceList `json:"devices"`
 	ConfigState DeviceConfigState  `json:"configState"`
@@ -60,6 +66,9 @@ func (d PreparedDevice) Type() string {
 	if d.ImexChannel != nil {
 		return ImexChannelType
 	}
+	if d.VfioPci != nil {
+		return VfioPciDeviceType
+	}
 	return UnknownDeviceType
 }
 
@@ -71,6 +80,8 @@ func (d *PreparedDevice) CanonicalName() string {
 		return d.Mig.Info.CanonicalName()
 	case ImexChannelType:
 		return d.ImexChannel.Info.CanonicalName()
+	case VfioPciDeviceType:
+		return d.VfioPci.Info.CanonicalName()
 	}
 	panic("unexpected type for AllocatableDevice")
 }
@@ -83,6 +94,8 @@ func (d *PreparedDevice) CanonicalIndex() string {
 		return d.Mig.Info.CanonicalIndex()
 	case ImexChannelType:
 		return d.ImexChannel.Info.CanonicalIndex()
+	case VfioPciDeviceType:
+		return d.VfioPci.Info.CanonicalIndex()
 	}
 	panic("unexpected type for AllocatableDevice")
 }
@@ -117,6 +130,16 @@ func (l PreparedDeviceList) ImexChannels() PreparedDeviceList {
 	return devices
 }
 
+func (l PreparedDeviceList) VfioPciDevices() PreparedDeviceList {
+	var devices PreparedDeviceList
+	for _, device := range l {
+		if device.Type() == VfioPciDeviceType {
+			devices = append(devices, device)
+		}
+	}
+	return devices
+}
+
 func (d PreparedDevices) GetDevices() []*drapbv1.Device {
 	var devices []*drapbv1.Device
 	for _, group := range d {
@@ -135,6 +158,8 @@ func (g *PreparedDeviceGroup) GetDevices() []*drapbv1.Device {
 			devices = append(devices, device.Mig.Device)
 		case ImexChannelType:
 			devices = append(devices, device.ImexChannel.Device)
+		case VfioPciDeviceType:
+			devices = append(devices, device.VfioPci.Device)
 		}
 	}
 	return devices
@@ -190,4 +215,24 @@ func (d PreparedDevices) MigDeviceUUIDs() []string {
 		uuids = append(uuids, group.MigDeviceUUIDs()...)
 	}
 	return uuids
+}
+
+func (l PreparedDeviceList) PciAddresses() []string {
+	var uuids []string
+	for _, device := range l.VfioPciDevices() {
+		uuids = append(uuids, device.VfioPci.Info.parent.pciAddress)
+	}
+	return uuids
+}
+
+func (g *PreparedDeviceGroup) PciAddresses() []string {
+	return g.Devices.VfioPciDevices().PciAddresses()
+}
+
+func (d PreparedDevices) PciAddresses() []string {
+	var pciAddresses []string
+	for _, group := range d {
+		pciAddresses = append(pciAddresses, group.PciAddresses()...)
+	}
+	return pciAddresses
 }
