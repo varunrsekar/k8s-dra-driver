@@ -26,7 +26,6 @@ type AllocatableDevice struct {
 	Gpu         *GpuInfo
 	Mig         *MigDeviceInfo
 	ImexChannel *ImexChannelInfo
-	VfioPci     *VfioPciDeviceInfo
 }
 
 func (d AllocatableDevice) Type() string {
@@ -39,9 +38,6 @@ func (d AllocatableDevice) Type() string {
 	if d.ImexChannel != nil {
 		return ImexChannelType
 	}
-	if d.VfioPci != nil {
-		return VfioPciDeviceType
-	}
 	return UnknownDeviceType
 }
 
@@ -53,8 +49,6 @@ func (d *AllocatableDevice) CanonicalName() string {
 		return d.Mig.CanonicalName()
 	case ImexChannelType:
 		return d.ImexChannel.CanonicalName()
-	case VfioPciDeviceType:
-		return d.VfioPci.CanonicalName()
 	}
 	panic("unexpected type for AllocatableDevice")
 }
@@ -67,8 +61,6 @@ func (d *AllocatableDevice) CanonicalIndex() string {
 		return d.Mig.CanonicalIndex()
 	case ImexChannelType:
 		return d.ImexChannel.CanonicalIndex()
-	case VfioPciDeviceType:
-		return d.VfioPci.CanonicalIndex()
 	}
 	panic("unexpected type for AllocatableDevice")
 }
@@ -81,8 +73,6 @@ func (d *AllocatableDevice) GetDevice() resourceapi.Device {
 		return d.Mig.GetDevice()
 	case ImexChannelType:
 		return d.ImexChannel.GetDevice()
-	case VfioPciDeviceType:
-		return d.VfioPci.GetDevice()
 	}
 	panic("unexpected type for AllocatableDevice")
 }
@@ -114,8 +104,8 @@ func (d AllocatableDevices) UUIDs() []string {
 func (d AllocatableDevices) PciAddresses() []string {
 	var pciAddresses []string
 	for _, device := range d {
-		if device.Type() == VfioPciDeviceType {
-			pciAddresses = append(pciAddresses, device.VfioPci.parent.pciAddress)
+		if device.Type() == GpuDeviceType {
+			pciAddresses = append(pciAddresses, device.Gpu.pciAddress)
 		}
 	}
 	return pciAddresses
