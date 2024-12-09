@@ -18,16 +18,19 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 
+	"k8s.io/klog/v2"
 	cdiapi "tags.cncf.io/container-device-interface/pkg/cdi"
 	cdispec "tags.cncf.io/container-device-interface/specs-go"
 )
 
 const (
 	hostNamespaceMount     = "/proc/1/ns/mnt"
+	kernelIommuGroupPath   = "/sys/kernel/iommu_groups"
 	vfioPciModule          = "vfio_pci"
 	vfioPciDriver          = "vfio-pci"
 	nvidiaDriver           = "nvidia"
@@ -54,15 +57,39 @@ func NewVfioPciManager() *VfioPciManager {
 	}
 }
 
-// Init ensures the vfio-pci module is loaded on the host.
-func (vm *VfioPciManager) Init() error {
+// PreChecks tests if vfio-pci device allocations can be used.
+func (vm *VfioPciManager) Prechecks() error {
 	if !vm.isVfioPCIModuleLoaded() {
-		err := vm.loadVfioPciModule()
-		if err != nil {
-			return err
-		}
+		return fmt.Errorf("vfio_pci module is not loaded")
+	}
+	iommuEnabled, err := vm.isIommuEnabled()
+	if err != nil {
+		return err
+	}
+	if !iommuEnabled {
+		return fmt.Errorf("IOMMU is not enabled in the kernel")
 	}
 	return nil
+}
+
+func (vm *VfioPciManager) isIommuEnabled() (bool, error) {
+	f, err := os.Open(kernelIommuGroupPath)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	_, err = f.Readdirnames(1)
+	if err == io.EOF {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func (vm *VfioPciManager) isVfioPCIModuleLoaded() bool {
@@ -150,16 +177,18 @@ func changeDriver(pciAddress, driver string) error {
 }
 
 func unbindFromDriver(pciAddress, driverResetRetries string) error {
-	_, err := execCommandInHostNamespace(unbindFromDriverScript, []string{pciAddress, driverResetRetries}) //nolint:gosec
+	out, err := execCommandInHostNamespace(unbindFromDriverScript, []string{pciAddress, driverResetRetries}) //nolint:gosec
 	if err != nil {
+		klog.Errorf("Attempting to unbind %s from its driver failed; stdout: %s, err: %v", pciAddress, string(out), err)
 		return err
 	}
 	return nil
 }
 
 func bindToDriver(pciAddress, driver string) error {
-	_, err := execCommandInHostNamespace(bindToDriverScript, []string{pciAddress, driver}) //nolint:gosec
+	out, err := execCommandInHostNamespace(bindToDriverScript, []string{pciAddress, driver}) //nolint:gosec
 	if err != nil {
+		klog.Errorf("Attempting to bind %s to %s driver failed; stdout: %s, err: %v", pciAddress, driver, string(out), err)
 		return err
 	}
 	return nil

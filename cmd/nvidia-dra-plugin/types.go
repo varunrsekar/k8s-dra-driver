@@ -23,6 +23,10 @@ const (
 	UnknownDeviceType = "unknown"
 )
 
+const (
+	VfioPciDeviceClass = "vfiopci"
+)
+
 type UUIDProvider interface {
 	UUIDs() []string
 	GpuUUIDs() []string

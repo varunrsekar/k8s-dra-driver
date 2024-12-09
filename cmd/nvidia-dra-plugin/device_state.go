@@ -89,7 +89,14 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 	tsManager := NewTimeSlicingManager(nvdevlib)
 	mpsManager := NewMpsManager(config, nvdevlib, MpsRoot, hostDriverRoot, MpsControlDaemonTemplatePath)
 
-	vfioPciManager := NewVfioPciManager()
+	var vfioPciManager *VfioPciManager
+	if config.flags.deviceClasses.Has(VfioPciDeviceClass) {
+		vfioPciManager = NewVfioPciManager()
+		if err := vfioPciManager.Prechecks(); err != nil {
+			return nil, fmt.Errorf("unable to initialize vfio-pci manager: %v", err)
+		}
+
+	}
 
 	if err := cdi.CreateStandardDeviceSpecFile(allocatable); err != nil {
 		return nil, fmt.Errorf("unable to create base CDI spec file: %v", err)
@@ -109,11 +116,6 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 		config:            config,
 		nvdevlib:          nvdevlib,
 		checkpointManager: checkpointManager,
-	}
-
-	// Initialize the vfio-pci driver manager.
-	if err := vfioPciManager.Init(); err != nil {
-		return nil, fmt.Errorf("unable to initialize vfio-pci manager: %v", err)
 	}
 
 	checkpoints, err := state.checkpointManager.ListCheckpoints()

@@ -117,7 +117,7 @@ func newApp() *cli.App {
 		&cli.StringSliceFlag{
 			Name:    "device-classes",
 			Usage:   "The supported set of DRA device classes",
-			Value:   cli.NewStringSlice(GpuDeviceType, MigDeviceType, ImexChannelType),
+			Value:   cli.NewStringSlice(GpuDeviceType, MigDeviceType, ImexChannelType, VfioPciDeviceClass),
 			EnvVars: []string{"DEVICE_CLASSES"},
 		},
 	}
