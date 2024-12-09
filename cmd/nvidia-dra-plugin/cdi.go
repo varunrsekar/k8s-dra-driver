@@ -229,6 +229,9 @@ func (cdi *CDIHandler) CreateStandardDeviceSpecFile(allocatable AllocatableDevic
 func (cdi *CDIHandler) CreateClaimSpecFile(claimUID string, preparedDevices PreparedDevices) error {
 	// Generate claim specific specs for each device.
 	var deviceSpecs []cdispec.Device
+	commonEdits := &cdiapi.ContainerEdits{
+		ContainerEdits: &cdispec.ContainerEdits{},
+	}
 	for _, group := range preparedDevices {
 		// If there are no edits passed back as part of the device config state, skip it
 		if group.ConfigState.containerEdits == nil {
@@ -239,11 +242,12 @@ func (cdi *CDIHandler) CreateClaimSpecFile(claimUID string, preparedDevices Prep
 		for _, device := range group.Devices {
 			deviceSpec := cdispec.Device{
 				Name:           fmt.Sprintf("%s-%s", claimUID, device.CanonicalName()),
-				ContainerEdits: *group.ConfigState.containerEdits.ContainerEdits,
+				ContainerEdits: *group.ConfigState.perDeviceContainerEdits[device.CanonicalName()].ContainerEdits,
 			}
 
 			deviceSpecs = append(deviceSpecs, deviceSpec)
 		}
+		commonEdits = commonEdits.Append(*&group.ConfigState.containerEdits)
 	}
 
 	// Generate the claim specific device spec for this driver.
@@ -251,6 +255,7 @@ func (cdi *CDIHandler) CreateClaimSpecFile(claimUID string, preparedDevices Prep
 		spec.WithVendor(cdiVendor),
 		spec.WithClass(cdiClaimClass),
 		spec.WithDeviceSpecs(deviceSpecs),
+		spec.WithEdits(*commonEdits.ContainerEdits),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to creat CDI spec: %w", err)

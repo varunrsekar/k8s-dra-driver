@@ -38,9 +38,10 @@ type OpaqueDeviceConfig struct {
 }
 
 type DeviceConfigState struct {
-	MpsControlDaemonID string               `json:"mpsControlDaemonID"`
-	GpuConfig          *configapi.GpuConfig `json:"gpuConfig,omitempty"`
-	containerEdits     *cdiapi.ContainerEdits
+	MpsControlDaemonID      string               `json:"mpsControlDaemonID"`
+	GpuConfig               *configapi.GpuConfig `json:"gpuConfig,omitempty"`
+	containerEdits          *cdiapi.ContainerEdits
+	perDeviceContainerEdits map[string]*cdiapi.ContainerEdits
 }
 
 type DeviceState struct {
@@ -493,7 +494,8 @@ func (s *DeviceState) applyGpuDriverConfig(ctx context.Context, config *configap
 		if err != nil {
 			return nil, err
 		}
-		configState.containerEdits = configState.containerEdits.Append(s.vfioPciManager.GetCDIContainerEdits(info.Gpu))
+		configState.containerEdits = configState.containerEdits.Append(s.vfioPciManager.GetCommonCDIContainerEdits())
+		configState.perDeviceContainerEdits[info.Gpu.CanonicalName()] = s.vfioPciManager.GetCDIContainerEdits(info.Gpu)
 	}
 
 	return configState, nil

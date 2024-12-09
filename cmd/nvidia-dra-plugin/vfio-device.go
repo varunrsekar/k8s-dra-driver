@@ -204,6 +204,18 @@ func (vm *VfioPciManager) getIommuGroupForVfioPciDevice(pciAddress string) strin
 
 }
 
+func (vm *VfioPciManager) GetCommonCDIContainerEdits() *cdiapi.ContainerEdits {
+	return &cdiapi.ContainerEdits{
+		ContainerEdits: &cdispec.ContainerEdits{
+			DeviceNodes: []*cdispec.DeviceNode{
+				{
+					Path: filepath.Join(vm.vfioDevicesRoot, "vfio"),
+				},
+			},
+		},
+	}
+}
+
 // GetCDIContainerEdits returns the CDI spec for a container to have access to the GPU while bound on vfio-pci driver.
 func (vm *VfioPciManager) GetCDIContainerEdits(info *GpuInfo) *cdiapi.ContainerEdits {
 	iommuGroup := vm.getIommuGroupForVfioPciDevice(info.PciAddress)
