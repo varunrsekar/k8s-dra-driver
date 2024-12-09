@@ -66,5 +66,9 @@ nodes:
   # on the kind nodes.
   - hostPath: /usr/bin/nvidia-ctk
     containerPath: /usr/bin/nvidia-ctk
-  - hostPath: /sys
-    containerPath: /sys
+  - hostPath: /sys/bus
+    containerPath: /sys/bus
+    readOnly: false
+  - hostPath: /dev/vfio
+    containerPath: /dev/vfio
+    readOnly: false
