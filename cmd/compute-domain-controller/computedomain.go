@@ -70,7 +70,7 @@ func NewComputeDomainManager(config *ManagerConfig) *ComputeDomainManager {
 		informer: informer,
 	}
 	m.daemonSetManager = NewDaemonSetManager(config, m.Get)
-	m.resourceClaimTemplateManager = NewWorkloadResourceClaimTemplateManager(config)
+	m.resourceClaimTemplateManager = NewWorkloadResourceClaimTemplateManager(config, m.Get)
 
 	return m
 }

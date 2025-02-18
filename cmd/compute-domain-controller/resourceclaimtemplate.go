@@ -58,12 +58,15 @@ type ResourceClaimTemplateTemplateData struct {
 }
 
 type BaseResourceClaimTemplateManager struct {
-	config        *ManagerConfig
-	waitGroup     sync.WaitGroup
-	cancelContext context.CancelFunc
+	config           *ManagerConfig
+	waitGroup        sync.WaitGroup
+	cancelContext    context.CancelFunc
+	getComputeDomain GetComputeDomainFunc
 
 	factory  informers.SharedInformerFactory
 	informer cache.SharedIndexInformer
+
+	cleanupManager *CleanupManager[*resourceapi.ResourceClaimTemplate]
 }
 
 type DaemonSetResourceClaimTemplateManager struct {
@@ -74,7 +77,7 @@ type WorkloadResourceClaimTemplateManager struct {
 	*BaseResourceClaimTemplateManager
 }
 
-func newBaseResourceClaimTemplateManager(config *ManagerConfig, labelSelector *metav1.LabelSelector, namespace string) *BaseResourceClaimTemplateManager {
+func newBaseResourceClaimTemplateManager(config *ManagerConfig, getComputeDomain GetComputeDomainFunc, labelSelector *metav1.LabelSelector, namespace string) *BaseResourceClaimTemplateManager {
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		config.clientsets.Core,
 		informerResyncPeriod,
@@ -87,10 +90,12 @@ func newBaseResourceClaimTemplateManager(config *ManagerConfig, labelSelector *m
 	informer := factory.Resource().V1beta1().ResourceClaimTemplates().Informer()
 
 	m := &BaseResourceClaimTemplateManager{
-		config:   config,
-		factory:  factory,
-		informer: informer,
+		config:           config,
+		getComputeDomain: getComputeDomain,
+		factory:          factory,
+		informer:         informer,
 	}
+	m.cleanupManager = NewCleanupManager[*resourceapi.ResourceClaimTemplate](informer, getComputeDomain, m.cleanup)
 
 	return m
 }
@@ -119,6 +124,10 @@ func (m *BaseResourceClaimTemplateManager) Start(ctx context.Context) (rerr erro
 
 	if !cache.WaitForCacheSync(ctx.Done(), m.informer.HasSynced) {
 		return fmt.Errorf("informer cache sync for ResourceClaimTemplate failed")
+	}
+
+	if err := m.cleanupManager.Start(ctx); err != nil {
+		return fmt.Errorf("error starting cleanup manager: %w", err)
 	}
 
 	return nil
@@ -234,7 +243,17 @@ func (m *BaseResourceClaimTemplateManager) AssertRemoved(ctx context.Context, cd
 	return nil
 }
 
-func NewDaemonSetResourceClaimTemplateManager(config *ManagerConfig) *DaemonSetResourceClaimTemplateManager {
+func (m *BaseResourceClaimTemplateManager) cleanup(ctx context.Context, cdUID string) error {
+	if err := m.Delete(ctx, cdUID); err != nil {
+		return fmt.Errorf("error deleting ResourceClaimTemplate: %w", err)
+	}
+	if err := m.RemoveFinalizer(ctx, cdUID); err != nil {
+		return fmt.Errorf("error removing ResourceClaimTemplate finalizer: %w", err)
+	}
+	return nil
+}
+
+func NewDaemonSetResourceClaimTemplateManager(config *ManagerConfig, getComputeDomain GetComputeDomainFunc) *DaemonSetResourceClaimTemplateManager {
 	labelSelector := &metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{
@@ -249,7 +268,7 @@ func NewDaemonSetResourceClaimTemplateManager(config *ManagerConfig) *DaemonSetR
 		},
 	}
 
-	base := newBaseResourceClaimTemplateManager(config, labelSelector, config.driverNamespace)
+	base := newBaseResourceClaimTemplateManager(config, getComputeDomain, labelSelector, config.driverNamespace)
 
 	m := &DaemonSetResourceClaimTemplateManager{
 		BaseResourceClaimTemplateManager: base,
@@ -295,7 +314,7 @@ func (m *DaemonSetResourceClaimTemplateManager) Create(ctx context.Context, name
 	return rct, nil
 }
 
-func NewWorkloadResourceClaimTemplateManager(config *ManagerConfig) *WorkloadResourceClaimTemplateManager {
+func NewWorkloadResourceClaimTemplateManager(config *ManagerConfig, getComputeDomain GetComputeDomainFunc) *WorkloadResourceClaimTemplateManager {
 	labelSelector := &metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{
@@ -310,7 +329,7 @@ func NewWorkloadResourceClaimTemplateManager(config *ManagerConfig) *WorkloadRes
 		},
 	}
 
-	base := newBaseResourceClaimTemplateManager(config, labelSelector, "")
+	base := newBaseResourceClaimTemplateManager(config, getComputeDomain, labelSelector, "")
 
 	m := &WorkloadResourceClaimTemplateManager{
 		BaseResourceClaimTemplateManager: base,

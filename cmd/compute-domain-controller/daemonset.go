@@ -62,6 +62,7 @@ type DaemonSetManager struct {
 	informer cache.SharedIndexInformer
 
 	resourceClaimTemplateManager *DaemonSetResourceClaimTemplateManager
+	cleanupManager               *CleanupManager[*appsv1.DaemonSet]
 	podManagers                  map[string]*DaemonSetPodManager
 }
 
@@ -93,7 +94,8 @@ func NewDaemonSetManager(config *ManagerConfig, getComputeDomain GetComputeDomai
 		informer:         informer,
 		podManagers:      make(map[string]*DaemonSetPodManager),
 	}
-	m.resourceClaimTemplateManager = NewDaemonSetResourceClaimTemplateManager(config)
+	m.resourceClaimTemplateManager = NewDaemonSetResourceClaimTemplateManager(config, getComputeDomain)
+	m.cleanupManager = NewCleanupManager[*appsv1.DaemonSet](informer, getComputeDomain, m.cleanup)
 
 	return m
 }
@@ -138,6 +140,10 @@ func (m *DaemonSetManager) Start(ctx context.Context) (rerr error) {
 
 	if err := m.resourceClaimTemplateManager.Start(ctx); err != nil {
 		return fmt.Errorf("error starting ResourceClaimTemplate manager: %w", err)
+	}
+
+	if err := m.cleanupManager.Start(ctx); err != nil {
+		return fmt.Errorf("error starting cleanup manager: %w", err)
 	}
 
 	return nil
@@ -397,5 +403,15 @@ func (m *DaemonSetManager) removeAllPodManagers() error {
 		delete(m.podManagers, key)
 	}
 	m.Unlock()
+	return nil
+}
+
+func (m *DaemonSetManager) cleanup(ctx context.Context, cdUID string) error {
+	if err := m.Delete(ctx, cdUID); err != nil {
+		return fmt.Errorf("error deleting DaemonSet: %w", err)
+	}
+	if err := m.RemoveFinalizer(ctx, cdUID); err != nil {
+		return fmt.Errorf("error removing DaemonSet finalizer: %w", err)
+	}
 	return nil
 }

@@ -41,6 +41,7 @@ const (
 	computeDomainLabelKey = "resource.nvidia.com/computeDomain"
 
 	informerResyncPeriod = 10 * time.Minute
+	cleanupInterval      = 10 * time.Minute
 
 	ComputeDomainDaemonSettingsRoot       = DriverPluginPath + "/domains"
 	ComputeDomainDaemonConfigTemplatePath = "/templates/compute-domain-daemon-config.tmpl.cfg"
@@ -104,6 +105,12 @@ func (m *ComputeDomainManager) Start(ctx context.Context) (rerr error) {
 	go func() {
 		defer m.waitGroup.Done()
 		m.factory.Start(ctx.Done())
+	}()
+
+	m.waitGroup.Add(1)
+	go func() {
+		defer m.waitGroup.Done()
+		m.periodicCleanup(ctx)
 	}()
 
 	if !cache.WaitForCacheSync(ctx.Done(), m.informer.HasSynced) {
@@ -348,4 +355,64 @@ func (m *ComputeDomainManager) GetComputeDomain(ctx context.Context, cdUID strin
 		return nil, fmt.Errorf("failed to cast to ComputeDomain")
 	}
 	return cd, nil
+}
+
+func (m *ComputeDomainManager) periodicCleanup(ctx context.Context) {
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			klog.V(6).Infof("Running periodic sync to remove artifacts owned by stale ComputeDomain")
+
+			_, err := os.Stat(m.configFilesRoot)
+			if os.IsNotExist(err) {
+				continue
+			}
+			if err != nil {
+				klog.Errorf("error checking for existenc of directory '%s': %v", m.configFilesRoot, err)
+				continue
+			}
+
+			entries, err := os.ReadDir(m.configFilesRoot)
+			if err != nil {
+				klog.Errorf("error reading entries under directory '%s': %v", m.configFilesRoot, err)
+				continue
+			}
+
+			for _, e := range entries {
+				if !e.IsDir() {
+					continue
+				}
+
+				uid := e.Name()
+				path := filepath.Join(m.configFilesRoot, e.Name())
+
+				computeDomain, err := m.GetComputeDomain(ctx, uid)
+				if err != nil {
+					klog.Errorf("error getting ComputeDomain: %v", err)
+					continue
+				}
+
+				if computeDomain != nil {
+					continue
+				}
+
+				klog.Infof("Stale artifacts found for ComputeDomain '%s', running cleanup", uid)
+
+				if err := os.RemoveAll(path); err != nil {
+					klog.Errorf("error removing artifacts directory for ComputeDomain '%s': %v", uid, err)
+					continue
+				}
+
+				if err := m.RemoveNodeLabel(ctx, uid); err != nil {
+					klog.Errorf("error removing Node label for ComputeDomain '%s': %v", uid, err)
+					continue
+				}
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
 }
