@@ -27,7 +27,10 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"k8s.io/klog/v2"
 	"k8s.io/mount-utils"
+
+	"github.com/google/uuid"
 
 	nvdev "github.com/NVIDIA/go-nvlib/pkg/nvlib/device"
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
@@ -88,6 +91,21 @@ func newDeviceLib(driverRoot root) (*deviceLib, error) {
 	return &d, nil
 }
 
+func (l deviceLib) init() error {
+	ret := l.nvmllib.Init()
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("error initializing NVML: %v", ret)
+	}
+	return nil
+}
+
+func (l deviceLib) alwaysShutdown() {
+	ret := l.nvmllib.Shutdown()
+	if ret != nvml.SUCCESS {
+		klog.Warningf("error shutting down NVML: %v", ret)
+	}
+}
+
 func (l deviceLib) enumerateAllPossibleDevices(config *Config) (AllocatableDevices, error) {
 	alldevices := make(AllocatableDevices)
 
@@ -140,6 +158,66 @@ func (l deviceLib) enumerateComputeDomainDaemons(config *Config) (AllocatableDev
 	}
 	devices[computeDomainDaemonInfo.CanonicalName()] = deviceInfo
 	return devices, nil
+}
+
+func (l deviceLib) getCliqueID() (string, error) {
+	if err := l.init(); err != nil {
+		return "", fmt.Errorf("error initializing deviceLib: %w", err)
+	}
+	defer l.alwaysShutdown()
+
+	uniqueClusterUUIDs := make(map[string]struct{})
+	uniqueCliqueIDs := make(map[string]struct{})
+
+	err := l.VisitDevices(func(i int, d nvdev.Device) error {
+		isFabricAttached, err := d.IsFabricAttached()
+		if err != nil {
+			return fmt.Errorf("error checking if device is fabric attached: %w", err)
+		}
+		if !isFabricAttached {
+			return nil
+		}
+
+		info, ret := d.GetGpuFabricInfo()
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("failed to get GPU fabric info: %w", ret)
+		}
+
+		clusterUUID, err := uuid.FromBytes(info.ClusterUuid[:])
+		if err != nil {
+			return fmt.Errorf("invalid cluster UUID: %w", err)
+		}
+
+		cliqueID := fmt.Sprintf("%d", info.CliqueId)
+
+		uniqueClusterUUIDs[clusterUUID.String()] = struct{}{}
+		uniqueCliqueIDs[cliqueID] = struct{}{}
+
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("error getting fabric information from one or more devices: %w", err)
+	}
+
+	if len(uniqueClusterUUIDs) == 0 && len(uniqueCliqueIDs) == 0 {
+		return "", nil
+	}
+
+	if len(uniqueClusterUUIDs) != 1 {
+		return "", fmt.Errorf("unexpected number of unique ClusterUUIDs found on devices")
+	}
+
+	if len(uniqueCliqueIDs) != 1 {
+		return "", fmt.Errorf("unexpected number of unique CliqueIDs found on devices")
+	}
+
+	for clusterUUID := range uniqueClusterUUIDs {
+		for cliqueID := range uniqueCliqueIDs {
+			return fmt.Sprintf("%s.%s", clusterUUID, cliqueID), nil
+		}
+	}
+
+	return "", fmt.Errorf("unexpected return")
 }
 
 func (l deviceLib) getImexChannelCount() (int, error) {

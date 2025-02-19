@@ -23,7 +23,6 @@ import (
 	"sync"
 
 	resourceapi "k8s.io/api/resource/v1beta1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 	drapbv1 "k8s.io/kubelet/pkg/apis/dra/v1beta1"
@@ -89,12 +88,11 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 		return nil, fmt.Errorf("unable to create CDI handler: %w", err)
 	}
 
-	node, err := config.clientsets.Core.CoreV1().Nodes().Get(ctx, config.flags.nodeName, metav1.GetOptions{})
+	cliqueID, err := nvdevlib.getCliqueID()
 	if err != nil {
-		return nil, fmt.Errorf("error getting Node: %w", err)
+		return nil, fmt.Errorf("error getting cliqueID: %w", err)
 	}
 
-	cliqueID := node.Labels[CliqueIDLabelKey]
 	computeDomainManager := NewComputeDomainManager(config, ComputeDomainDaemonSettingsRoot, cliqueID)
 
 	if err := cdi.CreateStandardDeviceSpecFile(allocatable); err != nil {
