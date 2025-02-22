@@ -26,6 +26,8 @@ kind: Pod
 metadata:
   namespace: gpu-test2
   name: pod
+  labels:
+    app: pod
 spec:
   containers:
   - name: ctr0
