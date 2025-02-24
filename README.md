@@ -61,7 +61,7 @@ First, create a `kind` cluster to run the demo:
 
 From here we will build the image for the example resource driver:
 ```console
-./demo/clusters/kind/build-dra-driver.sh
+./demo/clusters/kind/build-dra-driver-gpu.sh
 ```
 
 This also makes the built images available to the `kind` cluster.
@@ -76,8 +76,10 @@ This should show two pods running in the `nvidia` namespace:
 kubectl get pods -n nvidia
 ```
 ```
-NAME                                            READY   STATUS    RESTARTS   AGE
-k8s-dra-driver-gpu-kubelet-plugin-5vfp9         1/1     Running   0          69s
+$ kubectl get pods -n nvidia
+NAME                                                READY   STATUS    RESTARTS   AGE
+nvidia-dra-driver-gpu-controller-697898fc6b-g85zx   1/1     Running   0          40s
+nvidia-dra-driver-gpu-kubelet-plugin-kkwf7          2/2     Running   0          40s
 ```
 
 ### Run the examples by following the steps in the demo script
