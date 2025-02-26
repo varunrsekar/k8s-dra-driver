@@ -12,29 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 default:
-  image: docker:stable
+  image: docker:24.0.6
   services:
-    - name: docker:dind
+    - name: docker:24.0.6-dind
       command: ["--experimental"]
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
-  BUILDIMAGE: "${CI_REGISTRY_IMAGE}/build:${CI_COMMIT_SHORT_SHA}"
-  # TODO: For now we only build amd64 images to speed up development
-  BUILD_MULTI_ARCH_IMAGES: "false"
+  BUILD_MULTI_ARCH_IMAGES: "true"
 
 stages:
   - trigger
-  - image
-  - lint
-  - go-checks
-  - go-build
-  - unit-tests
   - package-build
   - image-build
   - test
   - scan
   - release
+  - sign
 
 .pipeline-trigger-rules:
   rules:
@@ -83,14 +77,10 @@ trigger-pipeline:
 .platform-amd64:
   variables:
     PLATFORM: linux/amd64
-    PLATFORM_ARCH: amd64
 
 .platform-arm64:
   variables:
     PLATFORM: linux/arm64
-    PLATFORM_ARCH: arm64
-  rules:
-    - if: $BUILD_MULTI_ARCH_IMAGES == "true"
 
 # Make buildx available as a docker CLI plugin
 .buildx-setup:
@@ -112,7 +102,10 @@ trigger-pipeline:
   stage: scan
   variables:
     IMAGE: "${CI_REGISTRY_IMAGE}/k8s-dra-driver-gpu:${CI_COMMIT_SHORT_SHA}-${DIST}"
-    IMAGE_ARCHIVE: "k8s-dra-driver-gpu-${CI_COMMIT_SHORT_SHA}-${DIST}-${PLATFORM_ARCH}.tar"
+    IMAGE_ARCHIVE: "k8s-dra-driver-gpu.tar"
+  except:
+    variables:
+      - $SKIP_SCANS && $SKIP_SCANS == "yes"
   before_script:
     - docker login -u "${CI_REGISTRY_USER}" -p "${CI_REGISTRY_PASSWORD}" "${CI_REGISTRY}"
     - docker pull --platform="${PLATFORM}" "${IMAGE}"
@@ -209,9 +202,6 @@ scan-ubi9-arm64:
     - if: $CI_COMMIT_BRANCH == $RELEASE_DEVEL_BRANCH
       variables:
         OUT_IMAGE_VERSION: "${DEVEL_RELEASE_IMAGE_VERSION}"
-  needs:
-    - job: unit-tests
-      optional:
 
 release:staging-ubi9:
   extends:
