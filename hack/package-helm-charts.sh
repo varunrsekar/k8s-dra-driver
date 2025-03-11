@@ -19,10 +19,19 @@ set -o pipefail
 # if arg1 is set, it will be used as the version number
 if [ -z "$1" ]; then
   VERSION=$(awk -F= '/^VERSION/ { print $2 }' versions.mk | tr -d '[:space:]')
+  # Remove any v prefix, if exists.
+  VERSION="${VERSION#v}"
 else
   VERSION=$1
 fi
 VERSION=${VERSION}
+
+
+# Note(JP): the goal below is for VERSION to always be
+# strictly semver-compliant (parseable with a semver
+# parser). That enables best compatibility with the Helm
+# ecosystem. For example, that means that no `v` prefix
+# should be used here.
 
 # Create release assets to be uploaded
 helm package deployments/helm/nvidia-dra-driver-gpu/ --version $VERSION --app-version $VERSION
