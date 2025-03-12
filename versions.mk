@@ -16,11 +16,15 @@ DRIVER_NAME := k8s-dra-driver-gpu
 HELM_DRIVER_NAME := nvidia-dra-driver-gpu
 MODULE := github.com/NVIDIA/$(DRIVER_NAME)
 
-REGISTRY ?= nvcr.io/nvidia/cloud-native
+REGISTRY ?= nvcr.io/nvidia
 
 VERSION  ?= v25.3.0-rc.1
 
 # vVERSION represents the version with a guaranteed v-prefix
+# Note: this is probably not consumed in our build chain.
+# `VERSION` above is expected to have a `v` prefix, which is
+# then automatically stripped in places that must not have it
+# (e.g., in context of Helm).
 vVERSION := v$(VERSION:v%=%)
 
 GOLANG_VERSION := $(shell ./hack/golang-version.sh)

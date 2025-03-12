@@ -147,7 +147,7 @@ set -e
 
 export VERSION=v25.2.0
 
-REGISTRY=nvcr.io/nvidia/cloud-native
+REGISTRY=nvcr.io/nvidia
 IMAGE=k8s-dra-driver-gpu
 PLATFORM=ubi9
 
