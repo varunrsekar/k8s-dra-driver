@@ -15,7 +15,7 @@
 
 apiVersion: v2
 name: nvidia-dra-driver-gpu
-description: A Helm chart for Kubernetes
+description: Official Helm chart for the Kubernetes DRA driver for NVIDIA GPUs
 
 # A chart can be either an 'application' or a 'library' chart.
 #
@@ -39,6 +39,8 @@ version: 25.3.0-rc.1
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
 
-# Note(JP): this currently defines the default `tag` value in a k8s
-# image specification. A "v" is prefixed in our template helpers to ensure consistency.
+# Note(jgehrcke): templating logic consumes `appVersion` for building the default
+# `tag` value used in a k8s image specification. That logic expects the version
+# number below to not have a "v" prefix (a "v" is added by said logic to yield a
+# valid image reference).
 appVersion: "25.3.0-rc.1"
