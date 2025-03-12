@@ -19,12 +19,11 @@ set -o pipefail
 # if arg1 is set, it will be used as the version number
 if [ -z "$1" ]; then
   VERSION=$(awk -F= '/^VERSION/ { print $2 }' versions.mk | tr -d '[:space:]')
-  # Remove any v prefix, if exists.
-  VERSION="${VERSION#v}"
 else
   VERSION=$1
 fi
-VERSION=${VERSION}
+# Remove any v prefix, if exists.
+VERSION="${VERSION#v}"
 
 
 # Note(JP): the goal below is for VERSION to always be

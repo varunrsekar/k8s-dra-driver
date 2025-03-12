@@ -25,5 +25,5 @@ version: 25.3.0-rc.1
 # It is recommended to use it with quotes.
 
 # Note(JP): this currently defines the default `tag` value in a k8s
-# image specification, and therefore must currently be v-prefixed.
-appVersion: "v25.3.0-rc.1"
+# image specification. A "v" is prefixed in our template helpers to ensure consistency.
+appVersion: "25.3.0-rc.1"
