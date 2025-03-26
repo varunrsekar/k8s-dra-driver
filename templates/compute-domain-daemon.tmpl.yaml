@@ -68,6 +68,15 @@ spec:
                 test "$(nvidia-imex-ctl -q)" = "READY"
           initialDelaySeconds: 10
           periodSeconds: 5
+      # Repel all node taints.
+      # See https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/305
+      tolerations:
+        - operator: "Exists"
+          effect: "NoSchedule"
+        - operator: "Exists"
+          effect: "NoExecute"
+        - operator: "Exists"
+          effect: "PreferNoSchedule"
       resourceClaims:
       - name: compute-domain-daemon
         resourceClaimTemplateName: {{ .ResourceClaimTemplateName }}
