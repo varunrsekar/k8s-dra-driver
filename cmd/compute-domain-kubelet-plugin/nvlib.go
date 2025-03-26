@@ -253,15 +253,20 @@ func (l deviceLib) getDeviceMajor(name string) (int, error) {
 		return -1, fmt.Errorf("error parsing '%s': unexpected regex match: %v", procDevicesPath, matches)
 	}
 
-	// Convert capture group content to integer. Error should be unreachable
-	// (because capture group has matched [0-9]+ which should always convert to
-	// integer).
-	major, err := strconv.Atoi(matches[1])
+	// Convert capture group content to integer. Perform upper bound check:
+	// value must fit into 32-bit integer (it's then also guaranteed to fit into
+	// a 32-bit unsigned integer, which is the type that must be passed to
+	// unix.Mkdev()).
+	major, err := strconv.ParseInt(matches[1], 10, 32)
 	if err != nil {
 		return -1, fmt.Errorf("int conversion failed for '%v': %w", matches[1], err)
 	}
 
-	return major, nil
+	// ParseInt() always returns an integer of explicit type `int64`. We have
+	// performed an upper bound check so it's safe to convert this to `int`
+	// (which is documented as "int is a signed integer type that is at least 32
+	// bits in size", so in theory it could be smaller than int64).
+	return int(major), nil
 }
 
 func (l deviceLib) parseNVCapDeviceInfo(nvcapsFilePath string) (*nvcapDeviceInfo, error) {
