@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -225,48 +226,42 @@ func (l deviceLib) getImexChannelCount() (int, error) {
 	return 2048, nil
 }
 
+// getDeviceMajor searches for one "<integer> <name>" occurrence in the
+// "Character devices" section of the /proc/devices file, and returns the
+// integer.
 func (l deviceLib) getDeviceMajor(name string) (int, error) {
-	file, err := os.Open(procDevicesPath)
+
+	re := regexp.MustCompile(
+		// The `(?s)` flag makes `.` match newlines. The greedy modifier in
+		// `.*?` ensures to pick the first match after "Character devices".
+		// Extract the number as capture group (the first and only group).
+		"(?s)Character devices:.*?" +
+			"([0-9]+) " + regexp.QuoteMeta(name) +
+			".*Block devices:",
+	)
+
+	data, err := os.ReadFile(procDevicesPath)
 	if err != nil {
-		return -1, err
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	foundCharDevices := false
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		// Ignore empty lines
-		if line == "" {
-			continue
-		}
-
-		// Check for any line with text followed by a colon (header)
-		if strings.Contains(line, ":") {
-			// Stop if we've already found the character devices section and reached another section
-			if foundCharDevices {
-				break
-			}
-			// Check if we entered the character devices section
-			if strings.HasSuffix(line, ":") && strings.HasPrefix(line, "Character") {
-				foundCharDevices = true
-			}
-			// Continue to the next line, regardless
-			continue
-		}
-
-		// If we've passed the character devices section, check for nvidiaCapsImexChannelsDeviceName
-		if foundCharDevices {
-			parts := strings.Fields(line)
-			if len(parts) == 2 && parts[1] == name {
-				return strconv.Atoi(parts[0])
-			}
-		}
+		return -1, fmt.Errorf("error reading '%s': %w", procDevicesPath, err)
 	}
 
-	return -1, scanner.Err()
+	// Expect precisely one match: first element is the total match, second
+	// element corresponds to first capture group within that match (i.e., the
+	// number of interest).
+	matches := re.FindStringSubmatch(string(data))
+	if len(matches) != 2 {
+		return -1, fmt.Errorf("error parsing '%s': unexpected regex match: %v", procDevicesPath, matches)
+	}
+
+	// Convert capture group content to integer. Error should be unreachable
+	// (because capture group has matched [0-9]+ which should always convert to
+	// integer).
+	major, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return -1, fmt.Errorf("int conversion failed for '%v': %w", matches[1], err)
+	}
+
+	return major, nil
 }
 
 func (l deviceLib) parseNVCapDeviceInfo(nvcapsFilePath string) (*nvcapDeviceInfo, error) {
