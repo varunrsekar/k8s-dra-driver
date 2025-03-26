@@ -1,6 +1,6 @@
 ---
 apiVersion: apps/v1
-kind: Daemonset
+kind: DaemonSet
 metadata:
   namespace: {{ .Namespace }}
   generateName: {{ .GenerateName }}
@@ -36,6 +36,8 @@ spec:
             touch /etc/nvidia-imex-null
             tail -f /dev/null & wait
           fi
+          # Emit nodes config for facilitating debug.
+          echo -e "/etc/nvidia-imex/nodes_config.cfg:\n\n" && cat /etc/nvidia-imex/nodes_config.cfg
           /usr/bin/nvidia-imex -c /etc/nvidia-imex/config.cfg
           tail -n +1 -f /var/log/nvidia-imex.log & wait
         resources:
