@@ -15,32 +15,14 @@
 
 apiVersion: v2
 name: nvidia-dra-driver-gpu
-description: Official Helm chart for the Kubernetes DRA driver for NVIDIA GPUs
-
-# A chart can be either an 'application' or a 'library' chart.
-#
-# Application charts are a collection of templates that can be packaged into versioned archives
-# to be deployed.
-#
-# Library charts provide useful utilities or functions for the chart developer. They're included as
-# a dependency of application charts to inject those utilities and functions into the rendering
-# pipeline. Library charts do not define any templates and therefore cannot be deployed.
+description: Official Helm chart for the NVIDIA DRA Driver for GPUs
 type: application
 
-# This is the chart version. This version number should be incremented each time you make changes
-# to the chart and its templates, including the app version.
-# Versions are expected to follow Semantic Versioning (https://semver.org/)
+# Note(JP): strict semver: no v prefix allowed
+version: "25.3.0-rc.2"
 
-# Note(JP): no v prefix allowed
-version: 25.3.0-rc.1
-
-# This is the version number of the application being deployed. This version number should be
-# incremented each time you make changes to the application. Versions are not expected to
-# follow Semantic Versioning. They should reflect the version the application is using.
-# It is recommended to use it with quotes.
-
-# Note(jgehrcke): templating logic consumes `appVersion` for building the default
+# Note(JP): templating logic consumes `appVersion` for building the default
 # `tag` value used in a k8s image specification. That logic expects the version
 # number below to not have a "v" prefix (a "v" is added by said logic to yield a
 # valid image reference).
-appVersion: "25.3.0-rc.1"
+appVersion: "25.3.0-rc.2"
