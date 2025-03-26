@@ -237,7 +237,9 @@ func (l deviceLib) getDeviceMajor(name string) (int, error) {
 		// Extract the number as capture group (the first and only group).
 		"(?s)Character devices:.*?" +
 			"([0-9]+) " + regexp.QuoteMeta(name) +
-			".*Block devices:",
+			// Require `name` to be newline-terminated (to not match on a device
+			// that has `name` as prefix).
+			"\n.*Block devices:",
 	)
 
 	data, err := os.ReadFile(procDevicesPath)
