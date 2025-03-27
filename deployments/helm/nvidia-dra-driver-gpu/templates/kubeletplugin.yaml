@@ -103,6 +103,9 @@ spec:
         - name: driver-root
           mountPath: /driver-root
           readOnly: true
+        # Pragmatic solution for host-managed drivers located not at /.
+        - name: host-dev
+          mountPath: /dev
       {{- end }}
       {{- if .Values.resources.gpus.enabled }}
       - name: gpus
@@ -172,6 +175,9 @@ spec:
       - name: driver-root
         hostPath:
           path: {{ .Values.nvidiaDriverRoot }}
+      - name: host-dev
+        hostPath:
+          path: /dev
       {{- with .Values.kubeletPlugin.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
