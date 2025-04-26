@@ -32,11 +32,8 @@ import (
 )
 
 const (
-	DriverName = "compute-domain.nvidia.com"
-
-	PluginRegistrationPath     = "/var/lib/kubelet/plugins_registry/" + DriverName + ".sock"
+	DriverName                 = "compute-domain.nvidia.com"
 	DriverPluginPath           = "/var/lib/kubelet/plugins/" + DriverName
-	DriverPluginSocketPath     = DriverPluginPath + "/plugin.sock"
 	DriverPluginCheckpointFile = "checkpoint.json"
 )
 
