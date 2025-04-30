@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG GOLANG_VERSION=1.23.8
+ARG GOLANG_VERSION=1.24.2
 # We use an ubuntu20.04 base image to allow for a more efficient multi-arch builds.
 FROM  nvcr.io/nvidia/cuda:12.8.1-base-ubuntu20.04 AS build
 
