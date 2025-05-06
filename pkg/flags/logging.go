@@ -31,7 +31,7 @@ import (
 )
 
 type LoggingConfig struct {
-	featureGate featuregate.MutableFeatureGate
+	featureGate featuregate.MutableVersionedFeatureGate
 	config      *logsapi.LoggingConfiguration
 }
 

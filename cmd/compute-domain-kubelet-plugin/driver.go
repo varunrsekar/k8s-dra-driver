@@ -23,11 +23,13 @@ import (
 	"sync"
 	"time"
 
+	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	coreclientset "k8s.io/client-go/kubernetes"
 	"k8s.io/dynamic-resource-allocation/kubeletplugin"
+	"k8s.io/dynamic-resource-allocation/resourceslice"
 	"k8s.io/klog/v2"
-	drapbv1 "k8s.io/kubelet/pkg/apis/dra/v1beta1"
 
 	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/workqueue"
 )
@@ -38,63 +40,65 @@ const ErrorRetryMaxTimeout = 45 * time.Second
 
 // permanentError defines an error indicating that it is permanent.
 // By default, every error will be retried up to ErrorRetryMaxTimeout.
-// Errors marked as permament will not be retried.
+// Errors marked as permanent will not be retried.
 type permanentError struct{ error }
 
 func isPermanentError(err error) bool {
 	return errors.As(err, &permanentError{})
 }
 
-var _ drapbv1.DRAPluginServer = &driver{}
-
 type driver struct {
 	sync.Mutex
-	client coreclientset.Interface
-	plugin kubeletplugin.DRAPlugin
-	state  *DeviceState
+	client       coreclientset.Interface
+	pluginhelper *kubeletplugin.Helper
+	state        *DeviceState
 }
 
 func NewDriver(ctx context.Context, config *Config) (*driver, error) {
-	driver := &driver{
-		client: config.clientsets.Core,
-	}
-
 	state, err := NewDeviceState(ctx, config)
 	if err != nil {
 		return nil, err
 	}
-	driver.state = state
 
-	plugin, err := kubeletplugin.Start(
+	driver := &driver{
+		client: config.clientsets.Core,
+		state:  state,
+	}
+
+	helper, err := kubeletplugin.Start(
 		ctx,
-		[]any{driver},
+		driver,
 		kubeletplugin.KubeClient(driver.client),
 		kubeletplugin.NodeName(config.flags.nodeName),
 		kubeletplugin.DriverName(DriverName),
-		kubeletplugin.RegistrarSocketPath(PluginRegistrationPath),
-		kubeletplugin.PluginSocketPath(DriverPluginSocketPath),
-		kubeletplugin.KubeletPluginSocketPath(DriverPluginSocketPath))
+	)
 	if err != nil {
 		return nil, err
 	}
-	driver.plugin = plugin
+	driver.pluginhelper = helper
 
 	// Enumerate the set of ComputeDomain daemon devices and publish them
-	var resources kubeletplugin.Resources
+	var resourceSlice resourceslice.Slice
 	for _, device := range state.allocatable {
 		// Explicitly exclude ComputeDomain channels from being advertised here. They
 		// are instead advertised in as a network resource from the control plane.
 		if device.Type() == ComputeDomainChannelType && device.Channel.ID != 0 {
 			continue
 		}
-		resources.Devices = append(resources.Devices, device.GetDevice())
+		resourceSlice.Devices = append(resourceSlice.Devices, device.GetDevice())
+	}
+
+	resources := resourceslice.DriverResources{
+		Pools: map[string]resourceslice.Pool{
+			config.flags.nodeName: {Slices: []resourceslice.Slice{resourceSlice}},
+		},
 	}
 
 	if err := state.computeDomainManager.Start(ctx); err != nil {
 		return nil, err
 	}
 
-	if err := plugin.PublishResources(ctx, resources); err != nil {
+	if err := driver.pluginhelper.PublishResources(ctx, resources); err != nil {
 		return nil, err
 	}
 
@@ -108,28 +112,58 @@ func (d *driver) Shutdown() error {
 	if err := d.state.computeDomainManager.Stop(); err != nil {
 		return fmt.Errorf("error stopping ComputeDomainManager: %w", err)
 	}
-	d.plugin.Stop()
+	d.pluginhelper.Stop()
 	return nil
 }
 
-func (d *driver) NodePrepareResources(ctx context.Context, req *drapbv1.NodePrepareResourcesRequest) (*drapbv1.NodePrepareResourcesResponse, error) {
-	klog.Infof("NodePrepareResource is called: number of claims: %d", len(req.Claims))
-	preparedResources := &drapbv1.NodePrepareResourcesResponse{Claims: map[string]*drapbv1.NodePrepareResourceResponse{}}
+func (d *driver) PrepareResourceClaims(ctx context.Context, claims []*resourceapi.ResourceClaim) (map[types.UID]kubeletplugin.PrepareResult, error) {
+	klog.Infof("PrepareResourceClaims called with %d claim(s)", len(claims))
 
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithTimeout(ctx, ErrorRetryMaxTimeout)
 	workQueue := workqueue.New(workqueue.DefaultControllerRateLimiter())
+	results := make(map[types.UID]kubeletplugin.PrepareResult)
 
-	for _, claim := range req.Claims {
+	for _, claim := range claims {
 		wg.Add(1)
 		workQueue.EnqueueRaw(claim, func(ctx context.Context, obj any) error {
-			done, prepared := d.nodePrepareResource(ctx, claim)
+			done, res := d.nodePrepareResource(ctx, claim)
 			if done {
-				preparedResources.Claims[claim.UID] = prepared
+				results[claim.UID] = res
 				wg.Done()
 				return nil
 			}
-			return fmt.Errorf("%s", prepared.Error)
+			return fmt.Errorf("%w", res.Err)
+		})
+	}
+
+	go func() {
+		wg.Wait()
+		cancel()
+	}()
+
+	workQueue.Run(ctx)
+	return results, nil
+}
+
+func (d *driver) UnprepareResourceClaims(ctx context.Context, claimRefs []kubeletplugin.NamespacedObject) (map[types.UID]error, error) {
+	klog.Infof("UnprepareResourceClaims called with %d claim(s)", len(claimRefs))
+
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithTimeout(ctx, ErrorRetryMaxTimeout)
+	workQueue := workqueue.New(workqueue.DefaultControllerRateLimiter())
+	results := make(map[types.UID]error)
+
+	for _, claim := range claimRefs {
+		wg.Add(1)
+		workQueue.EnqueueRaw(claim, func(ctx context.Context, obj any) error {
+			done, err := d.nodeUnprepareResource(ctx, claim)
+			if done {
+				results[claim.UID] = err
+				wg.Done()
+				return nil
+			}
+			return fmt.Errorf("%w", err)
 		})
 	}
 
@@ -140,104 +174,70 @@ func (d *driver) NodePrepareResources(ctx context.Context, req *drapbv1.NodePrep
 
 	workQueue.Run(ctx)
 
-	return preparedResources, nil
+	return results, nil
 }
 
-func (d *driver) NodeUnprepareResources(ctx context.Context, req *drapbv1.NodeUnprepareResourcesRequest) (*drapbv1.NodeUnprepareResourcesResponse, error) {
-	klog.Infof("NodeUnprepareResource is called: number of claims: %d", len(req.Claims))
-	unpreparedResources := &drapbv1.NodeUnprepareResourcesResponse{Claims: map[string]*drapbv1.NodeUnprepareResourceResponse{}}
-
-	var wg sync.WaitGroup
-	ctx, cancel := context.WithTimeout(ctx, ErrorRetryMaxTimeout)
-	workQueue := workqueue.New(workqueue.DefaultControllerRateLimiter())
-
-	for _, claim := range req.Claims {
-		wg.Add(1)
-		workQueue.EnqueueRaw(claim, func(ctx context.Context, obj any) error {
-			done, unprepared := d.nodeUnprepareResource(ctx, claim)
-			if done {
-				unpreparedResources.Claims[claim.UID] = unprepared
-				wg.Done()
-				return nil
-			}
-			return fmt.Errorf("%s", unprepared.Error)
-		})
-	}
-
-	go func() {
-		wg.Wait()
-		cancel()
-	}()
-
-	workQueue.Run(ctx)
-
-	return unpreparedResources, nil
-}
-
-func (d *driver) nodePrepareResource(ctx context.Context, claim *drapbv1.Claim) (bool, *drapbv1.NodePrepareResourceResponse) {
+func (d *driver) nodePrepareResource(ctx context.Context, claim *resourceapi.ResourceClaim) (bool, kubeletplugin.PrepareResult) {
 	d.Lock()
 	defer d.Unlock()
 
-	resourceClaim, err := d.client.ResourceV1beta1().ResourceClaims(claim.Namespace).Get(
-		ctx,
-		claim.Name,
-		metav1.GetOptions{})
+	if claim.Status.Allocation == nil {
+		res := kubeletplugin.PrepareResult{
+			Err: fmt.Errorf("no allocation set in ResourceClaim %s in namespace %s", claim.Name, claim.Namespace),
+		}
+		return true, res
+	}
+
+	devs, err := d.state.Prepare(ctx, claim)
 	if err != nil {
-		ret := &drapbv1.NodePrepareResourceResponse{
-			Error: fmt.Sprintf("failed to fetch ResourceClaim %s in namespace %s", claim.Name, claim.Namespace),
+		res := kubeletplugin.PrepareResult{
+			Err: fmt.Errorf("error preparing devices for claim %v: %w", claim.UID, err),
 		}
-		return isPermanentError(err), ret
+		return isPermanentError(err), res
 	}
 
-	if resourceClaim.Status.Allocation == nil {
-		ret := &drapbv1.NodePrepareResourceResponse{
-			Error: fmt.Sprintf("no allocation set in ResourceClaim %s in namespace %s", claim.Name, claim.Namespace),
+	// TODO: change return type of state.Prepare()
+	var prepDevs []kubeletplugin.Device
+	for _, d := range devs {
+		device := kubeletplugin.Device{
+			Requests:     d.RequestNames,
+			PoolName:     d.PoolName,
+			DeviceName:   d.DeviceName,
+			CDIDeviceIDs: d.CDIDeviceIDs,
 		}
-		return true, ret
+		prepDevs = append(prepDevs, device)
 	}
 
-	prepared, err := d.state.Prepare(ctx, resourceClaim)
-	if err != nil {
-		ret := &drapbv1.NodePrepareResourceResponse{
-			Error: fmt.Sprintf("error preparing devices for claim %v: %v", claim.UID, err),
-		}
-		return isPermanentError(err), ret
-	}
-
-	klog.Infof("Returning newly prepared devices for claim '%v': %v", claim.UID, prepared)
-	return true, &drapbv1.NodePrepareResourceResponse{Devices: prepared}
+	klog.Infof("Returning newly prepared devices for claim '%v': %v", claim.UID, prepDevs)
+	return true, kubeletplugin.PrepareResult{Devices: prepDevs}
 }
 
-func (d *driver) nodeUnprepareResource(ctx context.Context, claim *drapbv1.Claim) (bool, *drapbv1.NodeUnprepareResourceResponse) {
+func (d *driver) nodeUnprepareResource(ctx context.Context, claimRef kubeletplugin.NamespacedObject) (bool, error) {
 	d.Lock()
 	defer d.Unlock()
 
-	resourceClaim, err := d.client.ResourceV1beta1().ResourceClaims(claim.Namespace).Get(
+	// Fetching the resource claim should not be needed (and not be done) in the
+	// unprepare code path. Any state required during unprepare can be stored
+	// via checkpointing.
+	claim, err := d.client.ResourceV1beta1().ResourceClaims(claimRef.Namespace).Get(
 		ctx,
-		claim.Name,
+		claimRef.Name,
 		metav1.GetOptions{})
+
 	if err != nil {
-		ret := &drapbv1.NodeUnprepareResourceResponse{
-			Error: fmt.Sprintf("failed to fetch ResourceClaim %s in namespace %s", claim.Name, claim.Namespace),
-		}
-		return isPermanentError(err), ret
+		return isPermanentError(err), fmt.Errorf("failed to fetch ResourceClaim %s in namespace %s: %w", claimRef.Name, claimRef.Namespace, err)
 	}
 
-	if resourceClaim.Status.Allocation == nil {
-		ret := &drapbv1.NodeUnprepareResourceResponse{
-			Error: fmt.Sprintf("no allocation set in ResourceClaim %s in namespace %s", claim.Name, claim.Namespace),
-		}
-		return true, ret
+	if claim.Status.Allocation == nil {
+		return true, fmt.Errorf("no allocation set in ResourceClaim %s in namespace %s", claim.Name, claim.Namespace)
 	}
 
-	if err := d.state.Unprepare(ctx, resourceClaim); err != nil {
-		ret := &drapbv1.NodeUnprepareResourceResponse{
-			Error: fmt.Sprintf("error unpreparing devices for claim %v: %v", claim.UID, err),
-		}
-		return isPermanentError(err), ret
+	if err := d.state.Unprepare(ctx, claim); err != nil {
+		return isPermanentError(err), fmt.Errorf("error unpreparing devices for claim '%v': %w", claim.UID, err)
 	}
 
-	return true, &drapbv1.NodeUnprepareResourceResponse{}
+	klog.Infof("unprepared devices for claim '%v'", claim.UID)
+	return true, nil
 }
 
 // TODO: implement loop to remove CDI files from the CDI path for claimUIDs
