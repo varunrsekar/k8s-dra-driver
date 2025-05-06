@@ -32,9 +32,9 @@ import (
 )
 
 const (
-	DriverName                 = "gpu.nvidia.com"
-	DriverPluginPath           = "/var/lib/kubelet/plugins/" + DriverName
-	DriverPluginCheckpointFile = "checkpoint.json"
+	DriverName                         = "gpu.nvidia.com"
+	DriverPluginPath                   = "/var/lib/kubelet/plugins/" + DriverName
+	DriverPluginCheckpointFileBasename = "checkpoint.json"
 )
 
 type Flags struct {

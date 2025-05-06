@@ -86,7 +86,7 @@ func (d *driver) Shutdown() error {
 }
 
 func (d *driver) PrepareResourceClaims(ctx context.Context, claims []*resourceapi.ResourceClaim) (map[types.UID]kubeletplugin.PrepareResult, error) {
-	klog.Infof("PrepareResourceClaims called with %d claim(s)", len(claims))
+	klog.V(6).Infof("PrepareResourceClaims called with %d claim(s)", len(claims))
 	results := make(map[types.UID]kubeletplugin.PrepareResult)
 
 	for _, claim := range claims {
@@ -97,7 +97,7 @@ func (d *driver) PrepareResourceClaims(ctx context.Context, claims []*resourceap
 }
 
 func (d *driver) UnprepareResourceClaims(ctx context.Context, claimRefs []kubeletplugin.NamespacedObject) (map[types.UID]error, error) {
-	klog.Infof("UnprepareResourceClaims called with %d claim(s)", len(claimRefs))
+	klog.V(6).Infof("UnprepareResourceClaims called with %d claim(s)", len(claimRefs))
 
 	results := make(map[types.UID]error)
 

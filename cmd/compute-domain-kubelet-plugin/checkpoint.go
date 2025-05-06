@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 
+	resourceapi "k8s.io/api/resource/v1beta1"
 	"k8s.io/kubernetes/pkg/kubelet/checkpointmanager/checksum"
 )
 
@@ -12,14 +13,22 @@ type Checkpoint struct {
 }
 
 type CheckpointV1 struct {
-	PreparedClaims PreparedClaims `json:"preparedClaims,omitempty"`
+	PreparedClaims PreparedClaimsByUID `json:"preparedClaims,omitempty"`
+}
+
+// key: stringified claim UUID
+type PreparedClaimsByUID map[string]PreparedClaim
+
+type PreparedClaim struct {
+	Status          resourceapi.ResourceClaimStatus `json:"status,omitempty"`
+	PreparedDevices PreparedDevices                 `json:"preparedDevices,omitempty"`
 }
 
 func newCheckpoint() *Checkpoint {
 	pc := &Checkpoint{
 		Checksum: 0,
 		V1: &CheckpointV1{
-			PreparedClaims: make(PreparedClaims),
+			PreparedClaims: make(PreparedClaimsByUID),
 		},
 	}
 	return pc
