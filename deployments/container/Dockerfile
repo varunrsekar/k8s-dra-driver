@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG GOLANG_VERSION=1.24.2
 # We use an ubuntu20.04 base image to allow for a more efficient multi-arch builds.
 FROM  nvcr.io/nvidia/cuda:12.8.1-base-ubuntu20.04 AS build
 
@@ -21,6 +20,7 @@ RUN apt-get update && \
     && \
     rm -rf /var/lib/apt/lists/*
 
+# Require build arg.
 ARG GOLANG_VERSION=x.x.x
 
 RUN set -eux; \
@@ -35,8 +35,8 @@ RUN set -eux; \
     wget -nv -O - https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-${ARCH}.tar.gz \
     | tar -C /usr/local -xz
 
-ENV GOPATH /go
-ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
+ENV GOPATH=/go
+ENV PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
 
 WORKDIR /build
 COPY . .
