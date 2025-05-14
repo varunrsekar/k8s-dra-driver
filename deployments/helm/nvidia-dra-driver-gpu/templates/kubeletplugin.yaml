@@ -24,7 +24,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      {{- include "nvidia-dra-driver-gpu.selectorLabels" . | nindent 6 }}
+      {{- include "nvidia-dra-driver-gpu.selectorLabels" (dict "context" . "componentName" "kubelet-plugin") | nindent 6 }}
   {{- with .Values.kubeletPlugin.updateStrategy }}
   updateStrategy:
     {{- toYaml . | nindent 4 }}
@@ -37,6 +37,7 @@ spec:
       {{- end }}
       labels:
         {{- include "nvidia-dra-driver-gpu.templateLabels" . | nindent 8 }}
+        {{- include "nvidia-dra-driver-gpu.selectorLabels" (dict "context" . "componentName" "kubelet-plugin") | nindent 8 }}
     spec:
       {{- if .Values.kubeletPlugin.priorityClassName }}
       priorityClassName: {{ .Values.kubeletPlugin.priorityClassName }}

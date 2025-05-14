@@ -43,36 +43,47 @@ Create chart name and version as used by the chart label.
 {{- end }}
 
 {{/*
-Common labels
+Standard labels: documented at
+https://helm.sh/docs/chart_best_practices/labels/
+Apply this to all high-level objects (Deployment, DaemonSet, ...).
+Pod template labels are included here to deliver name+instance.
 */}}
 {{- define "nvidia-dra-driver-gpu.labels" -}}
 helm.sh/chart: {{ include "nvidia-dra-driver-gpu.chart" . }}
-{{ include "nvidia-dra-driver-gpu.templateLabels" . }}
-{{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
-{{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{ include "nvidia-dra-driver-gpu.templateLabels" . }}
 {{- end }}
 
 {{/*
-Template labels
+Apply this to all pod templates (a smaller set of labels compared to
+the set of standard labels above, to not clutter individual pods too
+much). Note that these labels cannot be used to distinguish
+components within this Helm chart.
 */}}
 {{- define "nvidia-dra-driver-gpu.templateLabels" -}}
 app.kubernetes.io/name: {{ include "nvidia-dra-driver-gpu.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
-{{- if .Values.selectorLabelsOverride }}
-{{ toYaml .Values.selectorLabelsOverride }}
-{{- end }}
 {{- end }}
 
 {{/*
-Selector labels
+Selector label: precisely filter for just the pods of the corresponding
+Deployment, DaemonSet, .... That is, this label key/value pair must be
+different per-component (a component name is a required argument). This
+could be many labels, but we want to use just one (with a sufficiently
+unique key).
+
+TOOD: remove the override feature, or make the override work per-component.
 */}}
 {{- define "nvidia-dra-driver-gpu.selectorLabels" -}}
-{{- if .Values.selectorLabelsOverride -}}
-{{ toYaml .Values.selectorLabelsOverride }}
+{{- if and (hasKey . "componentName") (hasKey . "context") -}}
+{{- if .context.Values.selectorLabelsOverride -}}
+{{ toYaml .context.Values.selectorLabelsOverride }}
 {{- else -}}
-{{ include "nvidia-dra-driver-gpu.templateLabels" . }}
+{{ .context.Chart.Name }}-component: {{ .componentName }}
+{{- end }}
+{{- else -}}
+fail "selectorLabels: both arguments are required: context, componentName"
 {{- end }}
 {{- end }}
 
