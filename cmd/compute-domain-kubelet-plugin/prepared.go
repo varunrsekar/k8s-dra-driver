@@ -22,7 +22,6 @@ import (
 
 type PreparedDeviceList []PreparedDevice
 type PreparedDevices []*PreparedDeviceGroup
-type PreparedClaims map[string]PreparedDevices
 
 type PreparedDevice struct {
 	Channel *PreparedComputeDomainChannel `json:"channel"`

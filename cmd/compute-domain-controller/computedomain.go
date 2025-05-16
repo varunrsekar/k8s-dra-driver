@@ -191,7 +191,7 @@ func (m *ComputeDomainManager) RemoveFinalizer(ctx context.Context, uid string) 
 	return nil
 }
 
-// AssertWorkloadsCompletes ensures that all workloads asssociated with a ComputeDomain have completed.
+// AssertWorkloadsCompletes ensures that all workloads associated with a ComputeDomain have completed.
 //
 // TODO: We should probably also check to ensure that all ResourceClaims
 // generated from our ResourceClaimTemplate for workloads are gone. Doing

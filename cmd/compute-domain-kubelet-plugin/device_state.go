@@ -115,13 +115,13 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 	}
 
 	for _, c := range checkpoints {
-		if c == DriverPluginCheckpointFile {
+		if c == DriverPluginCheckpointFileBasename {
 			return state, nil
 		}
 	}
 
 	checkpoint := newCheckpoint()
-	if err := state.checkpointManager.CreateCheckpoint(DriverPluginCheckpointFile, checkpoint); err != nil {
+	if err := state.checkpointManager.CreateCheckpoint(DriverPluginCheckpointFileBasename, checkpoint); err != nil {
 		return nil, fmt.Errorf("unable to sync to checkpoint: %v", err)
 	}
 
@@ -135,13 +135,17 @@ func (s *DeviceState) Prepare(ctx context.Context, claim *resourceapi.ResourceCl
 	claimUID := string(claim.UID)
 
 	checkpoint := newCheckpoint()
-	if err := s.checkpointManager.GetCheckpoint(DriverPluginCheckpointFile, checkpoint); err != nil {
-		return nil, fmt.Errorf("unable to sync from checkpoint: %v", err)
+	if err := s.checkpointManager.GetCheckpoint(DriverPluginCheckpointFileBasename, checkpoint); err != nil {
+		return nil, fmt.Errorf("unable to get checkpoint: %w", err)
 	}
-	preparedClaims := checkpoint.V1.PreparedClaims
 
-	if preparedClaims[claimUID] != nil {
-		return preparedClaims[claimUID].GetDevices(), nil
+	preparedClaim, exists := checkpoint.V1.PreparedClaims[claimUID]
+	if exists {
+		// Make this a noop. Associated device(s) has/ave been prepared by us.
+		// Prepare() must be idempotent, as it may be invoked more than once per
+		// claim (and actual device preparation must happen at most once).
+		klog.V(6).Infof("skip prepare: claim %v found in checkpoint", claimUID)
+		return preparedClaim.PreparedDevices.GetDevices(), nil
 	}
 
 	preparedDevices, err := s.prepareDevices(ctx, claim)
@@ -153,32 +157,45 @@ func (s *DeviceState) Prepare(ctx context.Context, claim *resourceapi.ResourceCl
 		return nil, fmt.Errorf("unable to create CDI spec file for claim: %w", err)
 	}
 
-	preparedClaims[claimUID] = preparedDevices
-	if err := s.checkpointManager.CreateCheckpoint(DriverPluginCheckpointFile, checkpoint); err != nil {
-		return nil, fmt.Errorf("unable to sync to checkpoint: %v", err)
+	// Add ResourceClaimStatus API object to node-local checkpoint: the
+	// 'unprepare' code path must use local state exclusively (ResourceClaim
+	// object might have been deleted from the API server).
+	checkpoint.V1.PreparedClaims[claimUID] = PreparedClaim{
+		Status:          claim.Status,
+		PreparedDevices: preparedDevices,
 	}
+	if err := s.checkpointManager.CreateCheckpoint(DriverPluginCheckpointFileBasename, checkpoint); err != nil {
+		return nil, fmt.Errorf("unable to create checkpoint: %w", err)
+	}
+	klog.V(6).Infof("checkpoint written for claim %v", claimUID)
 
-	return preparedClaims[claimUID].GetDevices(), nil
+	return preparedDevices.GetDevices(), nil
 }
 
-func (s *DeviceState) Unprepare(ctx context.Context, claim *resourceapi.ResourceClaim) error {
+func (s *DeviceState) Unprepare(ctx context.Context, claimRef kubeletplugin.NamespacedObject) error {
 	s.Lock()
 	defer s.Unlock()
 
-	claimUID := string(claim.UID)
+	claimUID := string(claimRef.UID)
 
-	if err := s.unprepareDevices(ctx, claim); err != nil {
-		return fmt.Errorf("unprepare devices failed: %w", err)
-	}
-
+	// Rely on local checkpoint state for ability to clean up.
 	checkpoint := newCheckpoint()
-	if err := s.checkpointManager.GetCheckpoint(DriverPluginCheckpointFile, checkpoint); err != nil {
-		return fmt.Errorf("unable to sync from checkpoint: %v", err)
+	if err := s.checkpointManager.GetCheckpoint(DriverPluginCheckpointFileBasename, checkpoint); err != nil {
+		return fmt.Errorf("unable to get checkpoint: %w", err)
 	}
-	preparedClaims := checkpoint.V1.PreparedClaims
 
-	if preparedClaims[claimUID] == nil {
+	pc, exists := checkpoint.V1.PreparedClaims[claimUID]
+	if !exists {
+		// Not an error: if this claim UID is not in the checkpoint then this
+		// device was never prepared or has already been unprepared (assume that
+		// Prepare+Checkpoint are done transactionally). Note that
+		// claimRef.String() contains namespace, name, UID.
+		klog.Infof("unprepare noop: claim not found in checkpoint data: %v", claimRef.String())
 		return nil
+	}
+
+	if err := s.unprepareDevices(ctx, &pc.Status); err != nil {
+		return fmt.Errorf("unprepare devices failed: %w", err)
 	}
 
 	err := s.cdi.DeleteClaimSpecFile(claimUID)
@@ -186,9 +203,11 @@ func (s *DeviceState) Unprepare(ctx context.Context, claim *resourceapi.Resource
 		return fmt.Errorf("unable to delete CDI spec file for claim: %w", err)
 	}
 
-	delete(preparedClaims, claimUID)
-	if err := s.checkpointManager.CreateCheckpoint(DriverPluginCheckpointFile, checkpoint); err != nil {
-		return fmt.Errorf("unable to sync to checkpoint: %v", err)
+	// Write new checkpoint reflecting that all devices for this claim have been
+	// unprepared (by virtue of removing its UID from all mappings).
+	delete(checkpoint.V1.PreparedClaims, claimUID)
+	if err := s.checkpointManager.CreateCheckpoint(DriverPluginCheckpointFileBasename, checkpoint); err != nil {
+		return fmt.Errorf("create checkpoint failed: %w", err)
 	}
 
 	return nil
@@ -196,7 +215,7 @@ func (s *DeviceState) Unprepare(ctx context.Context, claim *resourceapi.Resource
 
 func (s *DeviceState) prepareDevices(ctx context.Context, claim *resourceapi.ResourceClaim) (PreparedDevices, error) {
 	// Generate a mapping of each OpaqueDeviceConfigs to the Device.Results it applies to
-	configResultsMap, err := s.getConfigResultsMap(claim)
+	configResultsMap, err := s.getConfigResultsMap(&claim.Status)
 	if err != nil {
 		return nil, fmt.Errorf("error generating configResultsMap: %w", err)
 	}
@@ -283,9 +302,9 @@ func (s *DeviceState) prepareDevices(ctx context.Context, claim *resourceapi.Res
 	return preparedDevices, nil
 }
 
-func (s *DeviceState) unprepareDevices(ctx context.Context, claim *resourceapi.ResourceClaim) error {
+func (s *DeviceState) unprepareDevices(ctx context.Context, cs *resourceapi.ResourceClaimStatus) error {
 	// Generate a mapping of each OpaqueDeviceConfigs to the Device.Results it applies to
-	configResultsMap, err := s.getConfigResultsMap(claim)
+	configResultsMap, err := s.getConfigResultsMap(cs)
 	if err != nil {
 		return fmt.Errorf("error generating configResultsMap: %w", err)
 	}
@@ -407,12 +426,12 @@ func (s *DeviceState) applyComputeDomainDaemonConfig(ctx context.Context, config
 	return &configState, nil
 }
 
-func (s *DeviceState) getConfigResultsMap(claim *resourceapi.ResourceClaim) (map[runtime.Object][]*resourceapi.DeviceRequestAllocationResult, error) {
+func (s *DeviceState) getConfigResultsMap(rcs *resourceapi.ResourceClaimStatus) (map[runtime.Object][]*resourceapi.DeviceRequestAllocationResult, error) {
 	// Retrieve the full set of device configs for the driver.
 	configs, err := GetOpaqueDeviceConfigs(
 		configapi.Decoder,
 		DriverName,
-		claim.Status.Allocation.Devices.Config,
+		rcs.Allocation.Devices.Config,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error getting opaque device configs: %v", err)
@@ -433,7 +452,7 @@ func (s *DeviceState) getConfigResultsMap(claim *resourceapi.ResourceClaim) (map
 	// Look through the configs and figure out which one will be applied to
 	// each device allocation result based on their order of precedence and type.
 	configResultsMap := make(map[runtime.Object][]*resourceapi.DeviceRequestAllocationResult)
-	for _, result := range claim.Status.Allocation.Devices.Results {
+	for _, result := range rcs.Allocation.Devices.Results {
 		device, exists := s.allocatable[result.Device]
 		if !exists {
 			return nil, fmt.Errorf("requested device is not allocatable: %v", result.Device)

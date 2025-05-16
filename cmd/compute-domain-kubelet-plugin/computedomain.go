@@ -437,7 +437,7 @@ func (m *ComputeDomainManager) periodicCleanup(ctx context.Context) {
 				continue
 			}
 			if err != nil {
-				klog.Errorf("error checking for existenc of directory '%s': %v", m.configFilesRoot, err)
+				klog.Errorf("error checking for existence of directory '%s': %v", m.configFilesRoot, err)
 				continue
 			}
 
