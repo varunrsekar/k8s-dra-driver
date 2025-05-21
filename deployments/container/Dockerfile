@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Run build with binaries native to the current build platform.
-FROM --platform=$BUILDPLATFORM nvcr.io/nvidia/cuda:12.8.1-base-ubuntu20.04 AS build
+FROM --platform=$BUILDPLATFORM nvcr.io/nvidia/cuda:12.9.0-base-ubuntu20.04 AS build
 
 # Require arg to be provided (set invalid default value).
 ARG GOLANG_VERSION=x.x.x
@@ -58,7 +58,7 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
     make CC=${cc} GOARCH=${TARGETARCH} PREFIX=/artifacts cmds
 
 # Construct production image (arch: TARGETPLATFORM, set via --platform).
-FROM nvcr.io/nvidia/cuda:12.8.1-base-ubi9
+FROM nvcr.io/nvidia/cuda:12.9.0-base-ubi9
 
 ENV NVIDIA_DISABLE_REQUIRE="true"
 ENV NVIDIA_VISIBLE_DEVICES=all
