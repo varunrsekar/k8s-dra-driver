@@ -12,27 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# We use an ubuntu20.04 base image to allow for a more efficient multi-arch builds.
-FROM  nvcr.io/nvidia/cuda:12.8.1-base-ubuntu20.04 AS build
+# Run build with binaries native to the current build platform.
+FROM --platform=$BUILDPLATFORM nvcr.io/nvidia/cuda:12.8.1-base-ubuntu20.04 AS build
 
-RUN apt-get update && \
-    apt-get install -y wget make git gcc-aarch64-linux-gnu gcc \
-    && \
-    rm -rf /var/lib/apt/lists/*
-
-# Require build arg.
+# Require arg to be provided (set invalid default value).
 ARG GOLANG_VERSION=x.x.x
 
-RUN set -eux; \
-    \
-    arch="$(uname -m)"; \
-    case "${arch##*-}" in \
-        x86_64 | amd64) ARCH='amd64' ;; \
-        ppc64el | ppc64le) ARCH='ppc64le' ;; \
-        aarch64) ARCH='arm64' ;; \
-        *) echo "unsupported architecture" ; exit 1 ;; \
-    esac; \
-    wget -nv -O - https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-${ARCH}.tar.gz \
+# BUILDARCH, TARGETARCH (and others) are defined in the global scope by
+# BuiltKit. BUILDARCH is the architecture of the build platform. TARGETARCH is
+# set via the --platform arg provided to the `docker buildx build ...` command.
+# Redefining those variables here without new values makes the outer-context
+# values available to in-stage RUN commands. Arch values are of the form
+# amd64/arm64.
+ARG BUILDARCH
+ARG TARGETARCH
+
+RUN apt-get update && \
+    apt-get install -y \
+        wget \
+        make \
+        git \
+        gcc-aarch64-linux-gnu \
+        gcc && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN wget -nv -O - https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-${BUILDARCH}.tar.gz \
     | tar -C /usr/local -xz
 
 ENV GOPATH=/go
@@ -42,10 +46,10 @@ WORKDIR /build
 COPY . .
 
 RUN mkdir /artifacts
+
+# The VERSION and GIT_COMMIT env vars are consumed by the `make` target below.
 ARG VERSION="N/A"
 ARG GIT_COMMIT="unknown"
-ARG TARGETARCH
-
 RUN if [ "$TARGETARCH" = "amd64" ]; then \
         cc=gcc; \
     elif [ "$TARGETARCH" = "arm64" ]; then \
@@ -53,6 +57,7 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
     fi && \
     make CC=${cc} GOARCH=${TARGETARCH} PREFIX=/artifacts cmds
 
+# Construct production image (arch: TARGETPLATFORM, set via --platform).
 FROM nvcr.io/nvidia/cuda:12.8.1-base-ubi9
 
 ENV NVIDIA_DISABLE_REQUIRE="true"
@@ -72,6 +77,9 @@ LABEL description="NVIDIA DRA Driver for GPUs"
 LABEL org.opencontainers.image.description="NVIDIA DRA Driver for GPUs"
 LABEL org.opencontainers.image.source="https://github.com/NVIDIA/k8s-dra-driver-gpu"
 
+# When doing a cross-platform build (e.g., amd64 -> arm64) then mkdir/mv below
+# require virtualization. To support that you might have to install qemu:
+# https://docs.docker.com/build/building/multi-platform/#install-qemu-manually
 RUN mkdir /licenses && mv /NGC-DL-CONTAINER-LICENSE /licenses/NGC-DL-CONTAINER-LICENSE
 
 COPY --from=build /artifacts/compute-domain-controller     /usr/bin/compute-domain-controller
