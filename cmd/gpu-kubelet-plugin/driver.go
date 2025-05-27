@@ -19,7 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"sync"
+	"time"
 
 	resourceapi "k8s.io/api/resource/v1beta1"
 	"k8s.io/apimachinery/pkg/types"
@@ -27,13 +27,20 @@ import (
 	"k8s.io/dynamic-resource-allocation/kubeletplugin"
 	"k8s.io/dynamic-resource-allocation/resourceslice"
 	"k8s.io/klog/v2"
+
+	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/flock"
 )
 
+// DriverPrepUprepFlockPath is the path to a lock file used to make sure
+// that calls to nodePrepareResource() / nodeUnprepareResource() never
+// interleave, node-globally.
+const DriverPrepUprepFlockPath = DriverPluginPath + "/pu.lock"
+
 type driver struct {
-	sync.Mutex
 	client       coreclientset.Interface
 	pluginhelper *kubeletplugin.Helper
 	state        *DeviceState
+	pulock       *flock.Flock
 }
 
 func NewDriver(ctx context.Context, config *Config) (*driver, error) {
@@ -44,6 +51,7 @@ func NewDriver(ctx context.Context, config *Config) (*driver, error) {
 	driver := &driver{
 		client: config.clientsets.Core,
 		state:  state,
+		pulock: flock.NewFlock(DriverPrepUprepFlockPath),
 	}
 
 	helper, err := kubeletplugin.Start(
@@ -110,8 +118,13 @@ func (d *driver) UnprepareResourceClaims(ctx context.Context, claimRefs []kubele
 }
 
 func (d *driver) nodePrepareResource(ctx context.Context, claim *resourceapi.ResourceClaim) kubeletplugin.PrepareResult {
-	d.Lock()
-	defer d.Unlock()
+	release, err := d.pulock.Acquire(ctx, flock.WithTimeout(10*time.Second))
+	if err != nil {
+		return kubeletplugin.PrepareResult{
+			Err: fmt.Errorf("error acquiring prep/unprep lock: %w", err),
+		}
+	}
+	defer release()
 
 	devs, err := d.state.Prepare(ctx, claim)
 
@@ -126,8 +139,11 @@ func (d *driver) nodePrepareResource(ctx context.Context, claim *resourceapi.Res
 }
 
 func (d *driver) nodeUnprepareResource(ctx context.Context, claimNs kubeletplugin.NamespacedObject) error {
-	d.Lock()
-	defer d.Unlock()
+	release, err := d.pulock.Acquire(ctx, flock.WithTimeout(10*time.Second))
+	if err != nil {
+		return fmt.Errorf("error acquiring prep/unprep lock: %w", err)
+	}
+	defer release()
 
 	if err := d.state.Unprepare(ctx, string(claimNs.UID)); err != nil {
 		return fmt.Errorf("error unpreparing devices for claim %v: %w", claimNs.UID, err)

@@ -30,12 +30,22 @@ import (
 	"k8s.io/dynamic-resource-allocation/resourceslice"
 	"k8s.io/klog/v2"
 
+	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/flock"
 	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/workqueue"
 )
 
-// ErrorRetryMaxTimeout is the max amount of time we retry when errors are
-// returned before giving up.
-const ErrorRetryMaxTimeout = 45 * time.Second
+const (
+	// ErrorRetryMaxTimeout limits the amount of time spent in the request
+	// handlers UnprepareResourceClaims() and PrepareResourceClaims(), so that
+	// we send a response to the kubelet in a predictable amount of time. Within
+	// that deadline, retryable errors are retried (with backoff) via the
+	// workqueue abstraction.
+	ErrorRetryMaxTimeout = 45 * time.Second
+	// DriverPrepUprepFlockPath is the path to a lock file used to make sure
+	// that calls to nodePrepareResource() / nodeUnprepareResource() never
+	// interleave, node-globally.
+	DriverPrepUprepFlockPath = DriverPluginPath + "/pu.lock"
+)
 
 // permanentError defines an error indicating that it is permanent.
 // By default, every error will be retried up to ErrorRetryMaxTimeout.
@@ -47,10 +57,10 @@ func isPermanentError(err error) bool {
 }
 
 type driver struct {
-	sync.Mutex
 	client       coreclientset.Interface
 	pluginhelper *kubeletplugin.Helper
 	state        *DeviceState
+	pulock       *flock.Flock
 }
 
 func NewDriver(ctx context.Context, config *Config) (*driver, error) {
@@ -62,6 +72,7 @@ func NewDriver(ctx context.Context, config *Config) (*driver, error) {
 	driver := &driver{
 		client: config.clientsets.Core,
 		state:  state,
+		pulock: flock.NewFlock(DriverPrepUprepFlockPath),
 	}
 
 	helper, err := kubeletplugin.Start(
@@ -184,8 +195,14 @@ func (d *driver) UnprepareResourceClaims(ctx context.Context, claimRefs []kubele
 }
 
 func (d *driver) nodePrepareResource(ctx context.Context, claim *resourceapi.ResourceClaim) (bool, kubeletplugin.PrepareResult) {
-	d.Lock()
-	defer d.Unlock()
+	release, err := d.pulock.Acquire(ctx, flock.WithTimeout(10*time.Second))
+	if err != nil {
+		res := kubeletplugin.PrepareResult{
+			Err: fmt.Errorf("error acquiring prep/unprep lock: %w", err),
+		}
+		return false, res
+	}
+	defer release()
 
 	if claim.Status.Allocation == nil {
 		res := kubeletplugin.PrepareResult{
@@ -207,8 +224,11 @@ func (d *driver) nodePrepareResource(ctx context.Context, claim *resourceapi.Res
 }
 
 func (d *driver) nodeUnprepareResource(ctx context.Context, claimRef kubeletplugin.NamespacedObject) (bool, error) {
-	d.Lock()
-	defer d.Unlock()
+	release, err := d.pulock.Acquire(ctx, flock.WithTimeout(10*time.Second))
+	if err != nil {
+		return false, fmt.Errorf("error acquiring prep/unprep lock: %w", err)
+	}
+	defer release()
 
 	if err := d.state.Unprepare(ctx, claimRef); err != nil {
 		return isPermanentError(err), fmt.Errorf("error unpreparing devices for claim '%v': %w", claimRef.String(), err)
