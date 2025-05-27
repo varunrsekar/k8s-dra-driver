@@ -35,6 +35,9 @@ type ManagerConfig struct {
 	// driverNamespace is the Kubernetes namespace where the driver operates
 	driverNamespace string
 
+	// imageName is the full image name to use when rendering templates
+	imageName string
+
 	// clientsets provides access to various Kubernetes API client interfaces
 	clientsets flags.ClientSets
 
@@ -62,6 +65,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	managerConfig := &ManagerConfig{
 		driverName:      c.config.driverName,
 		driverNamespace: c.config.flags.namespace,
+		imageName:       c.config.flags.imageName,
 		clientsets:      c.config.clientsets,
 		workQueue:       workQueue,
 	}

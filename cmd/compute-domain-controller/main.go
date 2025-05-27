@@ -52,6 +52,7 @@ type Flags struct {
 
 	podName   string
 	namespace string
+	imageName string
 
 	httpEndpoint string
 	metricsPath  string
@@ -90,6 +91,13 @@ func newApp() *cli.App {
 			Value:       "default",
 			Destination: &flags.namespace,
 			EnvVars:     []string{"NAMESPACE"},
+		},
+		&cli.StringFlag{
+			Name:        "image-name",
+			Usage:       "The full image name to use for rendering templates.",
+			Required:    true,
+			Destination: &flags.imageName,
+			EnvVars:     []string{"IMAGE_NAME"},
 		},
 		&cli.StringFlag{
 			Category:    "HTTP server:",
