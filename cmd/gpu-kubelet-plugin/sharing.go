@@ -92,6 +92,7 @@ type MpsControlDaemonTemplateData struct {
 	MpsShmDirectory                 string
 	MpsPipeDirectory                string
 	MpsLogDirectory                 string
+	MpsImageName                    string
 }
 
 func NewTimeSlicingManager(deviceLib *deviceLib) *TimeSlicingManager {
@@ -206,6 +207,7 @@ func (m *MpsControlDaemon) Start(ctx context.Context, config *configapi.MpsConfi
 		MpsShmDirectory:                 m.shmDir,
 		MpsPipeDirectory:                m.pipeDir,
 		MpsLogDirectory:                 m.logDir,
+		MpsImageName:                    m.manager.config.flags.imageName,
 	}
 
 	if config != nil && config.DefaultActiveThreadPercentage != nil {

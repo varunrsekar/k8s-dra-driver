@@ -150,6 +150,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: IMAGE_NAME
+          value: {{ include "nvidia-dra-driver-gpu.fullimage" . }}
         volumeMounts:
         - name: plugins-registry
           mountPath: /var/lib/kubelet/plugins_registry

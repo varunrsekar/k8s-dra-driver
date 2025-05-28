@@ -47,6 +47,7 @@ type Flags struct {
 	containerDriverRoot string
 	hostDriverRoot      string
 	nvidiaCTKPath       string
+	imageName           string
 }
 
 type Config struct {
@@ -108,6 +109,13 @@ func newApp() *cli.App {
 			Usage:       "the path to use for the nvidia-ctk in the generated CDI specification. Note that this represents the path on the host.",
 			Destination: &flags.nvidiaCTKPath,
 			EnvVars:     []string{"NVIDIA_CTK_PATH"},
+		},
+		&cli.StringFlag{
+			Name:        "image-name",
+			Usage:       "The full image name to use for rendering templates.",
+			Required:    true,
+			Destination: &flags.imageName,
+			EnvVars:     []string{"IMAGE_NAME"},
 		},
 	}
 	cliFlags = append(cliFlags, flags.kubeClientConfig.Flags()...)

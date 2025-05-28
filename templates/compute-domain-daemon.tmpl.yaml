@@ -22,7 +22,7 @@ spec:
         {{ .ComputeDomainLabelKey }}: {{ .ComputeDomainLabelValue }}
       containers:
       - name: compute-domain-daemon
-        image: ubuntu:22.04
+        image: {{ .ImageName }}
         command: [sh, -c]
         args:
         - |-
