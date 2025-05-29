@@ -157,11 +157,22 @@ func (s *ComputeDomainDaemonSettings) GetDomain() string {
 	return s.domain
 }
 
-func (s *ComputeDomainDaemonSettings) GetCDIContainerEdits(devRoot string, info *nvcapDeviceInfo) *cdiapi.ContainerEdits {
-	return &cdiapi.ContainerEdits{
+func (s *ComputeDomainDaemonSettings) GetCDIContainerEdits(ctx context.Context, devRoot string, info *nvcapDeviceInfo) (*cdiapi.ContainerEdits, error) {
+	cd, err := s.manager.GetComputeDomain(ctx, s.domain)
+	if err != nil {
+		return nil, fmt.Errorf("error getting compute domain: %w", err)
+	}
+	if cd == nil {
+		return nil, fmt.Errorf("compute domain not found: %s", s.domain)
+	}
+
+	edits := &cdiapi.ContainerEdits{
 		ContainerEdits: &cdispec.ContainerEdits{
 			Env: []string{
 				fmt.Sprintf("CLIQUE_ID=%s", s.manager.cliqueID),
+				fmt.Sprintf("COMPUTE_DOMAIN_UUID=%s", cd.UID),
+				fmt.Sprintf("COMPUTE_DOMAIN_NAME=%s", cd.Name),
+				fmt.Sprintf("COMPUTE_DOMAIN_NAMESPACE=%s", cd.Namespace),
 			},
 			Mounts: []*cdispec.Mount{
 				{
@@ -178,6 +189,8 @@ func (s *ComputeDomainDaemonSettings) GetCDIContainerEdits(devRoot string, info 
 			},
 		},
 	}
+
+	return edits, nil
 }
 
 func (s *ComputeDomainDaemonSettings) Prepare(ctx context.Context) error {

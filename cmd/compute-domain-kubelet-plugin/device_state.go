@@ -420,7 +420,11 @@ func (s *DeviceState) applyComputeDomainDaemonConfig(ctx context.Context, config
 		}
 
 		// Store information about the ComputeDomain daemon in the configState.
-		configState.containerEdits = configState.containerEdits.Append(computeDomainDaemonSettings.GetCDIContainerEdits(s.cdi.devRoot, nvcapDeviceInfo))
+		edits, err := computeDomainDaemonSettings.GetCDIContainerEdits(ctx, s.cdi.devRoot, nvcapDeviceInfo)
+		if err != nil {
+			return nil, fmt.Errorf("error getting container edits for ComputeDomain daemon for requests '%v' in claim '%v': %w", requests, claim.UID, err)
+		}
+		configState.containerEdits = configState.containerEdits.Append(edits)
 	}
 
 	return &configState, nil
