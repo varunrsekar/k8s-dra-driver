@@ -22,8 +22,10 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	"github.com/Masterminds/semver"
 	"github.com/urfave/cli/v2"
 )
 
@@ -174,8 +176,22 @@ func check(ctx context.Context, flags *Flags) error {
 		return nil
 	}
 
+	// Get IMEX version to determine which flags to use
+	v, err := getIMEXVersion(ctx)
+	if err != nil {
+		return fmt.Errorf("error getting IMEX version: %w", err)
+	}
+
+	// Set flags based on version
+	var args []string
+	if v.LessThan(semver.MustParse("580.0.0")) {
+		args = []string{"-q", "-i", "127.0.0.1", "50005"}
+	} else {
+		args = []string{"-q"}
+	}
+
 	// Check if IMEX daemon is ready
-	cmd := exec.CommandContext(ctx, imexCtl, "-q", "-i", "127.0.0.1", "50005")
+	cmd := exec.CommandContext(ctx, imexCtl, args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("error checking IMEX daemon status: %w", err)
@@ -217,4 +233,29 @@ func tail(ctx context.Context, path string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// getIMEXVersion returns the version of the NVIDIA IMEX binary.
+func getIMEXVersion(ctx context.Context) (*semver.Version, error) {
+	cmd := exec.CommandContext(ctx, imexBinary, "--version")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("error running nvidia-imex: %w", err)
+	}
+
+	// Split the output by spaces and get the last token
+	version := string(output)
+	tokens := strings.Fields(version)
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("invalid version output: %s", version)
+	}
+
+	// Parse and normalize the version using semver
+	versionStr := tokens[len(tokens)-1]
+	v, err := semver.NewVersion(versionStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid version format: %w", err)
+	}
+
+	return v, nil
 }
