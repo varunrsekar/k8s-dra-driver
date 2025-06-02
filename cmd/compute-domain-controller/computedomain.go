@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -57,6 +58,7 @@ type ComputeDomainManager struct {
 
 	daemonSetManager             *DaemonSetManager
 	resourceClaimTemplateManager *WorkloadResourceClaimTemplateManager
+	cleanupManager               *CleanupManager[*corev1.Node]
 }
 
 // NewComputeDomainManager creates a new ComputeDomainManager.
@@ -71,6 +73,7 @@ func NewComputeDomainManager(config *ManagerConfig) *ComputeDomainManager {
 	}
 	m.daemonSetManager = NewDaemonSetManager(config, m.Get)
 	m.resourceClaimTemplateManager = NewWorkloadResourceClaimTemplateManager(config, m.Get)
+	m.cleanupManager = NewCleanupManager[*corev1.Node](informer, m.Get, m.cleanup)
 
 	return m
 }
@@ -123,6 +126,10 @@ func (m *ComputeDomainManager) Start(ctx context.Context) (rerr error) {
 
 	if err := m.resourceClaimTemplateManager.Start(ctx); err != nil {
 		return fmt.Errorf("error creating ResourceClaim manager: %w", err)
+	}
+
+	if err := m.cleanupManager.Start(ctx); err != nil {
+		return fmt.Errorf("error starting cleanup manager: %w", err)
 	}
 
 	return nil
@@ -196,7 +203,7 @@ func (m *ComputeDomainManager) RemoveFinalizer(ctx context.Context, uid string) 
 // TODO: We should probably also check to ensure that all ResourceClaims
 // generated from our ResourceClaimTemplate for workloads are gone. Doing
 // something is better than nothing for now though.
-func (m *ComputeDomainManager) AssertWorkloadsCompleted(ctx context.Context, cdUID string) error {
+func (m *ComputeDomainManager) RemoveNodeLabels(ctx context.Context, cdUID string) error {
 	labelSelector := &metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{
@@ -214,8 +221,13 @@ func (m *ComputeDomainManager) AssertWorkloadsCompleted(ctx context.Context, cdU
 		return fmt.Errorf("error retrieving nodes: %w", err)
 	}
 
-	if len(nodes.Items) != 0 {
-		return fmt.Errorf("nodes exist with label for ComputeDomain %s", cdUID)
+	for _, node := range nodes.Items {
+		newNode := node.DeepCopy()
+		delete(newNode.Labels, computeDomainLabelKey)
+
+		if _, err := m.config.clientsets.Core.CoreV1().Nodes().Update(ctx, newNode, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("error updating node %s: %w", node.Name, err)
+		}
 	}
 
 	return nil
@@ -254,8 +266,8 @@ func (m *ComputeDomainManager) onAddOrUpdate(ctx context.Context, obj any) error
 			return fmt.Errorf("error deleting DaemonSet: %w", err)
 		}
 
-		if err := m.AssertWorkloadsCompleted(ctx, string(cd.UID)); err != nil {
-			return fmt.Errorf("error asserting workloads completed: %w", err)
+		if err := m.RemoveNodeLabels(ctx, string(cd.UID)); err != nil {
+			return fmt.Errorf("error removing ComputeDomain node labels: %w", err)
 		}
 
 		if err := m.resourceClaimTemplateManager.RemoveFinalizer(ctx, string(cd.UID)); err != nil {
@@ -293,5 +305,12 @@ func (m *ComputeDomainManager) onAddOrUpdate(ctx context.Context, obj any) error
 		return fmt.Errorf("error creating ResourceClaimTemplate '%s/%s': %w", cd.Namespace, cd.Spec.Channel.ResourceClaimTemplate.Name, err)
 	}
 
+	return nil
+}
+
+func (m *ComputeDomainManager) cleanup(ctx context.Context, cdUID string) error {
+	if err := m.RemoveNodeLabels(ctx, cdUID); err != nil {
+		return fmt.Errorf("error removing ComputeDomain node labels: %w", err)
+	}
 	return nil
 }
