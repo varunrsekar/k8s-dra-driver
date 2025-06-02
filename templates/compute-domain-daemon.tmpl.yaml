@@ -42,6 +42,8 @@ spec:
             command: ["compute-domain-daemon", "check"]
           initialDelaySeconds: 1
           periodSeconds: 1
+          timeoutSeconds: 10
+          failureThreshold: 10
         livenessProbe:
           exec:
             command: ["compute-domain-daemon", "check"]
