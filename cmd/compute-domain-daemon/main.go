@@ -22,9 +22,14 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 
+	"github.com/Masterminds/semver"
 	"github.com/urfave/cli/v2"
+
+	nvapi "github.com/NVIDIA/k8s-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
 )
 
 const (
@@ -36,7 +41,12 @@ const (
 )
 
 type Flags struct {
-	cliqueID string
+	cliqueID               string
+	computeDomainUUID      string
+	computeDomainName      string
+	computeDomainNamespace string
+	nodeName               string
+	podIP                  string
 }
 
 func main() {
@@ -51,7 +61,7 @@ func newApp() *cli.App {
 	var flags Flags
 
 	// Create a wrapper that will be used to gracefully shut down all subcommands
-	wrapper := func(ctx context.Context, f func(ctx context.Context, flags *Flags) error) error {
+	wrapper := func(ctx context.Context, f func(ctx context.Context, cancel context.CancelFunc, flags *Flags) error) error {
 		// Create a cancelable context from the one passed in
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
@@ -65,7 +75,7 @@ func newApp() *cli.App {
 		}()
 
 		// Call the wrapped function
-		return f(ctx, &flags)
+		return f(ctx, cancel, &flags)
 	}
 
 	// Create the app
@@ -78,6 +88,37 @@ func newApp() *cli.App {
 				Usage:       "The clique ID for this node.",
 				EnvVars:     []string{"CLIQUE_ID"},
 				Destination: &flags.cliqueID,
+			},
+			&cli.StringFlag{
+				Name:        "compute-domain-uuid",
+				Usage:       "The UUID of the ComputeDomain to manage.",
+				EnvVars:     []string{"COMPUTE_DOMAIN_UUID"},
+				Destination: &flags.computeDomainUUID,
+			},
+			&cli.StringFlag{
+				Name:        "compute-domain-name",
+				Usage:       "The name of the ComputeDomain to manage.",
+				EnvVars:     []string{"COMPUTE_DOMAIN_NAME"},
+				Destination: &flags.computeDomainName,
+			},
+			&cli.StringFlag{
+				Name:        "compute-domain-namespace",
+				Usage:       "The namespace of the ComputeDomain to manage.",
+				Value:       "default",
+				EnvVars:     []string{"COMPUTE_DOMAIN_NAMESPACE"},
+				Destination: &flags.computeDomainNamespace,
+			},
+			&cli.StringFlag{
+				Name:        "node-name",
+				Usage:       "The name of this Kubernetes node.",
+				EnvVars:     []string{"NODE_NAME"},
+				Destination: &flags.nodeName,
+			},
+			&cli.StringFlag{
+				Name:        "pod-ip",
+				Usage:       "The IP address of this pod.",
+				EnvVars:     []string{"POD_IP"},
+				Destination: &flags.podIP,
 			},
 		},
 		Commands: []*cli.Command{
@@ -103,13 +144,48 @@ func newApp() *cli.App {
 
 // run runs the compute domain daemon, checking IMEX capability and managing the IMEX daemon lifecycle.
 // It returns an error if any step fails.
-func run(ctx context.Context, flags *Flags) error {
+func run(ctx context.Context, cancel context.CancelFunc, flags *Flags) error {
+	// Create controller config
+	config := &ControllerConfig{
+		cliqueID:               flags.cliqueID,
+		computeDomainUUID:      flags.computeDomainUUID,
+		computeDomainName:      flags.computeDomainName,
+		computeDomainNamespace: flags.computeDomainNamespace,
+		nodeName:               flags.nodeName,
+		podIP:                  flags.podIP,
+	}
+
+	// Create and start controller to watch for compute domain updates and keep
+	// the IPs mapped in the nodes config file in sync
+	controller, err := NewController(config)
+	if err != nil {
+		return fmt.Errorf("error creating controller: %w", err)
+	}
+
+	// Start controller in a goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		err := controller.Run(ctx)
+		if err != nil {
+			cancel()
+		}
+		errChan <- err
+	}()
+
+	// Wait until all nodes have joined the compute domain
+	nodes := controller.BlockUntilAllNodesJoinComputeDomain()
+
 	if flags.cliqueID == "" {
 		fmt.Println("ClusterUUID and CliqueId are NOT set for GPUs on this node.")
 		fmt.Println("The IMEX daemon will not be started.")
 		fmt.Println("Sleeping forever...")
 		<-ctx.Done()
 		return nil
+	}
+
+	// Create nodes config file
+	if err := createNodesConfig(ctx, flags.cliqueID, nodes); err != nil {
+		return fmt.Errorf("error creating nodes config: %w", err)
 	}
 
 	// Print nodes config
@@ -127,19 +203,34 @@ func run(ctx context.Context, flags *Flags) error {
 		return fmt.Errorf("error tailing log file: %w", err)
 	}
 
-	return nil
+	// Wait for controller to finish
+	return <-errChan
 }
 
 // check verifies if the node is IMEX capable and if so, checks if the IMEX daemon is ready.
 // It returns an error if any step fails.
-func check(ctx context.Context, flags *Flags) error {
+func check(ctx context.Context, cancel context.CancelFunc, flags *Flags) error {
 	if flags.cliqueID == "" {
 		fmt.Println("ClusterUUID and CliqueId are NOT set for GPUs on this node.")
 		return nil
 	}
 
+	// Get IMEX version to determine which flags to use
+	v, err := getIMEXVersion(ctx)
+	if err != nil {
+		return fmt.Errorf("error getting IMEX version: %w", err)
+	}
+
+	// Set flags based on version
+	var args []string
+	if v.LessThan(semver.MustParse("580.0.0")) {
+		args = []string{"-q", "-i", "127.0.0.1", "50005"}
+	} else {
+		args = []string{"-q"}
+	}
+
 	// Check if IMEX daemon is ready
-	cmd := exec.CommandContext(ctx, imexCtl, "-q", "-i", "127.0.0.1", "50005")
+	cmd := exec.CommandContext(ctx, imexCtl, args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("error checking IMEX daemon status: %w", err)
@@ -147,6 +238,33 @@ func check(ctx context.Context, flags *Flags) error {
 
 	if string(output) != "READY\n" {
 		return fmt.Errorf("IMEX daemon not ready: %s", string(output))
+	}
+
+	return nil
+}
+
+// createNodesConfig creates a nodesConfig file with IPs for nodes in the same clique.
+func createNodesConfig(ctx context.Context, cliqueID string, nodes []*nvapi.ComputeDomainNode) error {
+	// Ensure the directory exists
+	dir := filepath.Dir(nodesConfig)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", dir, err)
+	}
+
+	// Create or overwrite the nodesConfig file
+	f, err := os.Create(nodesConfig)
+	if err != nil {
+		return fmt.Errorf("failed to read nodes config: %w", err)
+	}
+	defer f.Close()
+
+	// Write IPs for nodes in the same clique
+	for _, node := range nodes {
+		if node.CliqueID == cliqueID {
+			if _, err := fmt.Fprintf(f, "%s\n", node.IPAddress); err != nil {
+				return fmt.Errorf("failed to write to nodesConfig file: %w", err)
+			}
+		}
 	}
 
 	return nil
@@ -181,4 +299,29 @@ func tail(ctx context.Context, path string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// getIMEXVersion returns the version of the NVIDIA IMEX binary.
+func getIMEXVersion(ctx context.Context) (*semver.Version, error) {
+	cmd := exec.CommandContext(ctx, imexBinary, "--version")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("error running nvidia-imex: %w", err)
+	}
+
+	// Split the output by spaces and get the last token
+	version := string(output)
+	tokens := strings.Fields(version)
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("invalid version output: %s", version)
+	}
+
+	// Parse and normalize the version using semver
+	versionStr := tokens[len(tokens)-1]
+	v, err := semver.NewVersion(versionStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid version format: %w", err)
+	}
+
+	return v, nil
 }

@@ -387,11 +387,6 @@ func (s *DeviceState) applyComputeDomainDaemonConfig(ctx context.Context, config
 		return nil, fmt.Errorf("only expected 1 device for requests '%v' in claim '%v'", requests, claim.UID)
 	}
 
-	// Add info about this node to the ComputeDomain status.
-	if err := s.computeDomainManager.AddNodeStatusToComputeDomain(ctx, config.DomainID); err != nil {
-		return nil, fmt.Errorf("error adding node status to ComputeDomain: %w", err)
-	}
-
 	// Declare a device group state object to populate.
 	configState := DeviceConfigState{
 		Type:          ComputeDomainDaemonType,
@@ -420,7 +415,11 @@ func (s *DeviceState) applyComputeDomainDaemonConfig(ctx context.Context, config
 		}
 
 		// Store information about the ComputeDomain daemon in the configState.
-		configState.containerEdits = configState.containerEdits.Append(computeDomainDaemonSettings.GetCDIContainerEdits(s.cdi.devRoot, nvcapDeviceInfo))
+		edits, err := computeDomainDaemonSettings.GetCDIContainerEdits(ctx, s.cdi.devRoot, nvcapDeviceInfo)
+		if err != nil {
+			return nil, fmt.Errorf("error getting container edits for ComputeDomain daemon for requests '%v' in claim '%v': %w", requests, claim.UID, err)
+		}
+		configState.containerEdits = configState.containerEdits.Append(edits)
 	}
 
 	return &configState, nil
