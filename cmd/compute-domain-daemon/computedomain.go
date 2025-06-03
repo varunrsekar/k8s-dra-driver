@@ -169,6 +169,11 @@ func (m *ComputeDomainManager) UpdateComputeDomainNodeInfo(ctx context.Context, 
 	// Unconditionally update its IP address
 	nodeInfo.IPAddress = m.config.podIP
 
+	// Conditionally update its status
+	if newCD.Status.Status == "" {
+		newCD.Status.Status = nvapi.ComputeDomainStatusNotReady
+	}
+
 	// Update the status
 	if _, err := m.config.clientsets.Nvidia.ResourceV1beta1().ComputeDomains(newCD.Namespace).UpdateStatus(ctx, newCD, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("error updating nodes in ComputeDomain status: %w", err)
