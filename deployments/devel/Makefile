@@ -43,6 +43,7 @@ DOCKERFILE_CONTEXT = deployments/devel
 	$(DOCKER) build \
 		--progress=plain \
 		--build-arg GOLANG_VERSION=$(GOLANG_VERSION) \
+		--build-arg TOOLKIT_CONTAINER_IMAGE="$(TOOLKIT_CONTAINER_IMAGE)" \
 		--tag $(BUILDIMAGE) \
 		-f $(DOCKERFILE_DEVEL) \
 		$(DOCKERFILE_CONTEXT)

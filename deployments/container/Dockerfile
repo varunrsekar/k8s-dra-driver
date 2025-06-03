@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Declared here for use in FROM directives below
+ARG TOOLKIT_CONTAINER_IMAGE=unknown
+
 # Run build with binaries native to the current build platform.
 FROM --platform=$BUILDPLATFORM nvcr.io/nvidia/cuda:12.9.0-base-ubuntu20.04 AS build
 
@@ -57,6 +60,10 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
     fi && \
     make CC=${cc} GOARCH=${TARGETARCH} PREFIX=/artifacts cmds
 
+# Pull the nvidia-cdi-hook binary out of the relevant toolkit container
+# (arch: TARGETPLATFORM, set via --platform).
+FROM ${TOOLKIT_CONTAINER_IMAGE} AS toolkit
+
 # Construct production image (arch: TARGETPLATFORM, set via --platform).
 FROM nvcr.io/nvidia/cuda:12.9.0-base-ubi9
 
@@ -82,8 +89,9 @@ LABEL org.opencontainers.image.source="https://github.com/NVIDIA/k8s-dra-driver-
 # https://docs.docker.com/build/building/multi-platform/#install-qemu-manually
 RUN mkdir /licenses && mv /NGC-DL-CONTAINER-LICENSE /licenses/NGC-DL-CONTAINER-LICENSE
 
-COPY --from=build /artifacts/compute-domain-controller     /usr/bin/compute-domain-controller
-COPY --from=build /artifacts/compute-domain-kubelet-plugin /usr/bin/compute-domain-kubelet-plugin
-COPY --from=build /artifacts/compute-domain-daemon         /usr/bin/compute-domain-daemon
-COPY --from=build /artifacts/gpu-kubelet-plugin            /usr/bin/gpu-kubelet-plugin
-COPY --from=build /build/templates                         /templates
+COPY --from=toolkit /usr/bin/nvidia-cdi-hook                 /usr/bin/nvidia-cdi-hook
+COPY --from=build   /artifacts/compute-domain-controller     /usr/bin/compute-domain-controller
+COPY --from=build   /artifacts/compute-domain-kubelet-plugin /usr/bin/compute-domain-kubelet-plugin
+COPY --from=build   /artifacts/compute-domain-daemon         /usr/bin/compute-domain-daemon
+COPY --from=build   /artifacts/gpu-kubelet-plugin            /usr/bin/gpu-kubelet-plugin
+COPY --from=build   /build/templates                         /templates

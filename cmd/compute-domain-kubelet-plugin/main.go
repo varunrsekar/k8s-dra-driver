@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/urfave/cli/v2"
@@ -46,7 +47,7 @@ type Flags struct {
 	cdiRoot             string
 	containerDriverRoot string
 	hostDriverRoot      string
-	nvidiaCTKPath       string
+	nvidiaCDIHookPath   string
 }
 
 type Config struct {
@@ -103,11 +104,10 @@ func newApp() *cli.App {
 			EnvVars:     []string{"CONTAINER_DRIVER_ROOT"},
 		},
 		&cli.StringFlag{
-			Name:        "nvidia-ctk-path",
-			Value:       "/usr/bin/nvidia-ctk",
-			Usage:       "the path to use for the nvidia-ctk in the generated CDI specification. Note that this represents the path on the host.",
-			Destination: &flags.nvidiaCTKPath,
-			EnvVars:     []string{"NVIDIA_CTK_PATH"},
+			Name:        "nvidia-cdi-hook-path",
+			Usage:       "Absolute path to the nvidia-cdi-hook executable in the host file system. Used in the generated CDI specification.",
+			Destination: &flags.nvidiaCDIHookPath,
+			EnvVars:     []string{"NVIDIA_CDI_HOOK_PATH"},
 		},
 	}
 	cliFlags = append(cliFlags, flags.kubeClientConfig.Flags()...)
@@ -152,12 +152,20 @@ func newApp() *cli.App {
 	return app
 }
 
+// StartPlugin initializes and runs the compute domain kubelet plugin.
 func StartPlugin(ctx context.Context, config *Config) error {
+	// Create the plugin directory
 	err := os.MkdirAll(DriverPluginPath, 0750)
 	if err != nil {
 		return err
 	}
 
+	// Setup nvidia-cdi-hook binary
+	if err := config.flags.setNvidiaCDIHookPath(); err != nil {
+		return fmt.Errorf("error setting up nvidia-cdi-hook: %w", err)
+	}
+
+	// Initialize CDI root directory
 	info, err := os.Stat(config.flags.cdiRoot)
 	switch {
 	case err != nil && os.IsNotExist(err):
@@ -171,9 +179,11 @@ func StartPlugin(ctx context.Context, config *Config) error {
 		return fmt.Errorf("path for cdi file generation is not a directory: '%v'", config.flags.cdiRoot)
 	}
 
+	// Setup signal handling for graceful shutdown
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
+	// Create a cancellable context for cleanup
 	var driver *driver
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -183,12 +193,43 @@ func StartPlugin(ctx context.Context, config *Config) error {
 		}
 	}()
 
+	// Create and start the driver
 	driver, err = NewDriver(ctx, config)
 	if err != nil {
 		return fmt.Errorf("error creating driver: %w", err)
 	}
 
+	// Wait for shutdown signal
 	<-sigs
+
+	return nil
+}
+
+// setNvidiaCDIHookPath ensures the proper flag is set with the host path for the nvidia-cdi-hook binary.
+// If 'f.nvidiaCDIHookPath' is already set (from the command line), do nothing.
+// If 'f.nvidiaCDIHookPath' is empty, it copies the nvidia-cdi-hook binary from
+// /usr/bin/nvidia-cdi-hook to DriverPluginPath and sets 'f.nvidiaCDIHookPath'
+// to this path. The /usr/bin/nvidia-cdi-hook is present in the current
+// container image because it is copied from the toolkit image into this
+// container at build time.
+func (f *Flags) setNvidiaCDIHookPath() error {
+	if f.nvidiaCDIHookPath != "" {
+		return nil
+	}
+
+	sourcePath := "/usr/bin/nvidia-cdi-hook"
+	targetPath := filepath.Join(DriverPluginPath, "nvidia-cdi-hook")
+
+	input, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return fmt.Errorf("error reading nvidia-cdi-hook: %w", err)
+	}
+
+	if err := os.WriteFile(targetPath, input, 0755); err != nil {
+		return fmt.Errorf("error copying nvidia-cdi-hook: %w", err)
+	}
+
+	f.nvidiaCDIHookPath = targetPath
 
 	return nil
 }
