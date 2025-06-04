@@ -49,6 +49,33 @@ spec:
       serviceAccountName: {{ include "nvidia-dra-driver-gpu.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.kubeletPlugin.podSecurityContext | nindent 8 }}
+      initContainers:
+      - name: init-container
+        image: {{ include "nvidia-dra-driver-gpu.fullimage" . }}
+        securityContext:
+          privileged: true
+        command: [bash, /usr/bin/kubelet-plugin-prestart.sh]
+        env:
+        - name: NVIDIA_DRIVER_ROOT
+          value: "{{ .Values.nvidiaDriverRoot }}"
+        # Use runc: explicit "void"; otherwise we inherit "all".
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: void
+        volumeMounts:
+        - name: driver-root-parent
+          mountPath: /driver-root-parent
+          {{- if eq "/" .Values.nvidiaDriverRoot }}
+          readOnly: true
+          {{- else }}
+          # In case of the operator-provided driver, another container mounts
+          # the driver onto the host using `mountPropagation: Bidirectional`
+          # (out-of-band of the lifecycle of _this_ pod here). For us to see
+          # that mount, `mountPropagation: HostToContainer` is required (docs:
+          # "if any Pod with Bidirectional mount propagation to the same volume
+          # mounts anything there, the container with HostToContainer mount
+          # propagation will see it.").
+          mountPropagation: HostToContainer
+          {{- end }}
       containers:
       {{- if .Values.resources.computeDomains.enabled }}
       - name: compute-domains
@@ -98,11 +125,13 @@ spec:
           mountPropagation: Bidirectional
         - name: cdi
           mountPath: /var/run/cdi
-        # We always mount the driver root at /driver-root in the container.
         - name: driver-root
           mountPath: /driver-root
           readOnly: true
-        # Pragmatic solution for host-managed drivers located not at /.
+          mountPropagation: HostToContainer
+        # For host-managed drivers located not at /.
+        # TODO: make this more surgical, see discussion in
+        # https://github.com/NVIDIA/k8s-dra-driver-gpu/pull/307.
         - name: host-dev
           mountPath: /dev
       {{- end }}
@@ -156,10 +185,10 @@ spec:
           mountPropagation: Bidirectional
         - name: cdi
           mountPath: /var/run/cdi
-        # We always mount the driver root at /driver-root in the container.
         - name: driver-root
           mountPath: /driver-root
           readOnly: true
+          mountPropagation: HostToContainer
       {{- end }}
       volumes:
       - name: plugins-registry
@@ -171,9 +200,22 @@ spec:
       - name: cdi
         hostPath:
           path: /var/run/cdi
+      - name: driver-root-parent
+        hostPath:
+          # If nvidiaDriverRoot == "/" then its parent is itself. Otherwise, get
+          # its parent by removing any trailing slashes as well as the last path
+          # element with sprig template function `dir`. Examples: /a/b/ -> /a,
+          # /a/b/c -> /a/b.
+          {{- if eq "/" .Values.nvidiaDriverRoot }}
+          path: "/"
+          {{- else }}
+          path: {{ dir (trimSuffix "/" .Values.nvidiaDriverRoot) }}
+          {{- end }}
+          type: DirectoryOrCreate
       - name: driver-root
         hostPath:
           path: {{ .Values.nvidiaDriverRoot }}
+          type: DirectoryOrCreate
       - name: host-dev
         hostPath:
           path: /dev
