@@ -28,6 +28,7 @@ VERSION  ?= v25.3.0-rc.2
 vVERSION := v$(VERSION:v%=%)
 
 GOLANG_VERSION := $(shell ./hack/golang-version.sh)
+TOOLKIT_CONTAINER_IMAGE := $(shell ./hack/toolkit-container-image.sh)
 
 # These variables are only needed when building a local image
 BUILDIMAGE_TAG ?= devel-go$(GOLANG_VERSION)
