@@ -50,7 +50,14 @@ type ComputeDomainManager struct {
 
 // NewComputeDomainManager creates a new ComputeDomainManager instance.
 func NewComputeDomainManager(config *ManagerConfig) *ComputeDomainManager {
-	factory := nvinformers.NewSharedInformerFactory(config.clientsets.Nvidia, informerResyncPeriod)
+	factory := nvinformers.NewSharedInformerFactoryWithOptions(
+		config.clientsets.Nvidia,
+		informerResyncPeriod,
+		nvinformers.WithNamespace(config.computeDomainNamespace),
+		nvinformers.WithTweakListOptions(func(opts *metav1.ListOptions) {
+			opts.FieldSelector = fmt.Sprintf("metadata.name=%s", config.computeDomainName)
+		}),
+	)
 	informer := factory.Resource().V1beta1().ComputeDomains().Informer()
 
 	m := &ComputeDomainManager{
@@ -113,6 +120,12 @@ func (m *ComputeDomainManager) onAddOrUpdate(ctx context.Context, obj any) error
 	cd, ok := obj.(*nvapi.ComputeDomain)
 	if !ok {
 		return fmt.Errorf("failed to cast to ComputeDomain")
+	}
+
+	// Skip ComputeDomains that don't match on UUID
+	if string(cd.UID) != m.config.computeDomainUUID {
+		klog.Errorf("ComputeDomain processed with non-matching UID (%v, %v)", cd.UID, m.config.computeDomainUUID)
+		return nil
 	}
 
 	// Update node info in ComputeDomain
