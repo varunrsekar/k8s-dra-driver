@@ -104,6 +104,6 @@ func (c *Controller) Run(ctx context.Context) error {
 
 // BlockUntilAllNodesJoinComputeDomain waits until all nodes have joined the compute domain
 // and returns the list of nodes in the compute domain.
-func (c *Controller) BlockUntilAllNodesJoinComputeDomain() []*nvapi.ComputeDomainNode {
-	return c.computeDomainManager.BlockUntilAllNodesJoinComputeDomain()
+func (c *Controller) BlockUntilAllNodesJoinComputeDomain(ctx context.Context) ([]*nvapi.ComputeDomainNode, error) {
+	return c.computeDomainManager.BlockUntilAllNodesJoinComputeDomain(ctx)
 }
