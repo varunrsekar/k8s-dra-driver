@@ -197,7 +197,11 @@ func (m *ComputeDomainManager) UpdateComputeDomainNodeInfo(ctx context.Context, 
 
 // BlockUntilAllNodesJoinComputeDomain waits until all nodes have joined the compute domain
 // and returns the list of nodes in the compute domain.
-func (m *ComputeDomainManager) BlockUntilAllNodesJoinComputeDomain() []*nvapi.ComputeDomainNode {
-	<-m.nodesChan
-	return m.nodes
+func (m *ComputeDomainManager) BlockUntilAllNodesJoinComputeDomain(ctx context.Context) ([]*nvapi.ComputeDomainNode, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-m.nodesChan:
+		return m.nodes, nil
+	}
 }

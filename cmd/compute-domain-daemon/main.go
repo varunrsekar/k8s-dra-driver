@@ -173,7 +173,10 @@ func run(ctx context.Context, cancel context.CancelFunc, flags *Flags) error {
 	}()
 
 	// Wait until all nodes have joined the compute domain
-	nodes := controller.BlockUntilAllNodesJoinComputeDomain()
+	nodes, err := controller.BlockUntilAllNodesJoinComputeDomain(ctx)
+	if err != nil {
+		return fmt.Errorf("error waiting for all nodes to join ComputeDomain: %w", err)
+	}
 
 	if flags.cliqueID == "" {
 		fmt.Println("ClusterUUID and CliqueId are NOT set for GPUs on this node.")
