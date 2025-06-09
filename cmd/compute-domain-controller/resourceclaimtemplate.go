@@ -81,7 +81,6 @@ func newBaseResourceClaimTemplateManager(config *ManagerConfig, getComputeDomain
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		config.clientsets.Core,
 		informerResyncPeriod,
-		informers.WithNamespace(namespace),
 		informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
 			opts.LabelSelector = metav1.FormatLabelSelector(labelSelector)
 		}),

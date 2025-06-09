@@ -79,7 +79,6 @@ func NewDaemonSetManager(config *ManagerConfig, getComputeDomain GetComputeDomai
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		config.clientsets.Core,
 		informerResyncPeriod,
-		informers.WithNamespace(config.driverNamespace),
 		informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
 			opts.LabelSelector = metav1.FormatLabelSelector(labelSelector)
 		}),
@@ -315,6 +314,11 @@ func (m *DaemonSetManager) onAddOrUpdate(ctx context.Context, obj any) error {
 	d, ok := obj.(*appsv1.DaemonSet)
 	if !ok {
 		return fmt.Errorf("failed to cast to DaemonSet")
+	}
+
+	// Only process events from the driver namespace
+	if d.Namespace != m.config.driverNamespace {
+		return nil
 	}
 
 	klog.Infof("Processing added or updated DaemonSet: %s/%s", d.Namespace, d.Name)
