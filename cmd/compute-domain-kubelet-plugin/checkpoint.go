@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 
 	resourceapi "k8s.io/api/resource/v1beta1"
 	"k8s.io/kubernetes/pkg/kubelet/checkpointmanager/checksum"
@@ -45,7 +46,31 @@ func (cp *Checkpoint) MarshalCheckpoint() ([]byte, error) {
 }
 
 func (cp *Checkpoint) UnmarshalCheckpoint(data []byte) error {
-	return json.Unmarshal(data, cp)
+	// If we can unmarshal to a Checkpoint directly we are done
+	if err := json.Unmarshal(data, cp); err == nil {
+		return nil
+	}
+
+	// Otherwise attempt to unmarshal to a Checkpoint2503RC2
+	// TODO: Remove this one release cycle following the v25.3.0 release
+	var cp2503rc2 Checkpoint2503RC2
+	if err := cp2503rc2.UnmarshalCheckpoint(data); err != nil {
+		return fmt.Errorf("unable to unmarshal as %T or %T", *cp, cp2503rc2)
+	}
+
+	// If that succeeded, verify its checksum...
+	if err := cp2503rc2.VerifyChecksum(); err != nil {
+		return fmt.Errorf("error verifying checksum for %T: %w", cp2503rc2, err)
+	}
+
+	// And then convert it to the v1 checkpoint format and try again
+	cpconv := cp2503rc2.ToV1()
+	data, err := cpconv.MarshalCheckpoint()
+	if err != nil {
+		return fmt.Errorf("error remarshalling %T after conversion from %T: %w", cpconv, cp2503rc2, err)
+	}
+
+	return cp.UnmarshalCheckpoint(data)
 }
 
 func (cp *Checkpoint) VerifyChecksum() error {

@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	resourceapi "k8s.io/api/resource/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/dynamic-resource-allocation/kubeletplugin"
 	"k8s.io/klog/v2"
@@ -192,6 +193,27 @@ func (s *DeviceState) Unprepare(ctx context.Context, claimRef kubeletplugin.Name
 		// claimRef.String() contains namespace, name, UID.
 		klog.Infof("unprepare noop: claim not found in checkpoint data: %v", claimRef.String())
 		return nil
+	}
+
+	// If pc.Status.Allocation is 'nil', attempt to pull the status from the
+	// API server. This should only ever happen if we have unmarshaled from a
+	// legacy checkpoint format that did not include the Status field.
+	//
+	// TODO: Remove this one release cycle following the v25.3.0 release
+	if pc.Status.Allocation == nil {
+		klog.Infof("PreparedClaim status was unset in Checkpoint for ResourceClaim %s: attempting to pull it from API server", claimRef.String())
+		claim, err := s.config.clientsets.Core.ResourceV1beta1().ResourceClaims(claimRef.Namespace).Get(
+			ctx,
+			claimRef.Name,
+			metav1.GetOptions{})
+
+		if err != nil {
+			return permanentError{fmt.Errorf("failed to fetch ResourceClaim %s: %w", claimRef.String(), err)}
+		}
+		if claim.Status.Allocation == nil {
+			return permanentError{fmt.Errorf("no allocation set in ResourceClaim %s", claim.String())}
+		}
+		pc.Status = claim.Status
 	}
 
 	if err := s.unprepareDevices(ctx, &pc.Status); err != nil {
