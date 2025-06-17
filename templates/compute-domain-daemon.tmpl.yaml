@@ -34,6 +34,9 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: status.podIP
+        # Use runc: explicit "void"; otherwise we inherit "all".
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: void
         resources:
           claims:
           - name: compute-domain-daemon
