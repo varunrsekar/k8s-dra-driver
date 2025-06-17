@@ -66,6 +66,9 @@ spec:
               fieldPath: metadata.namespace
         - name: IMAGE_NAME
           value: {{ include "nvidia-dra-driver-gpu.fullimage" . }}
+        # Use runc: explicit "void"; otherwise we inherit "all".
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: void
       {{- with .Values.controller.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
