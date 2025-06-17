@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -58,7 +57,7 @@ type ComputeDomainManager struct {
 
 	daemonSetManager             *DaemonSetManager
 	resourceClaimTemplateManager *WorkloadResourceClaimTemplateManager
-	cleanupManager               *CleanupManager[*corev1.Node]
+	nodeManager                  *NodeManager
 }
 
 // NewComputeDomainManager creates a new ComputeDomainManager.
@@ -73,7 +72,7 @@ func NewComputeDomainManager(config *ManagerConfig) *ComputeDomainManager {
 	}
 	m.daemonSetManager = NewDaemonSetManager(config, m.Get)
 	m.resourceClaimTemplateManager = NewWorkloadResourceClaimTemplateManager(config, m.Get)
-	m.cleanupManager = NewCleanupManager[*corev1.Node](informer, m.Get, m.cleanup)
+	m.nodeManager = NewNodeManager(config, m.Get)
 
 	return m
 }
@@ -128,8 +127,8 @@ func (m *ComputeDomainManager) Start(ctx context.Context) (rerr error) {
 		return fmt.Errorf("error creating ResourceClaim manager: %w", err)
 	}
 
-	if err := m.cleanupManager.Start(ctx); err != nil {
-		return fmt.Errorf("error starting cleanup manager: %w", err)
+	if err := m.nodeManager.Start(ctx); err != nil {
+		return fmt.Errorf("error starting Node manager: %w", err)
 	}
 
 	return nil
@@ -141,6 +140,9 @@ func (m *ComputeDomainManager) Stop() error {
 	}
 	if err := m.resourceClaimTemplateManager.Stop(); err != nil {
 		return fmt.Errorf("error stopping ResourceClaimTemplate manager: %w", err)
+	}
+	if err := m.nodeManager.Stop(); err != nil {
+		return fmt.Errorf("error stopping Node manager: %w", err)
 	}
 	m.cancelContext()
 	m.waitGroup.Wait()
@@ -198,41 +200,6 @@ func (m *ComputeDomainManager) RemoveFinalizer(ctx context.Context, uid string) 
 	return nil
 }
 
-// AssertWorkloadsCompletes ensures that all workloads associated with a ComputeDomain have completed.
-//
-// TODO: We should probably also check to ensure that all ResourceClaims
-// generated from our ResourceClaimTemplate for workloads are gone. Doing
-// something is better than nothing for now though.
-func (m *ComputeDomainManager) RemoveNodeLabels(ctx context.Context, cdUID string) error {
-	labelSelector := &metav1.LabelSelector{
-		MatchExpressions: []metav1.LabelSelectorRequirement{
-			{
-				Key:      computeDomainLabelKey,
-				Operator: metav1.LabelSelectorOpIn,
-				Values:   []string{cdUID},
-			},
-		},
-	}
-
-	nodes, err := m.config.clientsets.Core.CoreV1().Nodes().List(ctx, metav1.ListOptions{
-		LabelSelector: metav1.FormatLabelSelector(labelSelector),
-	})
-	if err != nil {
-		return fmt.Errorf("error retrieving nodes: %w", err)
-	}
-
-	for _, node := range nodes.Items {
-		newNode := node.DeepCopy()
-		delete(newNode.Labels, computeDomainLabelKey)
-
-		if _, err := m.config.clientsets.Core.CoreV1().Nodes().Update(ctx, newNode, metav1.UpdateOptions{}); err != nil {
-			return fmt.Errorf("error updating node %s: %w", node.Name, err)
-		}
-	}
-
-	return nil
-}
-
 func (m *ComputeDomainManager) addFinalizer(ctx context.Context, cd *nvapi.ComputeDomain) error {
 	for _, f := range cd.Finalizers {
 		if f == computeDomainFinalizer {
@@ -255,7 +222,7 @@ func (m *ComputeDomainManager) onAddOrUpdate(ctx context.Context, obj any) error
 		return fmt.Errorf("failed to cast to ComputeDomain")
 	}
 
-	klog.Infof("Processing added or updated ComputeDomain: %s/%s", cd.Namespace, cd.Name)
+	klog.Infof("Processing added or updated ComputeDomain: %s/%s/%s", cd.Namespace, cd.Name, cd.UID)
 
 	if cd.GetDeletionTimestamp() != nil {
 		if err := m.resourceClaimTemplateManager.Delete(ctx, string(cd.UID)); err != nil {
@@ -266,7 +233,7 @@ func (m *ComputeDomainManager) onAddOrUpdate(ctx context.Context, obj any) error
 			return fmt.Errorf("error deleting DaemonSet: %w", err)
 		}
 
-		if err := m.RemoveNodeLabels(ctx, string(cd.UID)); err != nil {
+		if err := m.nodeManager.RemoveComputeDomainLabels(ctx, string(cd.UID)); err != nil {
 			return fmt.Errorf("error removing ComputeDomain node labels: %w", err)
 		}
 
@@ -297,6 +264,9 @@ func (m *ComputeDomainManager) onAddOrUpdate(ctx context.Context, obj any) error
 		return fmt.Errorf("error adding finalizer: %w", err)
 	}
 
+	// Do not wait for the next periodic label cleanup to happen.
+	m.nodeManager.RemoveStaleComputeDomainLabelsAsync(ctx)
+
 	if _, err := m.daemonSetManager.Create(ctx, m.config.driverNamespace, cd); err != nil {
 		return fmt.Errorf("error creating DaemonSet: %w", err)
 	}
@@ -305,12 +275,5 @@ func (m *ComputeDomainManager) onAddOrUpdate(ctx context.Context, obj any) error
 		return fmt.Errorf("error creating ResourceClaimTemplate '%s/%s': %w", cd.Namespace, cd.Spec.Channel.ResourceClaimTemplate.Name, err)
 	}
 
-	return nil
-}
-
-func (m *ComputeDomainManager) cleanup(ctx context.Context, cdUID string) error {
-	if err := m.RemoveNodeLabels(ctx, cdUID); err != nil {
-		return fmt.Errorf("error removing ComputeDomain node labels: %w", err)
-	}
 	return nil
 }
