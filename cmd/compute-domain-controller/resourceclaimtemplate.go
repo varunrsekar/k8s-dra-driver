@@ -23,14 +23,14 @@ import (
 	"sync"
 	"text/template"
 
-	resourceapi "k8s.io/api/resource/v1beta1"
+	resourceapi "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/client-go/informers"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
@@ -63,7 +63,6 @@ type BaseResourceClaimTemplateManager struct {
 	cancelContext    context.CancelFunc
 	getComputeDomain GetComputeDomainFunc
 
-	factory       informers.SharedInformerFactory
 	informer      cache.SharedIndexInformer
 	mutationCache cache.MutationCache
 
@@ -79,20 +78,29 @@ type WorkloadResourceClaimTemplateManager struct {
 }
 
 func newBaseResourceClaimTemplateManager(config *ManagerConfig, getComputeDomain GetComputeDomainFunc, labelSelector *metav1.LabelSelector, namespace string) *BaseResourceClaimTemplateManager {
-	factory := informers.NewSharedInformerFactoryWithOptions(
-		config.clientsets.Core,
-		informerResyncPeriod,
-		informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
-			opts.LabelSelector = metav1.FormatLabelSelector(labelSelector)
-		}),
-	)
+	tweakListOptions := func(opts *metav1.ListOptions) {
+		opts.LabelSelector = metav1.FormatLabelSelector(labelSelector)
+	}
 
-	informer := factory.Resource().V1beta1().ResourceClaimTemplates().Informer()
+	informer := cache.NewSharedIndexInformer(
+		&cache.ListWatch{
+			ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
+				tweakListOptions(&options)
+				return config.clientsets.Resource.ResourceClaimTemplates("").List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
+				tweakListOptions(&options)
+				return config.clientsets.Resource.ResourceClaimTemplates("").Watch(ctx, options)
+			},
+		},
+		&resourceapi.ResourceClaimTemplate{},
+		informerResyncPeriod,
+		cache.Indexers{},
+	)
 
 	m := &BaseResourceClaimTemplateManager{
 		config:           config,
 		getComputeDomain: getComputeDomain,
-		factory:          factory,
 		informer:         informer,
 	}
 	m.cleanupManager = NewCleanupManager[*resourceapi.ResourceClaimTemplate](informer, getComputeDomain, m.cleanup)
@@ -127,7 +135,7 @@ func (m *BaseResourceClaimTemplateManager) Start(ctx context.Context) (rerr erro
 	m.waitGroup.Add(1)
 	go func() {
 		defer m.waitGroup.Done()
-		m.factory.Start(ctx.Done())
+		m.informer.Run(ctx.Done())
 	}()
 
 	if !cache.WaitForCacheSync(ctx.Done(), m.informer.HasSynced) {
@@ -170,7 +178,7 @@ func (m *BaseResourceClaimTemplateManager) Create(ctx context.Context, templateP
 		return nil, fmt.Errorf("failed to convert unstructured data to typed object: %w", err)
 	}
 
-	rct, err := m.config.clientsets.Core.ResourceV1beta1().ResourceClaimTemplates(resourceClaimTemplate.Namespace).Create(ctx, &resourceClaimTemplate, metav1.CreateOptions{})
+	rct, err := m.config.clientsets.Resource.ResourceClaimTemplates(resourceClaimTemplate.Namespace).Create(ctx, &resourceClaimTemplate, metav1.CreateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("error creating ResourceClaimTemplate: %w", err)
 	}
@@ -200,7 +208,7 @@ func (m *BaseResourceClaimTemplateManager) Delete(ctx context.Context, cdUID str
 		return nil
 	}
 
-	err = m.config.clientsets.Core.ResourceV1beta1().ResourceClaimTemplates(rct.Namespace).Delete(ctx, rct.Name, metav1.DeleteOptions{})
+	err = m.config.clientsets.Resource.ResourceClaimTemplates(rct.Namespace).Delete(ctx, rct.Name, metav1.DeleteOptions{})
 	if err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("erroring deleting ResourceClaimTemplate: %w", err)
 	}
@@ -237,7 +245,7 @@ func (m *BaseResourceClaimTemplateManager) RemoveFinalizer(ctx context.Context, 
 		return nil
 	}
 
-	if _, err = m.config.clientsets.Core.ResourceV1beta1().ResourceClaimTemplates(rct.Namespace).Update(ctx, newRCT, metav1.UpdateOptions{}); err != nil {
+	if _, err = m.config.clientsets.Resource.ResourceClaimTemplates(rct.Namespace).Update(ctx, newRCT, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("error updating ResourceClaimTemplate: %w", err)
 	}
 
