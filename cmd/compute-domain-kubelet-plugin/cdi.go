@@ -164,7 +164,7 @@ func (cdi *CDIHandler) CreateStandardDeviceSpecFile(allocatable AllocatableDevic
 		"NVIDIA_VISIBLE_DEVICES=void")
 
 	// Generate device specs for all devices.
-	deviceSpecs, err := cdi.nvcdiDevice.GetAllDeviceSpecs()
+	deviceSpecs, err := cdi.nvcdiDevice.GetDeviceSpecsByID("all")
 	if err != nil {
 		return fmt.Errorf("unable to get all GPU device specs: %w", err)
 	}
