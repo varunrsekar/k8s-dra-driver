@@ -474,6 +474,9 @@ func (s *DeviceState) getConfigResultsMap(rcs *resourceapi.ResourceClaimStatus) 
 	// each device allocation result based on their order of precedence and type.
 	configResultsMap := make(map[runtime.Object][]*resourceapi.DeviceRequestAllocationResult)
 	for _, result := range rcs.Allocation.Devices.Results {
+		if result.Driver != DriverName {
+			continue
+		}
 		device, exists := s.allocatable[result.Device]
 		if !exists {
 			return nil, fmt.Errorf("requested device is not allocatable: %v", result.Device)
