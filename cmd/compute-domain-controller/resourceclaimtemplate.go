@@ -63,8 +63,9 @@ type BaseResourceClaimTemplateManager struct {
 	cancelContext    context.CancelFunc
 	getComputeDomain GetComputeDomainFunc
 
-	factory  informers.SharedInformerFactory
-	informer cache.SharedIndexInformer
+	factory       informers.SharedInformerFactory
+	informer      cache.SharedIndexInformer
+	mutationCache cache.MutationCache
 
 	cleanupManager *CleanupManager[*resourceapi.ResourceClaimTemplate]
 }
@@ -114,6 +115,14 @@ func (m *BaseResourceClaimTemplateManager) Start(ctx context.Context) (rerr erro
 	if err := addComputeDomainLabelIndexer[*resourceapi.ResourceClaimTemplate](m.informer); err != nil {
 		return fmt.Errorf("error adding indexer for ComputeDomain label: %w", err)
 	}
+
+	m.mutationCache = cache.NewIntegerResourceVersionMutationCache(
+		klog.Background(),
+		m.informer.GetStore(),
+		m.informer.GetIndexer(),
+		mutationCacheTTL,
+		true,
+	)
 
 	m.waitGroup.Add(1)
 	go func() {
@@ -166,11 +175,15 @@ func (m *BaseResourceClaimTemplateManager) Create(ctx context.Context, templateP
 		return nil, fmt.Errorf("error creating ResourceClaimTemplate: %w", err)
 	}
 
+	// Add the newly created ResourceClaimTemplate to the mutation cache
+	// This ensures subsequent calls will see it immediately
+	m.mutationCache.Mutation(rct)
+
 	return rct, nil
 }
 
 func (m *BaseResourceClaimTemplateManager) Delete(ctx context.Context, cdUID string) error {
-	rcts, err := getByComputeDomainUID[*resourceapi.ResourceClaimTemplate](ctx, m.informer, cdUID)
+	rcts, err := getByComputeDomainUID[*resourceapi.ResourceClaimTemplate](ctx, m.mutationCache, cdUID)
 	if err != nil {
 		return fmt.Errorf("error retrieving ResourceClaimTemplate: %w", err)
 	}
@@ -196,7 +209,7 @@ func (m *BaseResourceClaimTemplateManager) Delete(ctx context.Context, cdUID str
 }
 
 func (m *BaseResourceClaimTemplateManager) RemoveFinalizer(ctx context.Context, cdUID string) error {
-	rcts, err := getByComputeDomainUID[*resourceapi.ResourceClaimTemplate](ctx, m.informer, cdUID)
+	rcts, err := getByComputeDomainUID[*resourceapi.ResourceClaimTemplate](ctx, m.mutationCache, cdUID)
 	if err != nil {
 		return fmt.Errorf("error retrieving ResourceClaimTemplate: %w", err)
 	}
@@ -228,11 +241,14 @@ func (m *BaseResourceClaimTemplateManager) RemoveFinalizer(ctx context.Context, 
 		return fmt.Errorf("error updating ResourceClaimTemplate: %w", err)
 	}
 
+	// Update mutation cache after successful update
+	m.mutationCache.Mutation(newRCT)
+
 	return nil
 }
 
 func (m *BaseResourceClaimTemplateManager) AssertRemoved(ctx context.Context, cdUID string) error {
-	rcts, err := getByComputeDomainUID[*resourceapi.ResourceClaimTemplate](ctx, m.informer, cdUID)
+	rcts, err := getByComputeDomainUID[*resourceapi.ResourceClaimTemplate](ctx, m.informer.GetIndexer(), cdUID)
 	if err != nil {
 		return fmt.Errorf("error retrieving ResourceClaimTemplate: %w", err)
 	}
@@ -277,7 +293,7 @@ func NewDaemonSetResourceClaimTemplateManager(config *ManagerConfig, getComputeD
 }
 
 func (m *DaemonSetResourceClaimTemplateManager) Create(ctx context.Context, namespace string, cd *nvapi.ComputeDomain) (*resourceapi.ResourceClaimTemplate, error) {
-	rcts, err := getByComputeDomainUID[*resourceapi.ResourceClaimTemplate](ctx, m.informer, string(cd.UID))
+	rcts, err := getByComputeDomainUID[*resourceapi.ResourceClaimTemplate](ctx, m.mutationCache, string(cd.UID))
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving ResourceClaimTemplate: %w", err)
 	}
@@ -337,7 +353,7 @@ func NewWorkloadResourceClaimTemplateManager(config *ManagerConfig, getComputeDo
 }
 
 func (m *WorkloadResourceClaimTemplateManager) Create(ctx context.Context, namespace, name string, cd *nvapi.ComputeDomain) (*resourceapi.ResourceClaimTemplate, error) {
-	rcts, err := getByComputeDomainUID[*resourceapi.ResourceClaimTemplate](ctx, m.informer, string(cd.UID))
+	rcts, err := getByComputeDomainUID[*resourceapi.ResourceClaimTemplate](ctx, m.mutationCache, string(cd.UID))
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving ResourceClaimTemplate: %w", err)
 	}
