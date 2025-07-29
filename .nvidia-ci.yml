@@ -234,7 +234,8 @@ push-images-to-staging:
       fi
 
       rm -f ${VERSION_FILE}
-      echo "${IN_IMAGE_TAG} ${OUT_IMAGE_TAG}-ubi9" >> ${VERSION_FILE}
+      echo "${IN_IMAGE_TAG}-ubi9 ${OUT_IMAGE_TAG}-ubi9" >> ${VERSION_FILE}
+      echo "${IN_IMAGE_TAG}-ubi9 ${OUT_IMAGE_TAG}" >> ${VERSION_FILE}
       cat ${VERSION_FILE}
   script:
     - cnt-ngc-publish render --project-name "${PROJECT_NAME}" --versions-file "${VERSION_FILE}" --output "${PROJECT_NAME}".yaml
