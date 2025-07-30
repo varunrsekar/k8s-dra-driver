@@ -8,14 +8,14 @@ require (
 	github.com/Masterminds/semver v1.5.0
 	github.com/NVIDIA/go-nvlib v0.7.3
 	github.com/NVIDIA/go-nvml v0.12.9-0
-	github.com/NVIDIA/nvidia-container-toolkit v1.17.8
+	github.com/NVIDIA/nvidia-container-toolkit v1.18.0-rc.1.0.20250730085513-4f98c014bfa1
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.22.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/pflag v1.0.7
 	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli/v2 v2.27.7
-	golang.org/x/sys v0.33.0
+	golang.org/x/sys v0.34.0
 	k8s.io/api v0.33.0
 	k8s.io/apimachinery v0.33.0
 	k8s.io/client-go v0.33.0
@@ -26,8 +26,8 @@ require (
 	k8s.io/kubernetes v1.33.2
 	k8s.io/mount-utils v0.33.0
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
-	tags.cncf.io/container-device-interface v0.8.1
-	tags.cncf.io/container-device-interface/specs-go v0.8.0
+	tags.cncf.io/container-device-interface v1.0.1
+	tags.cncf.io/container-device-interface/specs-go v1.0.0
 )
 
 require (
@@ -72,7 +72,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.33.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/mod v0.22.0 // indirect
+	golang.org/x/mod v0.26.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/term v0.30.0 // indirect
