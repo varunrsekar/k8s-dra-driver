@@ -224,6 +224,11 @@ push-images-to-staging:
 
     VERSION_FILE: "build-info-${CI_PIPELINE_ID}.txt"
     PROJECT_NAME: "k8s-dra-driver-gpu"
+    # Allow for setting nspect program version manually.
+    # The default empty string value results in the key
+    # being omitted from the publishing doc (which is
+    # valid).
+    NSPECT_PROGRAM_VERSION: ""
   before_script:
     - |
       if [ -n "${OVERRIDE_PUBLISHING_PROJECT_PATH}" ]; then
@@ -242,7 +247,12 @@ push-images-to-staging:
       echo "${IN_IMAGE_TAG}-ubi9 ${OUT_IMAGE_TAG}" >> ${VERSION_FILE}
       cat ${VERSION_FILE}
   script:
-    - cnt-ngc-publish render --project-name "${PROJECT_NAME}" --versions-file "${VERSION_FILE}" --output "${PROJECT_NAME}".yaml
+    - |
+      cnt-ngc-publish render \
+          --project-name "${PROJECT_NAME}" \
+          --versions-file "${VERSION_FILE}" \
+          --output "${PROJECT_NAME}".yaml \
+          --nspect-program-version "${NSPECT_PROGRAM_VERSION}"
     - cnt-ngc-publish merge-request --files "${PROJECT_NAME}.yaml"
   artifacts:
     paths:
