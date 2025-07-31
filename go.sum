@@ -6,8 +6,8 @@ github.com/NVIDIA/go-nvlib v0.7.3 h1:kXc8PkWUlrwedSpM4fR8xT/DAq1NKy8HqhpgteFcGAw
 github.com/NVIDIA/go-nvlib v0.7.3/go.mod h1:i95Je7GinMy/+BDs++DAdbPmT2TubjNP8i8joC7DD7I=
 github.com/NVIDIA/go-nvml v0.12.9-0 h1:e344UK8ZkeMeeLkdQtRhmXRxNf+u532LDZPGMtkdus0=
 github.com/NVIDIA/go-nvml v0.12.9-0/go.mod h1:+KNA7c7gIBH7SKSJ1ntlwkfN80zdx8ovl4hrK3LmPt4=
-github.com/NVIDIA/nvidia-container-toolkit v1.18.0-rc.1.0.20250730085513-4f98c014bfa1 h1:G1E4TuPBijzn4EuEnRwzZ64HGjcTjKwTrH2H3GN1NZw=
-github.com/NVIDIA/nvidia-container-toolkit v1.18.0-rc.1.0.20250730085513-4f98c014bfa1/go.mod h1:z0KTZNkSOiQx8u4SEo1iq0aldqdnwruLHPXHdMd3B+k=
+github.com/NVIDIA/nvidia-container-toolkit v1.18.0-rc.2 h1:vjEJpEpiGhGqca+JK9p0RqmCIBZPnOpPyT1nPj4nsEM=
+github.com/NVIDIA/nvidia-container-toolkit v1.18.0-rc.2/go.mod h1:z0KTZNkSOiQx8u4SEo1iq0aldqdnwruLHPXHdMd3B+k=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/blang/semver/v4 v4.0.0 h1:1PFHFE6yCCTv8C1TeyNNarDzntLi7wMI5i/pzqYIsAM=
