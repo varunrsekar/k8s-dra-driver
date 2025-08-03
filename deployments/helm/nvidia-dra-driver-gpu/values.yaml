@@ -81,6 +81,7 @@ controller:
   containers:
     computeDomain:
       securityContext: {}
+      env: []
       resources: {}
   affinity:
     nodeAffinity:
