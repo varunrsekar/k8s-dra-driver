@@ -25,14 +25,14 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/pflag v1.0.7
 	github.com/stretchr/testify v1.10.0
- 	github.com/urfave/cli/v2 v2.27.7
-	google.golang.org/grpc v1.68.1
-	golang.org/x/sys v0.33.0
-	k8s.io/api v0.33.0
-	k8s.io/apimachinery v0.33.0
-	k8s.io/client-go v0.33.0
-	k8s.io/component-base v0.33.0
-	k8s.io/dynamic-resource-allocation v0.33.0
+	github.com/urfave/cli/v2 v2.27.7
+  	google.golang.org/grpc v1.72.1
+	golang.org/x/sys v0.34.0
+	k8s.io/api v0.0.0
+	k8s.io/apimachinery v0.0.0
+	k8s.io/client-go v0.0.0
+	k8s.io/component-base v0.0.0
+	k8s.io/dynamic-resource-allocation v0.0.0
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubelet v0.0.0
 	k8s.io/kubernetes v0.0.0-00010101000000-000000000000
