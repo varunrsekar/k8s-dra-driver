@@ -28,8 +28,11 @@ import (
 )
 
 const (
-	// ExampleFeature is a placeholder just to show how these gates are added.
-	ExampleFeature featuregate.Feature = "ExampleFeature"
+	// TimeSlicingSettings allows timeslicing settings to be customized.
+	TimeSlicingSettings featuregate.Feature = "TimeSlicingSettings"
+
+	// MPSSupport allows MPS (Multi-Process Service) settings to be specified.
+	MPSSupport featuregate.Feature = "MPSSupport"
 )
 
 // FeatureGates is a singleton representing the set of all feature gates and their values.
@@ -39,7 +42,14 @@ var FeatureGates featuregate.MutableVersionedFeatureGate
 // defaultFeatureGates contains the default settings for all project-specific feature gates.
 // These will be registered with the standard Kubernetes feature gate system.
 var defaultFeatureGates = map[featuregate.Feature]featuregate.VersionedSpecs{
-	ExampleFeature: {
+	TimeSlicingSettings: {
+		{
+			Default:    false,
+			PreRelease: featuregate.Alpha,
+			Version:    version.MajorMinor(25, 8),
+		},
+	},
+	MPSSupport: {
 		{
 			Default:    false,
 			PreRelease: featuregate.Alpha,

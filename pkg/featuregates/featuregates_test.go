@@ -131,11 +131,11 @@ func TestDefaultFeatureGates(t *testing.T) {
 
 		// Test that the system is functional by querying a real feature
 		require.NotPanics(t, func() {
-			_ = fg.Enabled(ExampleFeature)
-		}, "Should be able to query actual project features")
+			_ = fg.Enabled(TimeSlicingSettings)
+		}, "Should be able to query real features")
 
 		// Test that real features have expected defaults
-		require.False(t, fg.Enabled(ExampleFeature), "ExampleFeature should be disabled by default (alpha)")
+		require.False(t, fg.Enabled(TimeSlicingSettings), "TimeSlicingSettings should be disabled by default (alpha)")
 	})
 }
 
@@ -314,15 +314,15 @@ func TestKnownFeaturesIntegration(t *testing.T) {
 
 		require.NotEmpty(t, knownFeatures, "Should have known features")
 
-		// Verify that our real project features are included
+		// Verify that our real features are included
 		found := false
 		for _, feature := range knownFeatures {
-			if strings.Contains(feature, string(ExampleFeature)) {
+			if strings.Contains(feature, string(TimeSlicingSettings)) {
 				found = true
 				break
 			}
 		}
-		require.True(t, found, "Should contain our project features in known features list")
+		require.True(t, found, "Should contain our real features in known features list")
 	})
 
 	t.Run("TestFeatureGates", func(t *testing.T) {
