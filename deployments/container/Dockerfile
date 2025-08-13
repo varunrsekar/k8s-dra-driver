@@ -78,7 +78,7 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
 FROM ${TOOLKIT_CONTAINER_IMAGE} AS toolkit
 
 # Construct production image (arch: TARGETPLATFORM, set via --platform).
-FROM nvcr.io/nvidia/cuda:12.9.1-base-ubi9
+FROM nvcr.io/nvidia/cuda:13.0.0-base-ubi9
 
 ENV NVIDIA_DISABLE_REQUIRE="true"
 ENV NVIDIA_VISIBLE_DEVICES=all
