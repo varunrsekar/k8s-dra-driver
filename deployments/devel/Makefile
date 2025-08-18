@@ -43,6 +43,7 @@ DOCKERFILE_CONTEXT = deployments/devel
 	$(DOCKER) build \
 		--progress=plain \
 		--build-arg GOLANG_VERSION=$(GOLANG_VERSION) \
+		--build-arg BASH_STATIC_GIT_REF="$(BASH_STATIC_GIT_REF)" \
 		--build-arg TOOLKIT_CONTAINER_IMAGE="$(TOOLKIT_CONTAINER_IMAGE)" \
 		--tag $(BUILDIMAGE) \
 		-f $(DOCKERFILE_DEVEL) \
