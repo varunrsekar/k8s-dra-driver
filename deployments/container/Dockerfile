@@ -20,7 +20,8 @@
 ARG TOOLKIT_CONTAINER_IMAGE=unknown
 
 # Run build with binaries native to the current build platform.
-FROM --platform=$BUILDPLATFORM nvcr.io/nvidia/cuda:12.9.1-base-ubuntu20.04 AS build
+#FROM --platform=$BUILDPLATFORM nvcr.io/nvidia/cuda:12.9.1-base-ubuntu20.04 AS build
+FROM --platform=$BUILDPLATFORM docker.io/debian:12-slim AS build
 
 # Require arg to be provided (set invalid default value).
 ARG GOLANG_VERSION=x.x.x
@@ -78,7 +79,13 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
 FROM ${TOOLKIT_CONTAINER_IMAGE} AS toolkit
 
 # Construct production image (arch: TARGETPLATFORM, set via --platform).
-FROM nvcr.io/nvidia/cuda:13.0.0-base-ubi9
+# Construct production image (arch: TARGETPLATFORM, set via the `--platform` CLI
+# arg). nvcr.io/nvidia/distroless/cc 3.1 is based on
+# https://github.com/GoogleContainerTools/distroless; specifically on debian12.
+# For consistency, the build stage above derives from Debian 12 directly. Add
+# `-dev` to get busybox as a shell added. For RUN directives to pick that up,
+# use `SHELL ["/busybox/sh", "-c"]`.
+FROM nvcr.io/nvidia/distroless/cc:v3.1.11-dev
 
 ENV NVIDIA_DISABLE_REQUIRE="true"
 ENV NVIDIA_VISIBLE_DEVICES=all
@@ -97,10 +104,8 @@ LABEL description="NVIDIA DRA Driver for GPUs"
 LABEL org.opencontainers.image.description="NVIDIA DRA Driver for GPUs"
 LABEL org.opencontainers.image.source="https://github.com/NVIDIA/k8s-dra-driver-gpu"
 
-# When doing a cross-platform build (e.g., amd64 -> arm64) then mkdir/mv below
-# require virtualization. To support that you might have to install qemu:
-# https://docs.docker.com/build/building/multi-platform/#install-qemu-manually
-RUN mkdir /licenses && mv /NGC-DL-CONTAINER-LICENSE /licenses/NGC-DL-CONTAINER-LICENSE
+# Add top-level license (AL2) file into the container image
+COPY LICENSE /
 
 COPY --from=toolkit /artifacts/rpm/usr/bin/nvidia-cdi-hook   /usr/bin/nvidia-cdi-hook
 COPY --from=build   /artifacts/compute-domain-controller     /usr/bin/compute-domain-controller
@@ -109,3 +114,6 @@ COPY --from=build   /artifacts/compute-domain-daemon         /usr/bin/compute-do
 COPY --from=build   /artifacts/gpu-kubelet-plugin            /usr/bin/gpu-kubelet-plugin
 COPY /hack/kubelet-plugin-prestart.sh /usr/bin/kubelet-plugin-prestart.sh
 COPY /templates /templates
+
+# Smoke-test executables.
+RUN ["/usr/bin/compute-domain-kubelet-plugin", "--help"]
