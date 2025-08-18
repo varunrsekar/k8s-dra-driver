@@ -52,6 +52,7 @@ import (
 )
 
 const (
+	MpsControlFilesDirName       = "mps"
 	MpsControlDaemonTemplatePath = "/templates/mps-control-daemon.tmpl.yaml"
 	MpsControlDaemonNameFmt      = "mps-control-daemon-%v" // Fill with ClaimUID
 )
@@ -97,10 +98,6 @@ type MpsControlDaemonTemplateData struct {
 	FeatureGates                    map[string]bool
 }
 
-func (c Config) MpsRoot() string {
-	return filepath.Join(c.DriverPluginPath(), "mps")
-}
-
 func NewTimeSlicingManager(deviceLib *deviceLib) *TimeSlicingManager {
 	return &TimeSlicingManager{
 		nvdevlib: deviceLib,
@@ -128,7 +125,9 @@ func (t *TimeSlicingManager) SetTimeSlice(devices UUIDProvider, config *configap
 	return nil
 }
 
-func NewMpsManager(config *Config, deviceLib *deviceLib, controlFilesRoot, hostDriverRoot, templatePath string) *MpsManager {
+func NewMpsManager(config *Config, deviceLib *deviceLib, hostDriverRoot, templatePath string) *MpsManager {
+	controlFilesRoot := filepath.Join(config.DriverPluginPath(), MpsControlFilesDirName)
+
 	return &MpsManager{
 		controlFilesRoot: controlFilesRoot,
 		hostDriverRoot:   hostDriverRoot,

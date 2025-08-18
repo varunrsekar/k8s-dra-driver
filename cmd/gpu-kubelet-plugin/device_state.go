@@ -85,7 +85,7 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 	}
 
 	tsManager := NewTimeSlicingManager(nvdevlib)
-	mpsManager := NewMpsManager(config, nvdevlib, config.MpsRoot(), hostDriverRoot, MpsControlDaemonTemplatePath)
+	mpsManager := NewMpsManager(config, nvdevlib, hostDriverRoot, MpsControlDaemonTemplatePath)
 
 	if err := cdi.CreateStandardDeviceSpecFile(allocatable); err != nil {
 		return nil, fmt.Errorf("unable to create base CDI spec file: %v", err)
