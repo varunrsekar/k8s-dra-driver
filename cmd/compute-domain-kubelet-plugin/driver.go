@@ -43,6 +43,10 @@ const (
 	// that deadline, retryable errors are retried (with backoff) via the
 	// workqueue abstraction.
 	ErrorRetryMaxTimeout = 45 * time.Second
+	// DriverPrepUprepFlockPath is the path to a lock file used to make sure
+	// that calls to nodePrepareResource() / nodeUnprepareResource() never
+	// interleave, node-globally.
+	DriverPrepUprepFlockFileName = "pu.lock"
 )
 
 // permanentError defines an error indicating that it is permanent.
@@ -61,23 +65,18 @@ type driver struct {
 	pulock       *flock.Flock
 }
 
-// DriverPrepUprepFlockPath is the path to a lock file used to make sure
-// that calls to nodePrepareResource() / nodeUnprepareResource() never
-// interleave, node-globally.
-func (c Config) DriverPrepUprepFlockPath() string {
-	return filepath.Join(c.DriverPluginPath(), "pu.lock")
-}
-
 func NewDriver(ctx context.Context, config *Config) (*driver, error) {
 	state, err := NewDeviceState(ctx, config)
 	if err != nil {
 		return nil, err
 	}
 
+	puLockPath := filepath.Join(config.DriverPluginPath(), DriverPrepUprepFlockFileName)
+
 	driver := &driver{
 		client: config.clientsets.Core,
 		state:  state,
-		pulock: flock.NewFlock(config.DriverPrepUprepFlockPath()),
+		pulock: flock.NewFlock(puLockPath),
 	}
 
 	helper, err := kubeletplugin.Start(
