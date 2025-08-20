@@ -43,7 +43,7 @@ const (
 	informerResyncPeriod = 10 * time.Minute
 	cleanupInterval      = 10 * time.Minute
 
-	ComputeDomainDaemonSettingsRoot       = DriverPluginPath + "/domains"
+	ComputeDomainDaemonConfigFilesDirName = "domains"
 	ComputeDomainDaemonConfigTemplatePath = "/templates/compute-domain-daemon-config.tmpl.cfg"
 )
 
@@ -67,9 +67,10 @@ type ComputeDomainDaemonSettings struct {
 	nodesConfigPath string
 }
 
-func NewComputeDomainManager(config *Config, configFilesRoot, cliqueID string) *ComputeDomainManager {
+func NewComputeDomainManager(config *Config, cliqueID string) *ComputeDomainManager {
 	factory := nvinformers.NewSharedInformerFactory(config.clientsets.Nvidia, informerResyncPeriod)
 	informer := factory.Resource().V1beta1().ComputeDomains().Informer()
+	configFilesRoot := filepath.Join(config.DriverPluginPath(), ComputeDomainDaemonConfigFilesDirName)
 
 	m := &ComputeDomainManager{
 		config:          config,

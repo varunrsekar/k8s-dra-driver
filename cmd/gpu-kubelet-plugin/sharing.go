@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -51,7 +52,7 @@ import (
 )
 
 const (
-	MpsRoot                      = DriverPluginPath + "/mps"
+	MpsControlFilesDirName       = "mps"
 	MpsControlDaemonTemplatePath = "/templates/mps-control-daemon.tmpl.yaml"
 	MpsControlDaemonNameFmt      = "mps-control-daemon-%v" // Fill with ClaimUID
 )
@@ -124,7 +125,9 @@ func (t *TimeSlicingManager) SetTimeSlice(devices UUIDProvider, config *configap
 	return nil
 }
 
-func NewMpsManager(config *Config, deviceLib *deviceLib, controlFilesRoot, hostDriverRoot, templatePath string) *MpsManager {
+func NewMpsManager(config *Config, deviceLib *deviceLib, hostDriverRoot, templatePath string) *MpsManager {
+	controlFilesRoot := filepath.Join(config.DriverPluginPath(), MpsControlFilesDirName)
+
 	return &MpsManager{
 		controlFilesRoot: controlFilesRoot,
 		hostDriverRoot:   hostDriverRoot,

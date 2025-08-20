@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	resourceapi "k8s.io/api/resource/v1"
@@ -35,7 +36,7 @@ import (
 // DriverPrepUprepFlockPath is the path to a lock file used to make sure
 // that calls to nodePrepareResource() / nodeUnprepareResource() never
 // interleave, node-globally.
-const DriverPrepUprepFlockPath = DriverPluginPath + "/pu.lock"
+const DriverPrepUprepFlockFileName = "pu.lock"
 
 type driver struct {
 	client       coreclientset.Interface
@@ -49,10 +50,13 @@ func NewDriver(ctx context.Context, config *Config) (*driver, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	puLockPath := filepath.Join(config.DriverPluginPath(), DriverPrepUprepFlockFileName)
+
 	driver := &driver{
 		client: config.clientsets.Core,
 		state:  state,
-		pulock: flock.NewFlock(DriverPrepUprepFlockPath),
+		pulock: flock.NewFlock(puLockPath),
 	}
 
 	helper, err := kubeletplugin.Start(
@@ -62,6 +66,8 @@ func NewDriver(ctx context.Context, config *Config) (*driver, error) {
 		kubeletplugin.NodeName(config.flags.nodeName),
 		kubeletplugin.DriverName(DriverName),
 		kubeletplugin.Serialize(false),
+		kubeletplugin.RegistrarDirectoryPath(config.flags.kubeletRegistrarDirectoryPath),
+		kubeletplugin.PluginDataDirectoryPath(config.DriverPluginPath()),
 	)
 	if err != nil {
 		return nil, err
