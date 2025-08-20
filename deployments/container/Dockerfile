@@ -20,10 +20,11 @@
 ARG TOOLKIT_CONTAINER_IMAGE=unknown
 
 # Run build with binaries native to the current build platform.
-FROM --platform=$BUILDPLATFORM nvcr.io/nvidia/cuda:12.9.1-base-ubuntu20.04 AS build
+FROM --platform=$BUILDPLATFORM docker.io/debian:12 AS build
 
 # Require arg to be provided (set invalid default value).
 ARG GOLANG_VERSION=x.x.x
+ARG BASH_STATIC_GIT_REF=unknown
 
 # BUILDARCH, TARGETARCH (and others) are defined in the global scope by
 # BuiltKit. BUILDARCH is the architecture of the build platform. TARGETARCH is
@@ -34,14 +35,35 @@ ARG GOLANG_VERSION=x.x.x
 ARG BUILDARCH
 ARG TARGETARCH
 
+# Install dependencies for Go build. Do not clear apt cache (does not
+# leak into prod stage).
 RUN apt-get update && \
     apt-get install -y \
         wget \
         make \
         git \
         gcc-aarch64-linux-gnu \
-        gcc && \
-    rm -rf /var/lib/apt/lists/*
+        gcc
+
+# Install dependencies for `bash-static` build.
+RUN apt-get install -y gpg curl autoconf
+
+# Build static bash binary (against musl).
+WORKDIR /bashbuild
+RUN git clone https://github.com/robxu9/bash-static/
+RUN ARCH="$TARGETARCH" && \
+    [ "$ARCH" = "arm64" ] && ARCH="aarch64" || true && \
+    [ "$ARCH" = "amd64" ] && ARCH="x86_64" || true && \
+    echo "detected arch: $ARCH" && \
+    cd bash-static && git checkout ${BASH_STATIC_GIT_REF} && \
+    sed -i 's|https://ftp\.gnu\.org/gnu|https://ftpmirror.gnu.org/|g' ./build.sh && \
+    sed -i 's/-sLO/-sSfLO --retry 300 --connect-timeout 20 --retry-delay 2/g' ./build.sh && \
+    bash version-52.sh && ./build.sh linux $ARCH
+
+# With above's commit, this emits
+# 'GNU bash, version 5.2.37(1)-release (aarch64-unknown-linux-musl)'
+RUN cd /bashbuild/bash-static/releases && ./bash*-static --version
+RUN mv /bashbuild/bash-static/releases/bash-*-static /bashbuild/bash
 
 RUN wget -nv -O - https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-${BUILDARCH}.tar.gz \
     | tar -C /usr/local -xz
@@ -77,8 +99,13 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
 # (arch: TARGETPLATFORM, set via --platform).
 FROM ${TOOLKIT_CONTAINER_IMAGE} AS toolkit
 
-# Construct production image (arch: TARGETPLATFORM, set via --platform).
-FROM nvcr.io/nvidia/cuda:13.0.0-base-ubi9
+# Construct production image (arch: TARGETPLATFORM, set via the `--platform` CLI
+# arg). Note that nvcr.io/nvidia/distroless/cc is based on
+# https://github.com/GoogleContainerTools/distroless; specifically on debian12.
+# For consistency, the build stage above derives from Debian 12 directly. The
+# `-dev` suffic is to get busybox as a shell added. For RUN directives to pick
+# that up, use `SHELL ["/busybox/sh", "-c"]`.
+FROM nvcr.io/nvidia/distroless/cc:v3.1.11-dev
 
 ENV NVIDIA_DISABLE_REQUIRE="true"
 ENV NVIDIA_VISIBLE_DEVICES=all
@@ -97,15 +124,24 @@ LABEL description="NVIDIA DRA Driver for GPUs"
 LABEL org.opencontainers.image.description="NVIDIA DRA Driver for GPUs"
 LABEL org.opencontainers.image.source="https://github.com/NVIDIA/k8s-dra-driver-gpu"
 
-# When doing a cross-platform build (e.g., amd64 -> arm64) then mkdir/mv below
-# require virtualization. To support that you might have to install qemu:
-# https://docs.docker.com/build/building/multi-platform/#install-qemu-manually
-RUN mkdir /licenses && mv /NGC-DL-CONTAINER-LICENSE /licenses/NGC-DL-CONTAINER-LICENSE
+# Add top-level license (AL2) file into the container image
+COPY LICENSE /
 
 COPY --from=toolkit /artifacts/rpm/usr/bin/nvidia-cdi-hook   /usr/bin/nvidia-cdi-hook
+COPY --from=build   /bashbuild/bash                          /bin/bash
 COPY --from=build   /artifacts/compute-domain-controller     /usr/bin/compute-domain-controller
 COPY --from=build   /artifacts/compute-domain-kubelet-plugin /usr/bin/compute-domain-kubelet-plugin
 COPY --from=build   /artifacts/compute-domain-daemon         /usr/bin/compute-domain-daemon
 COPY --from=build   /artifacts/gpu-kubelet-plugin            /usr/bin/gpu-kubelet-plugin
 COPY /hack/kubelet-plugin-prestart.sh /usr/bin/kubelet-plugin-prestart.sh
 COPY /templates /templates
+
+# Use root by default (for example, the init container as of now needs
+# this, otherwise `ln: /driver-root: Permission denied`).
+COPY --from=build /etc/passwd /etc/passwd
+COPY --from=build /etc/group /etc/group
+USER root:root
+
+# Smoke-test executables (provide early build feedback).
+RUN ["/usr/bin/compute-domain-kubelet-plugin", "--version"]
+RUN ["/bin/bash", "--version"]
