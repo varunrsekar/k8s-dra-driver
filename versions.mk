@@ -36,3 +36,6 @@ BUILDIMAGE_TAG ?= devel-go$(GOLANG_VERSION)
 BUILDIMAGE ?=  $(DRIVER_NAME):$(BUILDIMAGE_TAG)
 
 GIT_COMMIT ?= $(shell git describe --match="" --dirty --long --always --abbrev=40 2> /dev/null || echo "")
+
+print-%:
+	@echo $($*)
