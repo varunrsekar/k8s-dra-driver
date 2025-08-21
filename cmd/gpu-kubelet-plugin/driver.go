@@ -104,6 +104,7 @@ func (d *driver) Shutdown() error {
 	if d == nil {
 		return nil
 	}
+
 	if d.healthcheck != nil {
 		d.healthcheck.Stop()
 	}

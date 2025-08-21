@@ -1,4 +1,5 @@
 /*
+ * Copyright 2025 The Kubernetes Authors.
  * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -61,7 +62,7 @@ func startHealthcheck(ctx context.Context, config *Config) (*healthcheck, error)
 		Scheme: "unix",
 		// TODO: this needs to adapt when seamless upgrades
 		// are enabled and the filename includes a uid.
-		Path: path.Join(DriverRegistrarPath, DriverName+"-reg.sock"),
+		Path: path.Join(config.flags.kubeletRegistrarDirectoryPath, DriverName+"-reg.sock"),
 	}).String()
 	klog.V(6).Infof("connecting to registration socket path=%s", regSockPath)
 	regConn, err := grpc.NewClient(
@@ -74,7 +75,7 @@ func startHealthcheck(ctx context.Context, config *Config) (*healthcheck, error)
 
 	draSockPath := (&url.URL{
 		Scheme: "unix",
-		Path:   path.Join(DriverPluginPath, "dra.sock"),
+		Path:   path.Join(config.DriverPluginPath(), "dra.sock"),
 	}).String()
 	klog.V(6).Infof("connecting to DRA socket path=%s", draSockPath)
 	draConn, err := grpc.NewClient(
@@ -106,8 +107,8 @@ func startHealthcheck(ctx context.Context, config *Config) (*healthcheck, error)
 }
 
 func (h *healthcheck) Stop() {
-	klog.Info("Stopping healthcheck service")
 	if h.server != nil {
+		klog.Info("Stopping healthcheck service")
 		h.server.GracefulStop()
 	}
 	h.wg.Wait()

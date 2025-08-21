@@ -139,6 +139,7 @@ func (d *driver) Shutdown() error {
 	if d == nil {
 		return nil
 	}
+
 	if err := d.state.computeDomainManager.Stop(); err != nil {
 		return fmt.Errorf("error stopping ComputeDomainManager: %w", err)
 	}

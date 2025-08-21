@@ -36,7 +36,6 @@ import (
 const (
 	DriverName                         = "gpu.nvidia.com"
 	DriverPluginCheckpointFileBasename = "checkpoint.json"
-	DriverRegistrarPath                = "/var/lib/kubelet/plugins_registry"
 )
 
 type Flags struct {

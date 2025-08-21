@@ -154,14 +154,14 @@ kubeletPlugin:
       resources: {}
       # Port running a gRPC health service checked by a livenessProbe.
       # Set to a negative value to disable the service and the probe.
-      healthcheckPort: 61619
+      healthcheckPort: 51515
     gpus:
       securityContext:
         privileged: true
       resources: {}
       # Port running a gRPC health service checked by a livenessProbe.
       # Set to a negative value to disable the service and the probe.
-      healthcheckPort: 51518
+      healthcheckPort: 51516
   affinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
