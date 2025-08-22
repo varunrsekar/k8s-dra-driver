@@ -51,7 +51,7 @@ type Flags struct {
 	nvidiaCDIHookPath             string
 	kubeletRegistrarDirectoryPath string
 	kubeletPluginsDirectoryPath   string
-	healthcheckPort     int
+	healthcheckPort               int
 }
 
 type Config struct {
