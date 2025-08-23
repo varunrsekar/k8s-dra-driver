@@ -31,6 +31,7 @@ jobs:
     secrets: inherit
     with:
       version: ${{ needs.basic.outputs.version }}
+      golang_version: ${{ needs.basic.outputs.golang_version }}
 
   chart:
     # For faster CI signal, do not wait for `image`.
