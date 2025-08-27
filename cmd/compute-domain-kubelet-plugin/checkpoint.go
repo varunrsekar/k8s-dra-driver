@@ -4,35 +4,29 @@ import (
 	"encoding/json"
 	"fmt"
 
-	resourceapi "k8s.io/api/resource/v1"
 	"k8s.io/kubernetes/pkg/kubelet/checkpointmanager/checksum"
 )
 
 type Checkpoint struct {
 	Checksum checksum.Checksum `json:"checksum"`
 	V1       *CheckpointV1     `json:"v1,omitempty"`
+	V2       *CheckpointV2     `json:"v2,omitempty"`
 }
 
-type CheckpointV1 struct {
-	PreparedClaims PreparedClaimsByUID `json:"preparedClaims,omitempty"`
-}
-
-// key: stringified claim UUID
-type PreparedClaimsByUID map[string]PreparedClaim
-
-type PreparedClaim struct {
-	Status          resourceapi.ResourceClaimStatus `json:"status,omitempty"`
-	PreparedDevices PreparedDevices                 `json:"preparedDevices,omitempty"`
-}
-
-func newCheckpoint() *Checkpoint {
-	pc := &Checkpoint{
-		Checksum: 0,
-		V1: &CheckpointV1{
-			PreparedClaims: make(PreparedClaimsByUID),
-		},
+func (cp *Checkpoint) ToLatestVersion() *Checkpoint {
+	latest := &Checkpoint{}
+	switch {
+	case cp.V2 != nil:
+		latest.V2 = cp.V2
+	case cp.V1 != nil:
+		latest.V2 = cp.V1.ToV2()
+	default:
+		latest.V2 = &CheckpointV2{}
 	}
-	return pc
+	if latest.V2.PreparedClaims == nil {
+		latest.V2.PreparedClaims = make(PreparedClaimsByUID)
+	}
+	return latest
 }
 
 func (cp *Checkpoint) MarshalCheckpoint() ([]byte, error) {
