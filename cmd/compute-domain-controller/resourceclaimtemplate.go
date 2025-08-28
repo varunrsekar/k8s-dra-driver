@@ -376,6 +376,7 @@ func (m *WorkloadResourceClaimTemplateManager) Create(ctx context.Context, names
 
 	channelConfig := nvapi.DefaultComputeDomainChannelConfig()
 	channelConfig.DomainID = string(cd.UID)
+	channelConfig.AllocationMode = cd.Spec.Channel.AllocationMode
 
 	templateData := ResourceClaimTemplateTemplateData{
 		Namespace:               namespace,

@@ -404,6 +404,17 @@ func (s *DeviceState) applyConfig(ctx context.Context, config configapi.Interfac
 }
 
 func (s *DeviceState) applyComputeDomainChannelConfig(ctx context.Context, config *configapi.ComputeDomainChannelConfig, claim *resourceapi.ResourceClaim, results []*resourceapi.DeviceRequestAllocationResult) (*DeviceConfigState, error) {
+	// Not an expected error, but a violated invariant.
+	if len(results) != 1 {
+		return nil, fmt.Errorf("applyComputeDomainChannelConfig: unexpected results %v", results)
+	}
+
+	// If explicitly requested, inject all channels instead of just one.
+	chancount := 1
+	if config.AllocationMode == configapi.ComputeDomainChannelAllocationModeAll {
+		chancount = s.nvdevlib.maxImexChannelCount
+	}
+
 	// Declare a device group state object to populate.
 	configState := DeviceConfigState{
 		Type:          ComputeDomainChannelType,
@@ -411,24 +422,25 @@ func (s *DeviceState) applyComputeDomainChannelConfig(ctx context.Context, confi
 	}
 
 	// Create any necessary ComputeDomain channels and gather their CDI container edits.
-	for _, r := range results {
-		channel := s.allocatable[r.Device].Channel
-		if err := s.computeDomainManager.AssertComputeDomainNamespace(ctx, claim.Namespace, config.DomainID); err != nil {
-			return nil, permanentError{fmt.Errorf("error asserting ComputeDomain's namespace: %w", err)}
-		}
-		if err := s.computeDomainManager.AddNodeLabel(ctx, config.DomainID); err != nil {
-			return nil, fmt.Errorf("error adding Node label for ComputeDomain: %w", err)
-		}
-		if err := s.computeDomainManager.AssertComputeDomainReady(ctx, config.DomainID); err != nil {
-			return nil, fmt.Errorf("error asserting ComputeDomain Ready: %w", err)
-		}
-		if s.computeDomainManager.cliqueID != "" {
-			info, err := s.nvdevlib.getNVCapIMEXChannelDeviceInfo(channel.ID)
-			if err != nil {
-				return nil, fmt.Errorf("error getting nvcap for IMEX channel '%d': %w", channel.ID, err)
-			}
-			configState.containerEdits = configState.containerEdits.Append(s.computeDomainManager.GetComputeDomainChannelContainerEdits(s.cdi.devRoot, info))
-		}
+	if err := s.computeDomainManager.AssertComputeDomainNamespace(ctx, claim.Namespace, config.DomainID); err != nil {
+		return nil, permanentError{fmt.Errorf("error asserting ComputeDomain's namespace: %w", err)}
+	}
+
+	if err := s.computeDomainManager.AddNodeLabel(ctx, config.DomainID); err != nil {
+		return nil, fmt.Errorf("error adding Node label for ComputeDomain: %w", err)
+	}
+
+	if err := s.computeDomainManager.AssertComputeDomainReady(ctx, config.DomainID); err != nil {
+		return nil, fmt.Errorf("error asserting ComputeDomain Ready: %w", err)
+	}
+
+	if s.computeDomainManager.cliqueID == "" {
+		// Do not inject IMEX channel device nodes.
+		return &configState, nil
+	}
+
+	for _, info := range s.nvdevlib.nvCapImexChanDevInfos[:chancount] {
+		configState.containerEdits = configState.containerEdits.Append(s.computeDomainManager.GetComputeDomainChannelContainerEdits(s.cdi.devRoot, info))
 	}
 
 	return &configState, nil

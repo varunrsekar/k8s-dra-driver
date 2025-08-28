@@ -44,6 +44,15 @@ spec:
                 description: ComputeDomainChannelSpec provides the spec for a channel
                   used to run a workload inside a ComputeDomain.
                 properties:
+                  allocationMode:
+                    default: Single
+                    description: |-
+                      Allows for requesting all IMEX channels (the maximum per IMEX domain) or
+                      precisely one.
+                    enum:
+                    - All
+                    - Single
+                    type: string
                   resourceClaimTemplate:
                     description: ComputeDomainResourceClaimTemplate provides the details
                       of the ResourceClaimTemplate to generate.
@@ -54,6 +63,7 @@ spec:
                     - name
                     type: object
                 required:
+                - allocationMode
                 - resourceClaimTemplate
                 type: object
               numNodes:
