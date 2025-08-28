@@ -129,13 +129,17 @@ func (g *PreparedDeviceGroup2503RC2) ToV1() *PreparedDeviceGroup {
 
 // ToV1 converts a Checkpoint2503RC2 to a Checkpoint.
 func (cp *Checkpoint2503RC2) ToV1() *Checkpoint {
-	cpv1 := newCheckpoint()
+	cpv1 := &Checkpoint{
+		V1: &CheckpointV1{
+			PreparedClaims: make(PreparedClaimsByUIDV1),
+		},
+	}
 	for k, v := range cp.V1.PreparedClaims {
 		pds := make(PreparedDevices, 0, len(v))
 		for _, pd := range v {
 			pds = append(pds, pd.ToV1())
 		}
-		cpv1.V1.PreparedClaims[k] = PreparedClaim{
+		cpv1.V1.PreparedClaims[k] = PreparedClaimV1{
 			PreparedDevices: pds,
 		}
 	}
