@@ -162,11 +162,6 @@ spec:
           mountPath: /driver-root
           readOnly: true
           mountPropagation: HostToContainer
-        # For host-managed drivers located not at /.
-        # TODO: make this more surgical, see discussion in
-        # https://github.com/NVIDIA/k8s-dra-driver-gpu/pull/307.
-        - name: host-dev
-          mountPath: /host/dev
       {{- end }}
       {{- if .Values.resources.gpus.enabled }}
       - name: gpus
@@ -278,9 +273,6 @@ spec:
         hostPath:
           path: {{ .Values.nvidiaDriverRoot }}
           type: DirectoryOrCreate
-      - name: host-dev
-        hostPath:
-          path: /dev
       {{- with .Values.kubeletPlugin.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

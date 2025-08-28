@@ -26,8 +26,6 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/sys/unix"
-
 	"k8s.io/klog/v2"
 	"k8s.io/mount-utils"
 
@@ -43,7 +41,6 @@ const (
 	nvidiaCapsDeviceName             = "nvidia-caps"
 	nvidiaCapsImexChannelsDeviceName = "nvidia-caps-imex-channels"
 	nvidiaCapFabricImexMgmtPath      = "/proc/driver/nvidia/capabilities/fabric-imex-mgmt"
-	hostDevContainerPath             = "/host/dev"
 )
 
 type deviceLib struct {
@@ -88,10 +85,6 @@ func newDeviceLib(driverRoot root) (*deviceLib, error) {
 
 	if err := d.unmountRecursively(procDriverNvidiaPath); err != nil {
 		return nil, fmt.Errorf("error recursively unmounting %s: %w", procDriverNvidiaPath, err)
-	}
-
-	if err := d.conditionallyBindMountHostDev(); err != nil {
-		return nil, fmt.Errorf("error conditionally bind mounting host dev: %w", err)
 	}
 
 	return &d, nil
@@ -319,65 +312,21 @@ func (l deviceLib) parseNVCapDeviceInfo(nvcapsFilePath string) (*nvcapDeviceInfo
 	return info, nil
 }
 
-func (l deviceLib) createComputeDomainChannelDevice(channel int) error {
-	// Construct the properties of the device node to create.
-	path := fmt.Sprintf("/dev/nvidia-caps-imex-channels/channel%d", channel)
-	path = filepath.Join(l.devRoot, path)
-	mode := uint32(unix.S_IFCHR | 0666)
-
-	// Get the IMEX channel major and build a /dev device from it
+func (l deviceLib) getNVCapIMEXChannelDeviceInfo(channelID int) (*nvcapDeviceInfo, error) {
 	major, err := l.getDeviceMajor(nvidiaCapsImexChannelsDeviceName)
 	if err != nil {
-		return fmt.Errorf("error getting IMEX channel major: %w", err)
-	}
-	dev := unix.Mkdev(uint32(major), uint32(channel))
-
-	// Recursively create any parent directories of the channel.
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("error creating directory for IMEX channel device nodes: %w", err)
+		return nil, fmt.Errorf("error getting device major: %w", err)
 	}
 
-	// Remove the channel if it already exists.
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("error removing existing IMEX channel device node: %w", err)
+	info := &nvcapDeviceInfo{
+		major:  major,
+		minor:  channelID,
+		mode:   0666,
+		modify: 0,
+		path:   fmt.Sprintf("/dev/nvidia-caps-imex-channels/channel%d", channelID),
 	}
 
-	// Create the device node using syscall.Mknod
-	if err := unix.Mknod(path, mode, int(dev)); err != nil {
-		return fmt.Errorf("mknod of IMEX channel failed: %w", err)
-	}
-
-	return nil
-}
-
-func (l deviceLib) createNvCapDevice(nvcapFilePath string) error {
-	// Get the nvcapDeviceInfo for the nvcap file.
-	deviceInfo, err := l.parseNVCapDeviceInfo(nvcapFilePath)
-	if err != nil {
-		return fmt.Errorf("error parsing nvcap file for fabric-imex-mgmt: %w", err)
-	}
-
-	// Construct the necessary information to create the device node
-	path := filepath.Join(l.devRoot, deviceInfo.path)
-	mode := unix.S_IFCHR | uint32(deviceInfo.mode)
-	dev := unix.Mkdev(uint32(deviceInfo.major), uint32(deviceInfo.minor))
-
-	// Recursively create any parent directories of the device.
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("error creating directory for nvcaps device nodes: %w", err)
-	}
-
-	// Remove the device if it already exists.
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("error removing existing nvcap device node: %w", err)
-	}
-
-	// Create the device node using syscall.Mknod
-	if err := unix.Mknod(path, mode, int(dev)); err != nil {
-		return fmt.Errorf("mknod of nvcap device failed: %w", err)
-	}
-
-	return nil
+	return info, nil
 }
 
 func (l deviceLib) unmountRecursively(root string) error {
@@ -422,28 +371,4 @@ func (l deviceLib) unmountRecursively(root string) error {
 	}
 
 	return helper(root)
-}
-
-// conditionallyBindMountHostDev bind mounts hostDevContainerPath over /dev when devRoot is "/".
-// Introduced to address the issues described in https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/477.
-// TODO: Revisit with a more comprehensive solution as proposed in https://github.com/NVIDIA/k8s-dra-driver-gpu/pull/307.
-func (l deviceLib) conditionallyBindMountHostDev() error {
-	// If devRoot != "/" then we don't need to do the mount
-	if l.devRoot != "/" {
-		return nil
-	}
-
-	// Get a reference to the mount executable.
-	mountExecutable, err := exec.LookPath("mount")
-	if err != nil {
-		return fmt.Errorf("error looking up mount executable: %w", err)
-	}
-	mounter := mount.New(mountExecutable)
-
-	// Bind mount hostDevContainerPath over /dev
-	if err := mounter.Mount(hostDevContainerPath, "/dev", "", []string{"bind"}); err != nil {
-		return fmt.Errorf("failed to bind mount %s over /dev: %w", hostDevContainerPath, err)
-	}
-
-	return nil
 }

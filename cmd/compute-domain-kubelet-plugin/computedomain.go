@@ -29,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 
 	cdiapi "tags.cncf.io/container-device-interface/pkg/cdi"
 	cdispec "tags.cncf.io/container-device-interface/specs-go"
@@ -139,15 +140,16 @@ func (m *ComputeDomainManager) NewSettings(domain string) *ComputeDomainDaemonSe
 	}
 }
 
-func (m *ComputeDomainManager) GetComputeDomainChannelContainerEdits(devRoot string, info *ComputeDomainChannelInfo) *cdiapi.ContainerEdits {
-	channelPath := fmt.Sprintf("/dev/nvidia-caps-imex-channels/channel%d", info.ID)
-
+func (m *ComputeDomainManager) GetComputeDomainChannelContainerEdits(devRoot string, info *nvcapDeviceInfo) *cdiapi.ContainerEdits {
 	return &cdiapi.ContainerEdits{
 		ContainerEdits: &cdispec.ContainerEdits{
 			DeviceNodes: []*cdispec.DeviceNode{
 				{
-					Path:     channelPath,
-					HostPath: filepath.Join(devRoot, channelPath),
+					Path:     info.path,
+					Type:     "c",
+					FileMode: ptr.To(os.FileMode(info.mode)),
+					Major:    int64(info.major),
+					Minor:    int64(info.minor),
 				},
 			},
 		},
@@ -185,7 +187,10 @@ func (s *ComputeDomainDaemonSettings) GetCDIContainerEdits(ctx context.Context, 
 			DeviceNodes: []*cdispec.DeviceNode{
 				{
 					Path:     info.path,
-					HostPath: filepath.Join(devRoot, info.path),
+					Type:     "c",
+					FileMode: ptr.To(os.FileMode(info.mode)),
+					Major:    int64(info.major),
+					Minor:    int64(info.minor),
 				},
 			},
 		},
