@@ -2,6 +2,8 @@ package main
 
 import (
 	resourceapi "k8s.io/api/resource/v1"
+
+	"k8s.io/kubernetes/pkg/kubelet/checkpointmanager/checksum"
 )
 
 type ClaimCheckpointState string
@@ -19,6 +21,7 @@ type PreparedClaim = PreparedClaimV2
 // V2 types
 
 type CheckpointV2 struct {
+	Checksum       checksum.Checksum     `json:"checksum"`
 	PreparedClaims PreparedClaimsByUIDV2 `json:"preparedClaims,omitempty"`
 }
 
@@ -57,4 +60,20 @@ func (v1 *CheckpointV1) ToV2() *CheckpointV2 {
 		}
 	}
 	return v2
+}
+
+func (v2 *CheckpointV2) ToV1() *CheckpointV1 {
+	v1 := &CheckpointV1{
+		PreparedClaims: make(PreparedClaimsByUIDV1),
+	}
+	for claimUID, v1Claim := range v2.PreparedClaims {
+		if v1Claim.CheckpointState != ClaimCheckpointStateCompleted {
+			continue
+		}
+		v1.PreparedClaims[claimUID] = PreparedClaimV1{
+			Status:          v1Claim.Status,
+			PreparedDevices: v1Claim.PreparedDevices,
+		}
+	}
+	return v1
 }
