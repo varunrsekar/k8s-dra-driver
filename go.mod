@@ -4,17 +4,6 @@ go 1.24.0
 
 toolchain go1.24.2
 
-replace (
-	k8s.io/api => github.com/kubernetes/kubernetes/staging/src/k8s.io/api v0.0.0-20250730163427-032142c53e54
-	k8s.io/apimachinery => github.com/kubernetes/kubernetes/staging/src/k8s.io/apimachinery v0.0.0-20250730163427-032142c53e54
-	k8s.io/client-go => github.com/kubernetes/kubernetes/staging/src/k8s.io/client-go v0.0.0-20250730163427-032142c53e54
-	k8s.io/component-base => github.com/kubernetes/kubernetes/staging/src/k8s.io/component-base v0.0.0-20250730163427-032142c53e54
-	k8s.io/dynamic-resource-allocation => github.com/kubernetes/kubernetes/staging/src/k8s.io/dynamic-resource-allocation v0.0.0-20250730163427-032142c53e54
-	k8s.io/kubelet => github.com/kubernetes/kubernetes/staging/src/k8s.io/kubelet v0.0.0-20250730163427-032142c53e54
-	k8s.io/kubernetes => github.com/kubernetes/kubernetes v1.34.0-beta.0.0.20250730163427-032142c53e54
-	k8s.io/mount-utils => github.com/kubernetes/kubernetes/staging/src/k8s.io/mount-utils v0.0.0-20250730163427-032142c53e54
-)
-
 require (
 	github.com/Masterminds/semver v1.5.0
 	github.com/NVIDIA/go-nvlib v0.8.0
@@ -28,15 +17,15 @@ require (
 	github.com/urfave/cli/v2 v2.27.7
 	golang.org/x/sys v0.35.0
 	google.golang.org/grpc v1.75.0
-	k8s.io/api v0.0.0
-	k8s.io/apimachinery v0.0.0
-	k8s.io/client-go v0.0.0
-	k8s.io/component-base v0.0.0
-	k8s.io/dynamic-resource-allocation v0.0.0
+	k8s.io/api v0.34.0
+	k8s.io/apimachinery v0.34.0
+	k8s.io/client-go v0.34.0
+	k8s.io/component-base v0.34.0
+	k8s.io/dynamic-resource-allocation v0.34.0
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/kubelet v0.0.0
-	k8s.io/kubernetes v0.0.0-00010101000000-000000000000
-	k8s.io/mount-utils v0.0.0
+	k8s.io/kubelet v0.34.0
+	k8s.io/kubernetes v1.34.0
+	k8s.io/mount-utils v0.34.0
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 	tags.cncf.io/container-device-interface v1.0.1
 	tags.cncf.io/container-device-interface/specs-go v1.0.0
