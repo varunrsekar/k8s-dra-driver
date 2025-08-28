@@ -10,6 +10,7 @@ type ClaimCheckpointState string
 
 const (
 	ClaimCheckpointStateUnset            ClaimCheckpointState = ""
+	ClaimCheckpointStatePrepareStarted   ClaimCheckpointState = "PrepareStarted"
 	ClaimCheckpointStatePrepareCompleted ClaimCheckpointState = "PrepareCompleted"
 )
 
@@ -67,7 +68,7 @@ func (v2 *CheckpointV2) ToV1() *CheckpointV1 {
 		PreparedClaims: make(PreparedClaimsByUIDV1),
 	}
 	for claimUID, v1Claim := range v2.PreparedClaims {
-		if v1Claim.CheckpointState != ClaimCheckpointStateCompleted {
+		if v1Claim.CheckpointState != ClaimCheckpointStatePrepareCompleted {
 			continue
 		}
 		v1.PreparedClaims[claimUID] = PreparedClaimV1{

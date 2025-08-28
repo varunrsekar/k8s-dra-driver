@@ -143,6 +143,17 @@ func (s *DeviceState) Prepare(ctx context.Context, claim *resourceapi.ResourceCl
 		return nil, fmt.Errorf("unable to get checkpoint: %v", err)
 	}
 
+	err = s.updateCheckpoint(func(checkpoint *Checkpoint) {
+		checkpoint.V2.PreparedClaims[claimUID] = PreparedClaim{
+			CheckpointState: ClaimCheckpointStatePrepareStarted,
+			Status:          claim.Status,
+		}
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to update checkpoint: %w", err)
+	}
+	klog.V(6).Infof("checkpoint updated for claim %v", claimUID)
+
 	preparedClaim, exists := checkpoint.V2.PreparedClaims[claimUID]
 	if exists && preparedClaim.CheckpointState == ClaimCheckpointStatePrepareCompleted {
 		// Make this a noop. Associated device(s) has/ave been prepared by us.
@@ -196,6 +207,9 @@ func (s *DeviceState) Unprepare(ctx context.Context, claimUID string) error {
 	}
 
 	switch pc.CheckpointState {
+	case ClaimCheckpointStatePrepareStarted:
+		klog.Infof("unprepare noop: claim preparation started but not completed: %v", claimUID)
+		return nil
 	case ClaimCheckpointStatePrepareCompleted:
 		if err := s.unprepareDevices(ctx, claimUID, pc.PreparedDevices); err != nil {
 			return fmt.Errorf("unprepare devices failed: %w", err)

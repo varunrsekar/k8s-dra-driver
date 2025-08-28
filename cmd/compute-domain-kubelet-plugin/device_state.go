@@ -148,6 +148,17 @@ func (s *DeviceState) Prepare(ctx context.Context, claim *resourceapi.ResourceCl
 		return preparedClaim.PreparedDevices.GetDevices(), nil
 	}
 
+	err = s.updateCheckpoint(func(checkpoint *Checkpoint) {
+		checkpoint.V2.PreparedClaims[claimUID] = PreparedClaim{
+			CheckpointState: ClaimCheckpointStatePrepareStarted,
+			Status:          claim.Status,
+		}
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to update checkpoint: %w", err)
+	}
+	klog.V(6).Infof("checkpoint updated for claim %v", claimUID)
+
 	preparedDevices, err := s.prepareDevices(ctx, claim)
 	if err != nil {
 		return nil, fmt.Errorf("prepare devices failed: %w", err)
@@ -216,7 +227,7 @@ func (s *DeviceState) Unprepare(ctx context.Context, claimRef kubeletplugin.Name
 	}
 
 	switch pc.CheckpointState {
-	case ClaimCheckpointStatePrepareCompleted:
+	case ClaimCheckpointStatePrepareStarted, ClaimCheckpointStatePrepareCompleted:
 		if err := s.unprepareDevices(ctx, &pc.Status); err != nil {
 			return fmt.Errorf("unprepare devices failed: %w", err)
 		}
