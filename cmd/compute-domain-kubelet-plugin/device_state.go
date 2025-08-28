@@ -382,10 +382,11 @@ func (s *DeviceState) applyComputeDomainChannelConfig(ctx context.Context, confi
 			return nil, fmt.Errorf("error asserting ComputeDomain Ready: %w", err)
 		}
 		if s.computeDomainManager.cliqueID != "" {
-			if err := s.nvdevlib.createComputeDomainChannelDevice(channel.ID); err != nil {
-				return nil, fmt.Errorf("error creating ComputeDomain channel device: %w", err)
+			info, err := s.nvdevlib.getNVCapIMEXChannelDeviceInfo(channel.ID)
+			if err != nil {
+				return nil, fmt.Errorf("error getting nvcap for IMEX channel '%d': %w", channel.ID, err)
 			}
-			configState.containerEdits = configState.containerEdits.Append(s.computeDomainManager.GetComputeDomainChannelContainerEdits(s.cdi.devRoot, channel))
+			configState.containerEdits = configState.containerEdits.Append(s.computeDomainManager.GetComputeDomainChannelContainerEdits(s.cdi.devRoot, info))
 		}
 	}
 
@@ -421,11 +422,6 @@ func (s *DeviceState) applyComputeDomainDaemonConfig(ctx context.Context, config
 		nvcapDeviceInfo, err := s.nvdevlib.parseNVCapDeviceInfo(nvidiaCapFabricImexMgmtPath)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing nvcap device info for fabic-imex-mgmt: %w", err)
-		}
-
-		// Create the device node for the fabic-imex-mgmt nvcap.
-		if err := s.nvdevlib.createNvCapDevice(nvidiaCapFabricImexMgmtPath); err != nil {
-			return nil, fmt.Errorf("error creating nvcap device for fabic-imex-mgmt: %w", err)
 		}
 
 		// Create new ComputeDomain daemon settings from the ComputeDomainManager.
