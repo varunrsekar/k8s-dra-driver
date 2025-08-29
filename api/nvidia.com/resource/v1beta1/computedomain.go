@@ -23,6 +23,9 @@ import (
 const (
 	ComputeDomainStatusReady    = "Ready"
 	ComputeDomainStatusNotReady = "NotReady"
+
+	ComputeDomainChannelAllocationModeSingle = "Single"
+	ComputeDomainChannelAllocationModeAll    = "All"
 )
 
 // +genclient
@@ -61,6 +64,11 @@ type ComputeDomainSpec struct {
 // ComputeDomainChannelSpec provides the spec for a channel used to run a workload inside a ComputeDomain.
 type ComputeDomainChannelSpec struct {
 	ResourceClaimTemplate ComputeDomainResourceClaimTemplate `json:"resourceClaimTemplate"`
+	// Allows for requesting all IMEX channels (the maximum per IMEX domain) or
+	// precisely one.
+	// +kubebuilder:validation:Enum=All;Single
+	// +kubebuilder:default=Single
+	AllocationMode string `json:"allocationMode"`
 }
 
 // ComputeDomainResourceClaimTemplate provides the details of the ResourceClaimTemplate to generate.

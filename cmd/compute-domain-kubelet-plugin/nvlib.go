@@ -45,10 +45,12 @@ const (
 
 type deviceLib struct {
 	nvdev.Interface
-	nvmllib           nvml.Interface
-	driverLibraryPath string
-	devRoot           string
-	nvidiaSMIPath     string
+	nvmllib               nvml.Interface
+	driverLibraryPath     string
+	devRoot               string
+	nvidiaSMIPath         string
+	maxImexChannelCount   int
+	nvCapImexChanDevInfos []*nvcapDeviceInfo
 }
 
 type nvcapDeviceInfo struct {
@@ -75,12 +77,30 @@ func newDeviceLib(driverRoot root) (*deviceLib, error) {
 	nvmllib := nvml.New(
 		nvml.WithLibraryPath(driverLibraryPath),
 	)
+
 	d := deviceLib{
-		Interface:         nvdev.New(nvmllib),
-		nvmllib:           nvmllib,
-		driverLibraryPath: driverLibraryPath,
-		devRoot:           driverRoot.getDevRoot(),
-		nvidiaSMIPath:     nvidiaSMIPath,
+		Interface:           nvdev.New(nvmllib),
+		nvmllib:             nvmllib,
+		driverLibraryPath:   driverLibraryPath,
+		devRoot:             driverRoot.getDevRoot(),
+		nvidiaSMIPath:       nvidiaSMIPath,
+		maxImexChannelCount: 0,
+	}
+
+	mic, err := d.getImexChannelCount()
+	if err != nil {
+		return nil, fmt.Errorf("error getting max IMEX channel count: %w", err)
+	}
+	d.maxImexChannelCount = mic
+
+	// Iterate through [0, mic-1] to pre-compute objects for CDI specs
+	// (major/minor dev node numbers won't change at runtime).
+	for i := range mic {
+		info, err := d.getNVCapIMEXChannelDeviceInfo(i)
+		if err != nil {
+			return nil, fmt.Errorf("error getting nvcap for IMEX channel '%d': %w", i, err)
+		}
+		d.nvCapImexChanDevInfos = append(d.nvCapImexChanDevInfos, info)
 	}
 
 	if err := d.unmountRecursively(procDriverNvidiaPath); err != nil {
@@ -130,11 +150,7 @@ func (l deviceLib) enumerateAllPossibleDevices(config *Config) (AllocatableDevic
 func (l deviceLib) enumerateComputeDomainChannels(config *Config) (AllocatableDevices, error) {
 	devices := make(AllocatableDevices)
 
-	imexChannelCount, err := l.getImexChannelCount()
-	if err != nil {
-		return nil, fmt.Errorf("error getting IMEX channel count: %w", err)
-	}
-	for i := 0; i < imexChannelCount; i++ {
+	for i := range l.maxImexChannelCount {
 		computeDomainChannelInfo := &ComputeDomainChannelInfo{
 			ID: i,
 		}
