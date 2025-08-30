@@ -85,6 +85,13 @@ spec:
                   properties:
                     cliqueID:
                       type: string
+                    index:
+                      description: |-
+                        The Index field is used to ensure a consistent IP-to-DNS name
+                        mapping across all machines within an IMEX domain. Each node's index
+                        directly determines its DNS name. It is marked as optional (but not
+                        omitempty) in order to support downgrades and avoid an API bump.
+                      type: integer
                     ipAddress:
                       type: string
                     name:
