@@ -211,8 +211,8 @@ func RunPlugin(ctx context.Context, config *Config) error {
 		return fmt.Errorf("path for cdi file generation is not a directory: '%v'", config.flags.cdiRoot)
 	}
 
-	ctx, stop := signal.NotifyContext(ctx, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	defer stop()
+	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	defer cancel()
 
 	// Create and start the driver
 	driver, err := NewDriver(ctx, config)
@@ -221,9 +221,6 @@ func RunPlugin(ctx context.Context, config *Config) error {
 	}
 
 	<-ctx.Done()
-	// restore default signal behavior as soon as possible in case graceful
-	// shutdown gets stuck.
-	stop()
 	if err := ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
 		// A canceled context is the normal case here when the process receives
 		// a signal. Only log the error for more interesting cases.
