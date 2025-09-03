@@ -114,10 +114,8 @@ webhook:
     secret:
       # Name of the secret containing tls.crt and tls.key
       name: ""
-      # Base64-encoded CA certificate bundle for validating the webhook's TLS certificate
-      # Required when using secret mode. You can either:
-      # 1. Provide the caBundle directly here (base64-encoded)
-      # 2. Include ca.crt in your secret (we will extract it during deployment)
+      # Base64-encoded CA certificate bundle for validating the webhook's TLS certificate (base64 encoded)
+      # Required when using secret mode.
       # Note: Only include intermediate CA certificates, not root CA certificates
       caBundle: ""
 
