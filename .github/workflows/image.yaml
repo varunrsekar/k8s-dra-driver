@@ -31,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         name: Check out code
-      
+
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -60,4 +60,10 @@ jobs:
           BUILD_MULTI_ARCH_IMAGES: "true"
         run: |
           echo "${VERSION}"
+          make -f deployments/container/Makefile build
+          # Push the image again, using a shorter tag (only the 8 character
+          # commit hash). That's for consumption in downstream CI (for copying
+          # the image from GHCR to elsewhere). See
+          # https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/688
+          export IMAGE_TAG="$(echo $GITHUB_SHA | cut -c1-8)"
           make -f deployments/container/Makefile build
