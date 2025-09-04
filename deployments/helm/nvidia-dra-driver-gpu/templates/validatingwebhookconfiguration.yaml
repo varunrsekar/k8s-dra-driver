@@ -13,7 +13,7 @@ webhooks:
   - name: "gpu.nvidia.com"
     rules:
     - apiGroups:   ["resource.k8s.io"]
-      apiVersions: ["v1beta1"]
+      apiVersions: ["v1beta1", "v1beta2", "v1"]
       operations:  ["CREATE", "UPDATE"]
       resources:   ["resourceclaims", "resourceclaimtemplates"]
       scope:       "Namespaced"
@@ -23,6 +23,10 @@ webhooks:
         name: {{ include "nvidia-dra-driver-gpu.name" . }}-webhook
         port: {{ .Values.webhook.servicePort }}
         path: /validate-resource-claim-parameters
+      {{- if and (eq .Values.webhook.tls.mode "secret") .Values.webhook.tls.secret.caBundle }}
+      caBundle: {{ .Values.webhook.tls.secret.caBundle | quote }}
+      {{- end }}
+    failurePolicy: {{ default "Fail" .Values.webhook.failurePolicy | quote }}
     admissionReviewVersions: ["v1"]
     sideEffects: None
 {{- end }}

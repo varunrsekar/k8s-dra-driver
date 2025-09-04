@@ -93,6 +93,11 @@ webhook:
     create: true
     # Annotations to add to the service account
     name: ""
+  # failurePolicy defines how the API server should handle requests if the webhook call fails.
+  # Options:
+  #   - Fail   : reject the request if the webhook call fails either due to cert errors, timeout or if the service is unreachable.
+  #   - Ignore : allow the request to continue if the webhook call fails.
+  failurePolicy: Fail
   # TLS certificate configuration
   tls:
     # Certificate management mode: "cert-manager" or "secret"
@@ -109,8 +114,10 @@ webhook:
     secret:
       # Name of the secret containing tls.crt and tls.key
       name: ""
-      # Namespace of the secret (if different from webhook namespace)
-      namespace: ""
+      # Base64-encoded CA certificate bundle for validating the webhook's TLS certificate (base64 encoded)
+      # Required when using secret mode.
+      # Note: Only include intermediate CA certificates, not root CA certificates
+      caBundle: ""
 
 controller:
   priorityClassName: "system-node-critical"
