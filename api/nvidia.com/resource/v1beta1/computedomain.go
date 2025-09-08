@@ -67,8 +67,9 @@ type ComputeDomainChannelSpec struct {
 	// Allows for requesting all IMEX channels (the maximum per IMEX domain) or
 	// precisely one.
 	// +kubebuilder:validation:Enum=All;Single
-	// +kubebuilder:default=Single
-	AllocationMode string `json:"allocationMode"`
+	// +kubebuilder:default:=Single
+	// +kubebuilder:validation:Optional
+	AllocationMode string `json:"allocationMode,omitempty"`
 }
 
 // ComputeDomainResourceClaimTemplate provides the details of the ResourceClaimTemplate to generate.
