@@ -28,7 +28,7 @@ import (
 type ComputeDomainChannelConfig struct {
 	metav1.TypeMeta `json:",inline"`
 	DomainID        string `json:"domainID"`
-	AllocationMode  string `json:"allocationMode"`
+	AllocationMode  string `json:"allocationMode,omitempty"`
 }
 
 // DefaultComputeDomainChannelConfig provides the default ComputeDomainChannel configuration.

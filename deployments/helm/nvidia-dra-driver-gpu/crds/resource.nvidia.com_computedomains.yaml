@@ -63,7 +63,6 @@ spec:
                     - name
                     type: object
                 required:
-                - allocationMode
                 - resourceClaimTemplate
                 type: object
               numNodes:
