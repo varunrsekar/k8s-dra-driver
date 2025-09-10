@@ -35,6 +35,9 @@ const (
 	informerResyncPeriod = 10 * time.Minute
 )
 
+// GetComputeDomainFunc is a function type for getting a ComputeDomain by UID.
+type GetComputeDomainFunc func(uid string) (*nvapi.ComputeDomain, error)
+
 type IPSet map[string]struct{}
 
 // ComputeDomainManager watches compute domains and updates their status with
@@ -49,6 +52,8 @@ type ComputeDomainManager struct {
 
 	previousNodes    []*nvapi.ComputeDomainNode
 	updatedNodesChan chan []*nvapi.ComputeDomainNode
+
+	podManager *PodManager
 }
 
 // NewComputeDomainManager creates a new ComputeDomainManager instance.
@@ -70,6 +75,7 @@ func NewComputeDomainManager(config *ManagerConfig) *ComputeDomainManager {
 		previousNodes:    []*nvapi.ComputeDomainNode{},
 		updatedNodesChan: make(chan []*nvapi.ComputeDomainNode),
 	}
+	m.podManager = NewPodManager(config, m.Get)
 
 	return m
 }
@@ -116,6 +122,10 @@ func (m *ComputeDomainManager) Start(ctx context.Context) (rerr error) {
 		return fmt.Errorf("informer cache sync for ComputeDomains failed")
 	}
 
+	if err := m.podManager.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start pod manager: %w", err)
+	}
+
 	return nil
 }
 
@@ -123,6 +133,11 @@ func (m *ComputeDomainManager) Start(ctx context.Context) (rerr error) {
 //
 //nolint:contextcheck
 func (m *ComputeDomainManager) Stop() error {
+	// Stop the pod manager first
+	if err := m.podManager.Stop(); err != nil {
+		klog.Errorf("Failed to stop pod manager: %v", err)
+	}
+
 	// Create a new context for cleanup operations since the original context might be cancelled
 	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cleanupCancel()
@@ -136,6 +151,7 @@ func (m *ComputeDomainManager) Stop() error {
 	if m.cancelContext != nil {
 		m.cancelContext()
 	}
+
 	m.waitGroup.Wait()
 	return nil
 }

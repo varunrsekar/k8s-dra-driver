@@ -246,11 +246,22 @@ func (m *ComputeDomainManager) AssertComputeDomainReady(ctx context.Context, cdU
 		return fmt.Errorf("ComputeDomain not found: %s", cdUID)
 	}
 
-	if cd.Status.Status != nvapi.ComputeDomainStatusReady {
-		return fmt.Errorf("ComputeDomain not Ready")
+	// Check if the current node is ready in the ComputeDomain
+	if !m.isCurrentNodeReady(cd) {
+		return fmt.Errorf("current node not ready in ComputeDomain")
 	}
 
 	return nil
+}
+
+// isCurrentNodeReady checks if the current node is marked as ready in the ComputeDomain.
+func (m *ComputeDomainManager) isCurrentNodeReady(cd *nvapi.ComputeDomain) bool {
+	for _, node := range cd.Status.Nodes {
+		if node.Name == m.config.flags.nodeName {
+			return node.Status == nvapi.ComputeDomainStatusReady
+		}
+	}
+	return false
 }
 
 func (m *ComputeDomainManager) AssertComputeDomainNamespace(ctx context.Context, claimNamespace, cdUID string) error {

@@ -35,6 +35,8 @@ type ManagerConfig struct {
 	computeDomainNamespace string
 	cliqueID               string
 	podIP                  string
+	podName                string
+	podNamespace           string
 	maxNodesPerIMEXDomain  int
 }
 
@@ -46,6 +48,8 @@ type ControllerConfig struct {
 	computeDomainNamespace string
 	cliqueID               string
 	podIP                  string
+	podName                string
+	podNamespace           string
 	maxNodesPerIMEXDomain  int
 }
 
@@ -75,6 +79,8 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 		computeDomainNamespace: config.computeDomainNamespace,
 		cliqueID:               config.cliqueID,
 		podIP:                  config.podIP,
+		podName:                config.podName,
+		podNamespace:           config.podNamespace,
 		maxNodesPerIMEXDomain:  config.maxNodesPerIMEXDomain,
 	}
 
