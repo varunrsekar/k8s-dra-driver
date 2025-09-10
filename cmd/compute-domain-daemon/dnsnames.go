@@ -62,8 +62,8 @@ func (m *DNSNameManager) UpdateDNSNameMappings(nodes []*nvapi.ComputeDomainNode)
 	m.Lock()
 	defer m.Unlock()
 
-	// Make a local copy of the current ipToDNSName mappings
-	ipToDNSName := maps.Clone(m.ipToDNSName)
+	// Make a local ipToDNSName mappings
+	ipToDNSName := make(IPToDNSNameMap)
 
 	// Prefilter nodes to only consider those with the matching cliqueID
 	var cliqueNodes []*nvapi.ComputeDomainNode
@@ -73,24 +73,8 @@ func (m *DNSNameManager) UpdateDNSNameMappings(nodes []*nvapi.ComputeDomainNode)
 		}
 	}
 
-	// Find and remove stale IPs from map
-	currentIPs := make(map[string]bool)
+	// Add IPs to map
 	for _, node := range cliqueNodes {
-		currentIPs[node.IPAddress] = true
-	}
-	for ip := range ipToDNSName {
-		if !currentIPs[ip] {
-			delete(ipToDNSName, ip)
-		}
-	}
-
-	// Add new IPs to map
-	for _, node := range cliqueNodes {
-		// If IP already has a DNS name, skip it
-		if _, exists := ipToDNSName[node.IPAddress]; exists {
-			continue
-		}
-
 		// Construct the DNS name from the node index
 		dnsName, err := m.constructDNSName(node)
 		if err != nil {
