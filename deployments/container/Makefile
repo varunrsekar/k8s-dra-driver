@@ -16,10 +16,7 @@ BUILD_MULTI_ARCH_IMAGES ?= no
 DOCKER ?= docker
 REGCTL ?= regctl
 BUILDX =
-
-ifeq ($(BUILD_MULTI_ARCH_IMAGES),true)
-BUILDX = buildx
-endif
+PUSH_ON_BUILD ?= false
 
 ##### Global variables #####
 include $(CURDIR)/versions.mk
@@ -40,10 +37,19 @@ IMAGE = $(IMAGE_NAME):$(IMAGE_TAG)
 ##### Public rules #####
 .PHONY: build
 
-ifneq ($(BUILD_MULTI_ARCH_IMAGES),true)
-include $(CURDIR)/deployments/container/native-only.mk
+ifeq ($(BUILD_MULTI_ARCH_IMAGES),true)
+BUILDX = buildx
+DOCKER_BUILD_OPTIONS = --output=type=image,push=$(PUSH_ON_BUILD)
+DOCKER_BUILD_PLATFORM_OPTIONS = --platform=linux/amd64,linux/arm64
 else
-include $(CURDIR)/deployments/container/multi-arch.mk
+# We also support building single-platform images.
+# These are mostly used for local testing and as such we don't allow these to
+# be pushed on build.
+ifeq ($(PUSH_ON_BUILD),true)
+$(error PUSH_ON_BUILD=true is not supported for single architecture builds)
+endif
+ARCH ?= $(shell uname -m | sed -e 's,aarch64,arm64,' -e 's,x86_64,amd64,')
+DOCKER_BUILD_PLATFORM_OPTIONS = --platform=linux/$(ARCH)
 endif
 
 DOCKERFILE = $(CURDIR)/deployments/container/Dockerfile
