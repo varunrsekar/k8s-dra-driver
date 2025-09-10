@@ -28,6 +28,7 @@ import (
 	"k8s.io/klog/v2"
 
 	nvapi "github.com/NVIDIA/k8s-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
+	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/featuregates"
 	nvinformers "github.com/NVIDIA/k8s-dra-driver-gpu/pkg/nvidia.com/informers/externalversions"
 )
 
@@ -318,13 +319,16 @@ func getNextAvailableIndex(nodes []*nvapi.ComputeDomainNode, maxNodesPerIMEXDoma
 	return nextIndex, nil
 }
 
-// If we've reached the expected number of nodes and if there was actually a
-// change compared to the previously known set of nodes: pass info to IMEX
-// daemon controller.
+// If there was actually a change compared to the previously known set of
+// nodes: pass info to IMEX daemon controller.
 func (m *ComputeDomainManager) MaybePushNodesUpdate(cd *nvapi.ComputeDomain) {
-	if len(cd.Status.Nodes) != cd.Spec.NumNodes {
-		klog.Infof("numNodes: %d, nodes seen: %d", cd.Spec.NumNodes, len(cd.Status.Nodes))
-		return
+	// When not running with the 'IMEXDaemonsWithDNSNames' feature enabled,
+	// wait for all 'numNodes' nodes to show up before sending an update.
+	if !featuregates.Enabled(featuregates.IMEXDaemonsWithDNSNames) {
+		if len(cd.Status.Nodes) != cd.Spec.NumNodes {
+			klog.Infof("numNodes: %d, nodes seen: %d", cd.Spec.NumNodes, len(cd.Status.Nodes))
+			return
+		}
 	}
 
 	newIPs := getIPSet(cd.Status.Nodes)
