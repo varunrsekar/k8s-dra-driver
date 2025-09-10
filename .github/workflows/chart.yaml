@@ -41,7 +41,7 @@ jobs:
           sed -i "s/name: nvidia-dra-driver-gpu/name: k8s-dra-driver-gpu/g" deployments/helm/nvidia-dra-driver-gpu/Chart.yaml
           sed -i "s/nvcr\.io/ghcr.io/g" deployments/helm/nvidia-dra-driver-gpu/values.yaml
           sed -i "s/nameOverride: \"\"/nameOverride: \"nvidia-dra-driver-gpu\"/g" deployments/helm/nvidia-dra-driver-gpu/values.yaml
-          sed -i "s/tag: \"\"/tag: \"${VERSION_W_COMMIT}-ubi9\"/g" deployments/helm/nvidia-dra-driver-gpu/values.yaml
+          sed -i "s/tag: \"\"/tag: \"${VERSION_W_COMMIT}\"/g" deployments/helm/nvidia-dra-driver-gpu/values.yaml
           git diff || echo "ignore git diff exit code"
           ./helm package deployments/helm/nvidia-dra-driver-gpu
       - name: push-chart
