@@ -14,14 +14,10 @@
 
 PUSH_ON_BUILD ?= false
 
+ifeq ($(PUSH_ON_BUILD),true)
+$(error PUSH_ON_BUILD=true is not supported for single architecture builds)
+endif
+
 # Override ARCH in env to set the target build platform
 ARCH ?= $(shell uname -m | sed -e 's,aarch64,arm64,' -e 's,x86_64,amd64,')
 DOCKER_BUILD_PLATFORM_OPTIONS = --platform=linux/$(ARCH)
-
-# Build target depends on image
-ifeq ($(PUSH_ON_BUILD),true)
-build: image
-	$(DOCKER) push "$(IMAGE)"
-else
-build: image
-endif
