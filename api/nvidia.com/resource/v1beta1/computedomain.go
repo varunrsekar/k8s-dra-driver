@@ -96,7 +96,15 @@ type ComputeDomainNode struct {
 	// mapping across all machines within an IMEX domain. Each node's index
 	// directly determines its DNS name. It is marked as optional (but not
 	// omitempty) in order to support downgrades and avoid an API bump.
-	// +optional
 	// +kubebuilder:validation:Optional
 	Index int `json:"index"`
+	// The Status field tracks the readiness of the IMEX daemon running on
+	// this node. It gets switched to Ready whenever the IMEX daemon is
+	// ready to broker GPU memory exchanges and switches to NotReady when
+	// it is not. It is marked as optional in order to support downgrades
+	// and avoid an API bump.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=Ready;NotReady
+	// +kubebuilder:default:=NotReady
+	Status string `json:"status,omitempty"`
 }

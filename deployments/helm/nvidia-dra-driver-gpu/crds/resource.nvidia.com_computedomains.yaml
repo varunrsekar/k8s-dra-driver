@@ -95,6 +95,18 @@ spec:
                       type: string
                     name:
                       type: string
+                    status:
+                      default: NotReady
+                      description: |-
+                        The Status field tracks the readiness of the IMEX daemon running on
+                        this node. It gets switched to Ready whenever the IMEX daemon is
+                        ready to broker GPU memory exchanges and switches to NotReady when
+                        it is not. It is marked as optional in order to support downgrades
+                        and avoid an API bump.
+                      enum:
+                      - Ready
+                      - NotReady
+                      type: string
                   required:
                   - cliqueID
                   - ipAddress
