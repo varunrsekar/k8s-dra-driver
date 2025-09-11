@@ -7,6 +7,9 @@ rules:
 - apiGroups: ["resource.nvidia.com"]
   resources: ["computedomains", "computedomains/status"]
   verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
 
 {{- range $namespace := splitList "," (include "nvidia-dra-driver-gpu.namespaces" .) }}
 ---

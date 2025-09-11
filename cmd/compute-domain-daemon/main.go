@@ -52,6 +52,8 @@ type Flags struct {
 	computeDomainNamespace string
 	nodeName               string
 	podIP                  string
+	podName                string
+	podNamespace           string
 	maxNodesPerIMEXDomain  int
 	loggingConfig          *flags.LoggingConfig
 	featureGateConfig      *flags.FeatureGateConfig
@@ -130,6 +132,18 @@ func newApp() *cli.App {
 			EnvVars:     []string{"POD_IP"},
 			Destination: &flags.podIP,
 		},
+		&cli.StringFlag{
+			Name:        "pod-name",
+			Usage:       "The name of this pod.",
+			EnvVars:     []string{"POD_NAME"},
+			Destination: &flags.podName,
+		},
+		&cli.StringFlag{
+			Name:        "pod-namespace",
+			Usage:       "The namespace of this pod.",
+			EnvVars:     []string{"POD_NAMESPACE"},
+			Destination: &flags.podNamespace,
+		},
 		&cli.IntFlag{
 			Name:        "max-nodes-per-imex-domain",
 			Usage:       "The maximum number of possible nodes per IMEX domain",
@@ -187,6 +201,8 @@ func run(ctx context.Context, cancel context.CancelFunc, flags *Flags) error {
 		computeDomainNamespace: flags.computeDomainNamespace,
 		nodeName:               flags.nodeName,
 		podIP:                  flags.podIP,
+		podName:                flags.podName,
+		podNamespace:           flags.podNamespace,
 		maxNodesPerIMEXDomain:  flags.maxNodesPerIMEXDomain,
 	}
 	klog.Infof("config: %v", config)
