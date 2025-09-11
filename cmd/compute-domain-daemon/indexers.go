@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 func uidIndexer[T metav1.ObjectMetaAccessor](obj any) ([]string, error) {
@@ -28,4 +29,20 @@ func uidIndexer[T metav1.ObjectMetaAccessor](obj any) ([]string, error) {
 		return nil, fmt.Errorf("expected a %T but got %T", *new(T), obj)
 	}
 	return []string{string(d.GetObjectMeta().GetUID())}, nil
+}
+
+// getByComputeDomainUID retrieves objects by UID using the mutation cache.
+func getByComputeDomainUID[T any](mutationCache cache.MutationCache, uid string) ([]T, error) {
+	objs, err := mutationCache.ByIndex("uid", uid)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving objects by UID: %w", err)
+	}
+
+	var result []T
+	for _, obj := range objs {
+		if t, ok := obj.(T); ok {
+			result = append(result, t)
+		}
+	}
+	return result, nil
 }

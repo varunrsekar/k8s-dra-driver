@@ -33,6 +33,7 @@ import (
 
 const (
 	informerResyncPeriod = 10 * time.Minute
+	mutationCacheTTL     = time.Hour
 )
 
 // GetComputeDomainFunc is a function type for getting a ComputeDomain by UID.
@@ -53,7 +54,8 @@ type ComputeDomainManager struct {
 	previousNodes    []*nvapi.ComputeDomainNode
 	updatedNodesChan chan []*nvapi.ComputeDomainNode
 
-	podManager *PodManager
+	podManager    *PodManager
+	mutationCache cache.MutationCache
 }
 
 // NewComputeDomainManager creates a new ComputeDomainManager instance.
@@ -99,6 +101,15 @@ func (m *ComputeDomainManager) Start(ctx context.Context) (rerr error) {
 	if err != nil {
 		return fmt.Errorf("error adding indexer for ComputeDomain UID: %w", err)
 	}
+
+	// Create mutation cache to track our own updates
+	m.mutationCache = cache.NewIntegerResourceVersionMutationCache(
+		klog.Background(),
+		m.informer.GetStore(),
+		m.informer.GetIndexer(),
+		mutationCacheTTL,
+		true,
+	)
 
 	_, err = m.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
@@ -156,23 +167,19 @@ func (m *ComputeDomainManager) Stop() error {
 	return nil
 }
 
-// Get gets the ComputeDomain by UID from the informer cache.
+// Get gets the ComputeDomain by UID from the mutation cache.
 func (m *ComputeDomainManager) Get(uid string) (*nvapi.ComputeDomain, error) {
-	objs, err := m.informer.GetIndexer().ByIndex("uid", uid)
+	cds, err := getByComputeDomainUID[*nvapi.ComputeDomain](m.mutationCache, uid)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving ComputeDomain by UID: %w", err)
 	}
-	if len(objs) == 0 {
+	if len(cds) == 0 {
 		return nil, nil
 	}
-	if len(objs) != 1 {
+	if len(cds) != 1 {
 		return nil, fmt.Errorf("multiple ComputeDomains with the same UID")
 	}
-	cd, ok := objs[0].(*nvapi.ComputeDomain)
-	if !ok {
-		return nil, fmt.Errorf("error casting to ComputeDomain")
-	}
-	return cd, nil
+	return cds[0], nil
 }
 
 // onAddOrUpdate handles the addition or update of a ComputeDomain.
@@ -209,14 +216,16 @@ func (m *ComputeDomainManager) onAddOrUpdate(ctx context.Context, obj any) error
 
 // UpdateComputeDomainNodeInfo updates the Nodes field in the ComputeDomain
 // with info about the ComputeDomain daemon running on this node.
-func (m *ComputeDomainManager) UpdateComputeDomainNodeInfo(ctx context.Context, cd *nvapi.ComputeDomain) error {
+func (m *ComputeDomainManager) UpdateComputeDomainNodeInfo(ctx context.Context, cd *nvapi.ComputeDomain) (rerr error) {
 	var nodeInfo *nvapi.ComputeDomainNode
 
 	// Create a deep copy of the ComputeDomain to avoid modifying the original
 	newCD := cd.DeepCopy()
 
 	defer func() {
-		m.MaybePushNodesUpdate(newCD)
+		if rerr == nil {
+			m.MaybePushNodesUpdate(newCD)
+		}
 	}()
 
 	// Try to find an existing entry for the current k8s node
@@ -262,6 +271,9 @@ func (m *ComputeDomainManager) UpdateComputeDomainNodeInfo(ctx context.Context, 
 	if _, err := m.config.clientsets.Nvidia.ResourceV1beta1().ComputeDomains(newCD.Namespace).UpdateStatus(ctx, newCD, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("error updating nodes in ComputeDomain status: %w", err)
 	}
+
+	// Add the updated ComputeDomain to the mutation cache
+	m.mutationCache.Mutation(newCD)
 
 	return nil
 }
