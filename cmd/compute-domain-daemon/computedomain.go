@@ -216,14 +216,16 @@ func (m *ComputeDomainManager) onAddOrUpdate(ctx context.Context, obj any) error
 
 // UpdateComputeDomainNodeInfo updates the Nodes field in the ComputeDomain
 // with info about the ComputeDomain daemon running on this node.
-func (m *ComputeDomainManager) UpdateComputeDomainNodeInfo(ctx context.Context, cd *nvapi.ComputeDomain) error {
+func (m *ComputeDomainManager) UpdateComputeDomainNodeInfo(ctx context.Context, cd *nvapi.ComputeDomain) (rerr error) {
 	var nodeInfo *nvapi.ComputeDomainNode
 
 	// Create a deep copy of the ComputeDomain to avoid modifying the original
 	newCD := cd.DeepCopy()
 
 	defer func() {
-		m.MaybePushNodesUpdate(newCD)
+		if rerr == nil {
+			m.MaybePushNodesUpdate(newCD)
+		}
 	}()
 
 	// Try to find an existing entry for the current k8s node
