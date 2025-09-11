@@ -308,6 +308,8 @@ func (m *ComputeDomainManager) AddNodeLabel(ctx context.Context, cdUID string) e
 	return nil
 }
 
+// RemoveNodeLabel() attempts removal and returns no error if the label was
+// removed or didn't exist in the first place.
 func (m *ComputeDomainManager) RemoveNodeLabel(ctx context.Context, cdUID string) error {
 	node, err := m.config.clientsets.Core.CoreV1().Nodes().Get(ctx, m.config.flags.nodeName, metav1.GetOptions{})
 	if err != nil {
@@ -357,7 +359,7 @@ func (m *ComputeDomainManager) periodicCleanup(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			klog.V(6).Infof("Running periodic sync to remove artifacts owned by stale ComputeDomain")
+			klog.V(6).Infof("Running periodic cleanup to remove stale ComputeDomain artifacts")
 
 			_, err := os.Stat(m.configFilesRoot)
 			if os.IsNotExist(err) {
@@ -379,6 +381,7 @@ func (m *ComputeDomainManager) periodicCleanup(ctx context.Context) {
 					continue
 				}
 
+				// Convention: per-CD directory with CD UID as basename
 				uid := e.Name()
 				path := filepath.Join(m.configFilesRoot, e.Name())
 
@@ -388,19 +391,15 @@ func (m *ComputeDomainManager) periodicCleanup(ctx context.Context) {
 					continue
 				}
 
+				// CD still exists, do not clean up
 				if computeDomain != nil {
 					continue
 				}
 
-				klog.Infof("Stale artifacts found for ComputeDomain '%s', running cleanup", uid)
+				klog.V(6).Infof("Stale directory found for ComputeDomain '%s', running cleanup", uid)
 
 				if err := os.RemoveAll(path); err != nil {
 					klog.Errorf("error removing artifacts directory for ComputeDomain '%s': %v", uid, err)
-					continue
-				}
-
-				if err := m.RemoveNodeLabel(ctx, uid); err != nil {
-					klog.Errorf("error removing Node label for ComputeDomain '%s': %v", uid, err)
 					continue
 				}
 			}
