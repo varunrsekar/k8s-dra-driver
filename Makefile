@@ -220,3 +220,54 @@ PHONY: .shell
 		-w /work \
 		--user $$(id -u):$$(id -g) \
 		$(BUILDIMAGE)
+
+BATS_IMAGE = batstests:$(GIT_COMMIT_SHORT)
+
+.PHONY: bats-image
+bats-image:
+	docker buildx build . -t $(BATS_IMAGE) -f ci-tests.Dockerfile
+
+TEST_CHART_REPO ?= "oci://ghcr.io/nvidia/k8s-dra-driver-gpu"
+TEST_CHART_VERSION ?= $(VERSION_GHCR_CHART)
+TEST_CHART_LASTSTABLE_REPO ?= "oci://ghcr.io/nvidia/k8s-dra-driver-gpu"
+TEST_CHART_LASTSTABLE_VERSION ?= "25.3.2-7020737a-chart"
+
+# Currently consumed in upgrade test via
+# kubectl apply -f <URL> (can be a branch, tag, or commit)
+TEST_CRD_UPGRADE_TARGET_GIT_REF ?= $(GIT_COMMIT_SHORT)
+
+# Warning: destructive against currently configured k8s cluster.
+#
+# Explicit invocation of 'cleanup-from-previous-run.sh' (could also be done as
+# suite/file 'setup' in bats, but we'd lose output on success). During dev, you
+# may want to add --show-output-of-passing-tests (and read bats docs for other
+# cmdline args).
+.PHONY: bats-tests
+bats-tests: bats-image
+	mkdir -p tests-out
+	export _RUNDIR=$(shell mktemp -p tests-out -d -t bats-tests-$$(date +%s)-XXXXX) && \
+	echo "output directory: $${_RUNDIR}" && \
+	time docker run \
+		-it \
+		-v /tmp:/tmp \
+		-v $(shell pwd):/cwd \
+		-v ~/.kube/config:/kubeconfig \
+		--env KUBECONFIG=/kubeconfig \
+		--env TEST_CHART_REPO=$(TEST_CHART_REPO) \
+		--env TEST_CHART_VERSION=$(TEST_CHART_VERSION) \
+		--env TEST_CHART_LASTSTABLE_REPO=$(TEST_CHART_LASTSTABLE_REPO) \
+		--env TEST_CHART_LASTSTABLE_VERSION=$(TEST_CHART_LASTSTABLE_VERSION) \
+		--env TEST_CRD_UPGRADE_TARGET_GIT_REF=$(TEST_CRD_UPGRADE_TARGET_GIT_REF) \
+		-u $(shell id -u ${USER}):$(shell id -g ${USER}) \
+		--entrypoint "/bin/bash"\
+		$(BATS_IMAGE) \
+		-c "cd /cwd; \
+			echo 'Running k8s cluster cleanup (invasive)... '; \
+			bash tests/cleanup-from-previous-run.sh &> $${_RUNDIR}/cleanup.outerr || \
+				(echo 'Cleanup failed:'; cat $${_RUNDIR}/cleanup.outerr);  \
+			TMPDIR=/cwd/$${_RUNDIR} bats \
+			--print-output-on-failure \
+			--no-tempdir-cleanup \
+			--timing \
+			tests/tests.bats \
+		"
