@@ -13,34 +13,51 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Determines nvidia-container-toolkit image URL based on go.mod version.
-# - Pseudo-versions: uses ghcr.io with commit SHA (dev builds)
-# - Tagged releases: uses nvcr.io with version tag (stable releases)
-# Output is used to pull nvidia-cdi-hook binary from the container.
+# Parse go.mod entry for `github.com/NVIDIA/nvidia-container-toolkit`. Construct
+# and output ctk container image locator corresponding to that.
+
+# The image locator is meant for consumption at DRA driver container image build
+# time (passed into the build as build argument). Currently used to read the
+# `nvidia-cdi-hook` binary from the toolkits container image.
+#
+# Distinguish two cases:
+#
+# - Format 'vX.Y.Z-time-commit': use ghcr.io with commit SHA (dev builds)
+# - Format 'vX.Y.Z'            : use nvcr.io (releases)
+#
+# Assume consumption via `$(shell ...)` which ignores the exit code. Indicate
+# result on stdout:
+#
+#  - Success: emit URL on stdout
+#  - Failure: emit TOOLKIT_VERSION_NOT_SET or TOOLKIT_VERSION_PARSE_FAILED.
+#
+# May fail in some environments that do not have Golang tooling in their PATH.
+# Currently executed upon including `versions.mk`, i.e. for all targets. Hence,
+# do not emit errors on `stderr`, but gracefully degrade (many Makefile targets
+# powered by versions.mk still work correctly with TOOLKIT_VERSION_NOT_SET).
 
 set -euo pipefail
 
-# Get the resolved version from go.mod using go tooling
 TOOLKIT_VERSION=$(go list -m -f '{{.Version}}' github.com/NVIDIA/nvidia-container-toolkit 2>/dev/null || true)
 
 if [ -z "${TOOLKIT_VERSION}" ]; then
-    echo "Error: Could not find nvidia-container-toolkit dependency" >&2
-    exit 1
+    echo "TOOLKIT_VERSION_NOT_SET"
+    exit 0
 fi
 
-# Check if this is a pseudo-version (format: vx.y.z-timestamp-commit-hash)
+# Handle format vX.Y.Z-time-commit
 if [[ "${TOOLKIT_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]{14}-([a-f0-9]{12})$ ]]; then
     TOOLKIT_VERSION_SHA="${BASH_REMATCH[1]}"
     SHORT_SHA="${TOOLKIT_VERSION_SHA:0:8}"
     IMAGE_URL="ghcr.io/nvidia/container-toolkit:${SHORT_SHA}"
-# Check if this is a release-version (format: vx.y.z)
-# Remove the 'v' prefix for the image tag (nvcr.io uses x.y.z format)
+# Handle format vX.Y.Z, drop leading 'v'
 elif [[ "${TOOLKIT_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
     IMAGE_TAG="${TOOLKIT_VERSION#v}"
     IMAGE_URL="nvcr.io/nvidia/k8s/container-toolkit:v${IMAGE_TAG}"
 else
     echo "Error: Unexpected version format: ${TOOLKIT_VERSION}" >&2
-    exit 1
+    echo "TOOLKIT_VERSION_PARSE_FAILED"
+    exit 0
 fi
 
 echo "${IMAGE_URL}"
