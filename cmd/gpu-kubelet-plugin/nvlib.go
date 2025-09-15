@@ -201,9 +201,11 @@ func (l deviceLib) getGpuInfo(index int, device nvdev.Device) (*GpuInfo, error) 
 		return nil, fmt.Errorf("error getting PCIe bus ID for device %d: %w", index, err)
 	}
 
-	pcieRootAttr, err := deviceattribute.GetPCIeRootAttributeByPCIBusID(pcieBusID)
-	if err != nil {
-		return nil, fmt.Errorf("error getting PCIe root for device %d: %w", index, err)
+	var pcieRootAttr *deviceattribute.DeviceAttribute
+	if attr, err := deviceattribute.GetPCIeRootAttributeByPCIBusID(pcieBusID); err == nil {
+		pcieRootAttr = &attr
+	} else {
+		klog.Warningf("error getting PCIe root for device %d, continuing without attribute: %v", index, err)
 	}
 
 	var migProfiles []*MigProfileInfo

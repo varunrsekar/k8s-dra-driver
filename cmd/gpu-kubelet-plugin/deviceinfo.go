@@ -41,7 +41,7 @@ type GpuInfo struct {
 	driverVersion         string
 	cudaDriverVersion     string
 	pcieBusID             string
-	pcieRootAttr          deviceattribute.DeviceAttribute
+	pcieRootAttr          *deviceattribute.DeviceAttribute
 	migProfiles           []*MigProfileInfo
 }
 
@@ -56,7 +56,7 @@ type MigDeviceInfo struct {
 	ciProfileInfo *nvml.ComputeInstanceProfileInfo
 	ciInfo        *nvml.ComputeInstanceInfo
 	pcieBusID     string
-	pcieRootAttr  deviceattribute.DeviceAttribute
+	pcieRootAttr  *deviceattribute.DeviceAttribute
 }
 
 type MigProfileInfo struct {
@@ -125,13 +125,15 @@ func (d *GpuInfo) GetDevice() resourceapi.Device {
 			"pcieBusID": {
 				StringValue: &d.pcieBusID,
 			},
-			d.pcieRootAttr.Name: d.pcieRootAttr.Value,
 		},
 		Capacity: map[resourceapi.QualifiedName]resourceapi.DeviceCapacity{
 			"memory": {
 				Value: *resource.NewQuantity(int64(d.memoryBytes), resource.BinarySI),
 			},
 		},
+	}
+	if d.pcieRootAttr != nil {
+		device.Attributes[d.pcieRootAttr.Name] = d.pcieRootAttr.Value
 	}
 	return device
 }
@@ -179,7 +181,6 @@ func (d *MigDeviceInfo) GetDevice() resourceapi.Device {
 			"pcieBusID": {
 				StringValue: &d.pcieBusID,
 			},
-			d.pcieRootAttr.Name: d.pcieRootAttr.Value,
 		},
 		Capacity: map[resourceapi.QualifiedName]resourceapi.DeviceCapacity{
 			"multiprocessors": {
@@ -198,6 +199,9 @@ func (d *MigDeviceInfo) GetDevice() resourceapi.Device {
 		device.Capacity[capacity] = resourceapi.DeviceCapacity{
 			Value: *resource.NewQuantity(1, resource.BinarySI),
 		}
+	}
+	if d.pcieRootAttr != nil {
+		device.Attributes[d.pcieRootAttr.Name] = d.pcieRootAttr.Value
 	}
 	return device
 }
