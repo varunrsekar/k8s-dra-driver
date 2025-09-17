@@ -28,9 +28,11 @@ TEST_NVIDIA_DRIVER_ROOT ?= "/run/nvidia/driver"
 # kubectl apply -f <URL> (can be a branch, tag, or commit)
 TEST_CRD_UPGRADE_TARGET_GIT_REF ?= $(GIT_COMMIT_SHORT)
 
-.PHONY: bats-image
-bats-image:
-	docker buildx build . -t $(BATS_IMAGE) -f tests/bats/bats-tests.Dockerfile
+default: tests
+
+.PHONY: image
+image:
+	docker buildx build . -t $(BATS_IMAGE) -f tests/bats/Dockerfile
 
 # Warning: destructive against currently configured k8s cluster.
 #
@@ -38,8 +40,8 @@ bats-image:
 # suite/file 'setup' in bats, but we'd lose output on success). During dev, you
 # may want to add --show-output-of-passing-tests (and read bats docs for other
 # cmdline args).
-.PHONY: bats-tests
-bats-tests: bats-image
+.PHONY: tests
+tests: image
 	mkdir -p tests-out
 	export _RUNDIR=$(shell mktemp -p tests-out -d -t bats-tests-$$(date +%s)-XXXXX) && \
 	echo "output directory: $${_RUNDIR}" && \

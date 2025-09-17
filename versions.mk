@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Needed for e.g. `$${FOO:1}` substitution used below.
-SHELL := /bin/bash
-
 DRIVER_NAME := k8s-dra-driver-gpu
 HELM_DRIVER_NAME := nvidia-dra-driver-gpu
 MODULE := github.com/NVIDIA/$(DRIVER_NAME)
@@ -45,7 +42,7 @@ GIT_COMMIT_SHORT ?= $(shell git rev-parse --short=8 HEAD)
 VERSION_W_COMMIT = $(VERSION)-$(GIT_COMMIT_SHORT)
 
 # Shape: 25.8.0-dev-f2eaddd6-chart (no leading v)
-VERSION_GHCR_CHART ?= $(shell FOO="$(VERSION)-$(GIT_COMMIT_SHORT)-chart"; echo $${FOO:1})
+VERSION_GHCR_CHART ?= $(VERSION_W_COMMIT:v%=%)-chart
 
 print-%:
 	@echo $($*)
