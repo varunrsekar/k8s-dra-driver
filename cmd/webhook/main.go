@@ -249,7 +249,8 @@ func admitResourceClaimParameters(ar admissionv1.AdmissionReview) *admissionv1.A
 		}
 
 		fieldPath := fmt.Sprintf("%s.devices.config[%d].opaque.parameters", specPath, configIndex)
-		decodedConfig, err := runtime.Decode(nvapi.Decoder, config.Opaque.Parameters.Raw)
+		// Strict-decode: do not allow for users to provide unknown fields.
+		decodedConfig, err := runtime.Decode(nvapi.StrictDecoder, config.Opaque.Parameters.Raw)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error decoding object at %s: %w", fieldPath, err))
 			continue
