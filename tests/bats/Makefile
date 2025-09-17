@@ -1,0 +1,70 @@
+#  SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#  SPDX-License-Identifier: Apache-2.0
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
+include $(CURDIR)/versions.mk
+include $(CURDIR)/common.mk
+
+BATS_IMAGE = batstests:$(GIT_COMMIT_SHORT)
+
+TEST_CHART_REPO ?= "oci://ghcr.io/nvidia/k8s-dra-driver-gpu"
+TEST_CHART_VERSION ?= $(VERSION_GHCR_CHART)
+TEST_CHART_LASTSTABLE_REPO ?= "oci://ghcr.io/nvidia/k8s-dra-driver-gpu"
+TEST_CHART_LASTSTABLE_VERSION ?= "25.3.2-2c250af3-chart"
+TEST_NVIDIA_DRIVER_ROOT ?= "/run/nvidia/driver"
+
+# Currently consumed in upgrade test via
+# kubectl apply -f <URL> (can be a branch, tag, or commit)
+TEST_CRD_UPGRADE_TARGET_GIT_REF ?= $(GIT_COMMIT_SHORT)
+
+.PHONY: bats-image
+bats-image:
+	docker buildx build . -t $(BATS_IMAGE) -f tests/bats/bats-tests.Dockerfile
+
+# Warning: destructive against currently configured k8s cluster.
+#
+# Explicit invocation of 'cleanup-from-previous-run.sh' (could also be done as
+# suite/file 'setup' in bats, but we'd lose output on success). During dev, you
+# may want to add --show-output-of-passing-tests (and read bats docs for other
+# cmdline args).
+.PHONY: bats-tests
+bats-tests: bats-image
+	mkdir -p tests-out
+	export _RUNDIR=$(shell mktemp -p tests-out -d -t bats-tests-$$(date +%s)-XXXXX) && \
+	echo "output directory: $${_RUNDIR}" && \
+	time docker run \
+		-it \
+		-v /tmp:/tmp \
+		-v $(CURDIR):/cwd \
+		-v ~/.kube/config:/kubeconfig \
+		--env KUBECONFIG=/kubeconfig \
+		--env TEST_CHART_REPO=$(TEST_CHART_REPO) \
+		--env TEST_CHART_VERSION=$(TEST_CHART_VERSION) \
+		--env TEST_CHART_LASTSTABLE_REPO=$(TEST_CHART_LASTSTABLE_REPO) \
+		--env TEST_CHART_LASTSTABLE_VERSION=$(TEST_CHART_LASTSTABLE_VERSION) \
+		--env TEST_CRD_UPGRADE_TARGET_GIT_REF=$(TEST_CRD_UPGRADE_TARGET_GIT_REF) \
+		--env TEST_NVIDIA_DRIVER_ROOT=$(TEST_NVIDIA_DRIVER_ROOT) \
+		-u $(shell id -u ${USER}):$(shell id -g ${USER}) \
+		--entrypoint "/bin/bash"\
+		$(BATS_IMAGE) \
+		-c "cd /cwd; \
+			echo 'Running k8s cluster cleanup (invasive)... '; \
+			bash tests/bats/cleanup-from-previous-run.sh &> $${_RUNDIR}/cleanup.outerr || \
+				(echo 'Cleanup failed:'; cat $${_RUNDIR}/cleanup.outerr);  \
+			TMPDIR=/cwd/$${_RUNDIR} bats \
+			--print-output-on-failure \
+			--no-tempdir-cleanup \
+			--timing \
+			tests/bats/tests.bats \
+		"
