@@ -227,7 +227,7 @@ apply_check_delete_workload_imex_chan_inject() {
   echo "${output}" | grep -E '^.*SUM multinode_device_to_device_memcpy_read_ce [0-9]+\.[0-9]+.*$'
 }
 
-@test "downgrade: current -> ${TEST_CHART_LASTSTABLE_REPO}/${TEST_CHART_LASTSTABLE_VERSION}" {
+@test "downgrade: current-dev -> last-stable" {
   # Stage 1: apply workload, but do not delete.
   kubectl apply -f demo/specs/imex/channel-injection.yaml
   kubectl wait --for=condition=READY pods imex-channel-injection --timeout=60s
