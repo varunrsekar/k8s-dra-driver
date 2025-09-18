@@ -6,3 +6,4 @@
 .idea
 [._]*.sw[a-p]
 coverage.out
+tests-out
