@@ -4,6 +4,7 @@ setup() {
   load '/bats-libraries/bats-support/load.bash'
   load '/bats-libraries/bats-assert/load.bash'
   load '/bats-libraries/bats-file/load.bash'
+  load 'helpers.sh'
 }
 
 # Currently, the tests defined in this file deliberately depend on each other
@@ -160,6 +161,44 @@ apply_check_delete_workload_imex_chan_inject() {
   assert_output --partial "channel2047"
   assert_output --partial "channel222"
   kubectl delete -f demo/specs/imex/channel-injection-all.yaml
+}
+
+@test "NodePrepareResources: catch unknown field in opaque cfg in ResourceClaim" {
+  local SPEC="tests/bats/specs/rc-opaque-cfg-unknown-field.yaml"
+
+  # Create pod with random name suffix.
+  # Store ref of the form `pod/batssuite-pod-boc-brs2l`.
+  local POD
+  POD=$(kubectl create -f "${SPEC}" | grep pod | awk '{print $1;}')
+
+  # Confirm ContainerCreating state (no failure yet though).
+  kubectl wait \
+    --for=jsonpath='{.status.containerStatuses[0].state.waiting.reason}'=ContainerCreating \
+    --timeout=10s \
+    "${POD}"
+
+  # Rather quickly, we expect an event with reason
+  # `FailedPrepareDynamicResources`. That's not typically the method users
+  # discover the error.
+  wait_for_pod_event "${POD}" FailedPrepareDynamicResources 10
+
+  # This is how users probably see this error first.
+  kubectl describe "${POD}" | grep FailedPrepareDynamicResources | \
+    grep "error preparing devices"  | \
+    grep 'strict decoding error: unknown field "unexpectedField"'
+
+  # Confirm that precise root cause can also be inferred from
+  # CD kubelet plugin logs.
+  kubectl logs \
+    -l nvidia-dra-driver-gpu-component=kubelet-plugin \
+    -n nvidia-dra-driver-gpu \
+    --prefix --tail=-1 | \
+      grep 'Permanent error' | \
+      grep 'strict decoding error: unknown field "unexpectedField"'
+
+  # Clean up.
+  kubectl delete "${POD}"
+  kubectl delete resourceclaim batssuite-rc-bad-opaque-config
 }
 
 @test "nickelpie (NCCL send/recv/broadcast, 2 pods, 2 nodes, small payload)" {
