@@ -220,3 +220,8 @@ PHONY: .shell
 		-w /work \
 		--user $$(id -u):$$(id -g) \
 		$(BUILDIMAGE)
+
+.PHONY: bats
+bats:
+	make -f tests/bats/Makefile tests
+
