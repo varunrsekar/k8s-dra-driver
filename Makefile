@@ -223,5 +223,5 @@ PHONY: .shell
 
 .PHONY: bats
 bats:
-	make -f tests/bats/Makefile bats-tests
+	make -f tests/bats/Makefile tests
 
