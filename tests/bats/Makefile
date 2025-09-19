@@ -18,6 +18,7 @@ include $(CURDIR)/common.mk
 
 BATS_IMAGE = batstests:$(GIT_COMMIT_SHORT)
 
+KUBECONFIG ?= $(HOME)/.kube/config
 TEST_CHART_REPO ?= "oci://ghcr.io/nvidia/k8s-dra-driver-gpu"
 TEST_CHART_VERSION ?= $(VERSION_GHCR_CHART)
 TEST_CHART_LASTSTABLE_REPO ?= "oci://ghcr.io/nvidia/k8s-dra-driver-gpu"
@@ -42,15 +43,14 @@ image:
 # cmdline args).
 .PHONY: tests
 tests: image
-	mkdir -p tests-out
+	mkdir -p tests-out && \
 	export _RUNDIR=$(shell mktemp -p tests-out -d -t bats-tests-$$(date +%s)-XXXXX) && \
-	echo "output directory: $${_RUNDIR}" && \
 	time docker run \
 		-it \
 		-v /tmp:/tmp \
 		-v $(CURDIR):/cwd \
-		-v ~/.kube/config:/kubeconfig \
-		--env KUBECONFIG=/kubeconfig \
+		-v $(HOME)/.kube/:$(HOME)/.kube \
+		--env KUBECONFIG=$(KUBECONFIG) \
 		--env TEST_CHART_REPO=$(TEST_CHART_REPO) \
 		--env TEST_CHART_VERSION=$(TEST_CHART_VERSION) \
 		--env TEST_CHART_LASTSTABLE_REPO=$(TEST_CHART_LASTSTABLE_REPO) \
