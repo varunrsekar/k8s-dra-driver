@@ -56,6 +56,13 @@ endif
 BATS_IMAGE = batstests:$(GIT_COMMIT_SHORT)
 KUBECONFIG ?= $(HOME)/.kube/config
 
+# Add `docker run` arguments when not running
+# in Github Actions / GitLab CI.
+DOCKER_RUN_FLAGS :=
+ifeq ($(CI),)
+  DOCKER_RUN_FLAGS += -it
+endif
+
 default: tests
 
 .PHONY: image
@@ -71,9 +78,10 @@ image:
 .PHONY: tests
 tests: image
 	mkdir -p tests-out && \
-	export _RUNDIR=$(shell mktemp -p tests-out -d -t bats-tests-$$(date +%s)-XXXXX) && \
-	time docker run \
-		-it \
+	export _RUNDIR=$$(mktemp -p tests-out -d -t bats-tests-$$(date +%s)-XXXXX) && \
+	docker run \
+		--rm \
+		$(DOCKER_RUN_FLAGS) \
 		-v /tmp:/tmp \
 		-v $(CURDIR):/cwd \
 		-v $(HOME)/.kube/:$(HOME)/.kube \
@@ -88,7 +96,7 @@ tests: image
 		-u $(shell id -u ${USER}):$(shell id -g ${USER}) \
 		--entrypoint "/bin/bash"\
 		$(BATS_IMAGE) \
-		-c "cd /cwd; \
+		-c "set -ex; cd /cwd; \
 			echo 'Running k8s cluster cleanup (invasive)... '; \
 			bash tests/bats/cleanup-from-previous-run.sh 2>&1 | tee -a $${_RUNDIR}/cleanup.outerr; \
 			TMPDIR=/cwd/$${_RUNDIR} bats \
