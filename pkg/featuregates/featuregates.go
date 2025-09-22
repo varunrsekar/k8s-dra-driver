@@ -61,8 +61,8 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.VersionedSpecs{
 	},
 	IMEXDaemonsWithDNSNames: {
 		{
-			Default:    false,
-			PreRelease: featuregate.Alpha,
+			Default:    true,
+			PreRelease: featuregate.Beta,
 			Version:    version.MajorMinor(25, 8),
 		},
 	},

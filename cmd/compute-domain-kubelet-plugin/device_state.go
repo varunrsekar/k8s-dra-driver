@@ -25,12 +25,14 @@ import (
 	resourceapi "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/dynamic-resource-allocation/kubeletplugin"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/kubelet/checkpointmanager"
 	cdiapi "tags.cncf.io/container-device-interface/pkg/cdi"
 
 	configapi "github.com/NVIDIA/k8s-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
+	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/featuregates"
 )
 
 type OpaqueDeviceConfig struct {
@@ -60,6 +62,13 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 	nvdevlib, err := newDeviceLib(containerDriverRoot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create device library: %w", err)
+	}
+
+	// Check driver version if IMEXDaemonsWithDNSNames feature gate is enabled
+	if featuregates.Enabled(featuregates.IMEXDaemonsWithDNSNames) {
+		if err := validateDriverVersionForIMEXDaemonsWithDNSNames(config.flags, nvdevlib); err != nil {
+			return nil, fmt.Errorf("driver version validation failed: %w", err)
+		}
 	}
 
 	allocatable, err := nvdevlib.enumerateAllPossibleDevices(config)
@@ -559,6 +568,32 @@ func (s *DeviceState) getConfigResultsMap(rcs *resourceapi.ResourceClaimStatus, 
 		}
 	}
 	return configResultsMap, nil
+}
+
+// validateDriverVersionForIMEXDaemonsWithDNSNames validates that the driver version
+// meets the minimum requirement for the IMEXDaemonsWithDNSNames feature gate.
+func validateDriverVersionForIMEXDaemonsWithDNSNames(flags *Flags, nvdevlib *deviceLib) error {
+	klog.Infof("Starting driver version validation for IMEXDaemonsWithDNSNames feature...")
+	klog.Infof("Minimum required version: %s", IMEXDaemonsWithDNSNamesMinDriverVersion)
+
+	driverVer, err := nvdevlib.getDriverVersion()
+	if err != nil {
+		return fmt.Errorf("error getting driver version: %w", err)
+	}
+
+	minVersion, err := version.ParseGeneric(IMEXDaemonsWithDNSNamesMinDriverVersion)
+	if err != nil {
+		return fmt.Errorf("error parsing minimum version: %w", err)
+	}
+
+	if driverVer.LessThan(minVersion) {
+		klog.Errorf("IMEXDaemonsWithDNSNames feature requires GPU driver version >= %s, but found %s", minVersion.String(), driverVer.String())
+		klog.Errorf("If installed via helm, set featureGates.IMEXDaemonsWithDNSNames=false to disable")
+		return fmt.Errorf("minimum version not satisfied for IMEXDaemonsWithDNSNames feature")
+	}
+
+	klog.Infof("Driver version validation passed: %s >= %s", driverVer.String(), minVersion.String())
+	return nil
 }
 
 // GetOpaqueDeviceConfigs returns an ordered list of the configs contained in possibleConfigs for this driver.
