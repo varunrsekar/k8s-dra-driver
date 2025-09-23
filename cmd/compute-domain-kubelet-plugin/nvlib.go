@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/klog/v2"
 	"k8s.io/mount-utils"
 
@@ -123,6 +124,26 @@ func (l deviceLib) alwaysShutdown() {
 	if ret != nvml.SUCCESS {
 		klog.Warningf("error shutting down NVML: %v", ret)
 	}
+}
+
+func (l deviceLib) getDriverVersion() (*version.Version, error) {
+	if err := l.init(); err != nil {
+		return nil, fmt.Errorf("error initializing NVML: %w", err)
+	}
+	defer l.alwaysShutdown()
+
+	driverVersion, ret := l.nvmllib.SystemGetDriverVersion()
+	if ret != nvml.SUCCESS {
+		return nil, fmt.Errorf("error getting driver version: %v", ret)
+	}
+
+	// Parse the version using Kubernetes version utilities
+	v, err := version.ParseGeneric(driverVersion)
+	if err != nil {
+		return nil, fmt.Errorf("invalid driver version format '%s': %w", driverVersion, err)
+	}
+
+	return v, nil
 }
 
 func (l deviceLib) enumerateAllPossibleDevices(config *Config) (AllocatableDevices, error) {

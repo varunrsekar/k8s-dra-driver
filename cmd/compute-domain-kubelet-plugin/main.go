@@ -35,8 +35,9 @@ import (
 )
 
 const (
-	DriverName                         = "compute-domain.nvidia.com"
-	DriverPluginCheckpointFileBasename = "checkpoint.json"
+	DriverName                              = "compute-domain.nvidia.com"
+	DriverPluginCheckpointFileBasename      = "checkpoint.json"
+	IMEXDaemonsWithDNSNamesMinDriverVersion = "570.158.01"
 )
 
 type Flags struct {
