@@ -78,6 +78,8 @@ webhook:
   priorityClassName: "system-cluster-critical"
   strategy:
     type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: "100%"
   podAnnotations: {}
   podSecurityContext: {}
   nodeSelector: {}
@@ -145,6 +147,8 @@ kubeletPlugin:
   priorityClassName: "system-node-critical"
   updateStrategy:
     type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: "100%"
   podAnnotations: {}
   podSecurityContext: {}
   nodeSelector: {}
