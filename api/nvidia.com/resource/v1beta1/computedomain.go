@@ -94,7 +94,9 @@ type ComputeDomainNode struct {
 	CliqueID  string `json:"cliqueID"`
 	// The Index field is used to ensure a consistent IP-to-DNS name
 	// mapping across all machines within an IMEX domain. Each node's index
-	// directly determines its DNS name. It is marked as optional (but not
+	// directly determines its DNS name within a given NVLink partition
+	// (i.e. clique). In other words, the 2-tuple of (CliqueID, Index) will
+	// always be unique. This field is marked as optional (but not
 	// omitempty) in order to support downgrades and avoid an API bump.
 	// +kubebuilder:validation:Optional
 	Index int `json:"index"`

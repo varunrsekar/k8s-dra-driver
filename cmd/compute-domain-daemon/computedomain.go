@@ -245,7 +245,7 @@ func (m *ComputeDomainManager) UpdateComputeDomainNodeInfo(ctx context.Context, 
 	// If there isn't one, create one and append it to the list
 	if nodeInfo == nil {
 		// Get the next available index for this new node
-		nextIndex, err := getNextAvailableIndex(newCD.Status.Nodes, m.config.maxNodesPerIMEXDomain)
+		nextIndex, err := getNextAvailableIndex(m.config.cliqueID, newCD.Status.Nodes, m.config.maxNodesPerIMEXDomain)
 		if err != nil {
 			return fmt.Errorf("error getting next available index: %w", err)
 		}
@@ -286,22 +286,26 @@ func (m *ComputeDomainManager) UpdateComputeDomainNodeInfo(ctx context.Context, 
 //
 // getNextAvailableIndex finds the next available index for the current node by
 // seeing which ones are already taken by other nodes in the ComputeDomain
-// status. It fills in gaps where it can, and returns an error if no index is
-// available within maxNodesPerIMEXDomain.
+// status that have the same cliqueID. It fills in gaps where it can, and returns
+// an error if no index is available within maxNodesPerIMEXDomain.
 //
 // By filling gaps in the index sequence (rather than always appending), we
 // maintain stable DNS names for existing nodes even when intermediate nodes
 // are removed from the compute domain and new ones are added.
-func getNextAvailableIndex(nodes []*nvapi.ComputeDomainNode, maxNodesPerIMEXDomain int) (int, error) {
-	if len(nodes) >= maxNodesPerIMEXDomain {
-		return -1, fmt.Errorf("cannot add more nodes, already at maximum (%d)", maxNodesPerIMEXDomain)
+func getNextAvailableIndex(currentCliqueID string, nodes []*nvapi.ComputeDomainNode, maxNodesPerIMEXDomain int) (int, error) {
+	// Filter nodes to only consider those with the same cliqueID
+	var cliqueNodes []*nvapi.ComputeDomainNode
+	for _, node := range nodes {
+		if node.CliqueID == currentCliqueID {
+			cliqueNodes = append(cliqueNodes, node)
+		}
 	}
 
 	// Create a map to track used indices
 	usedIndices := make(map[int]bool)
 
-	// Collect all currently used indices
-	for _, node := range nodes {
+	// Collect all currently used indices from nodes with the same cliqueID
+	for _, node := range cliqueNodes {
 		usedIndices[node.Index] = true
 	}
 
@@ -313,7 +317,7 @@ func getNextAvailableIndex(nodes []*nvapi.ComputeDomainNode, maxNodesPerIMEXDoma
 
 	// Ensure nextIndex is within the range 0..maxNodesPerIMEXDomain
 	if nextIndex < 0 || nextIndex >= maxNodesPerIMEXDomain {
-		return -1, fmt.Errorf("no available indices within maxNodesPerIMEXDomain (%d)", maxNodesPerIMEXDomain)
+		return -1, fmt.Errorf("no available indices within maxNodesPerIMEXDomain (%d) for cliqueID %s", maxNodesPerIMEXDomain, currentCliqueID)
 	}
 
 	return nextIndex, nil
