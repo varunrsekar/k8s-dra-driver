@@ -94,6 +94,8 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 		return nil, fmt.Errorf("unable to create CDI handler: %w", err)
 	}
 
+	// TODO: explore calling this not only during plugin startup because this
+	// information may change during runtime.
 	cliqueID, err := nvdevlib.getCliqueID()
 	if err != nil {
 		return nil, fmt.Errorf("error getting cliqueID: %w", err)
