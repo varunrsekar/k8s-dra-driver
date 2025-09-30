@@ -41,12 +41,20 @@ type DaemonSetPodManager struct {
 	lister   corev1listers.PodLister
 
 	getComputeDomain GetComputeDomainFunc
-	computeDomainUID string
 
 	cleanupManager *CleanupManager[*corev1.Pod]
 }
 
-func NewDaemonSetPodManager(config *ManagerConfig, labelSelector *metav1.LabelSelector, getComputeDomain GetComputeDomainFunc, computeDomainUID string) *DaemonSetPodManager {
+func NewDaemonSetPodManager(config *ManagerConfig, getComputeDomain GetComputeDomainFunc) *DaemonSetPodManager {
+	labelSelector := &metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      computeDomainLabelKey,
+				Operator: metav1.LabelSelectorOpExists,
+			},
+		},
+	}
+
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		config.clientsets.Core,
 		informerResyncPeriod,
@@ -65,7 +73,6 @@ func NewDaemonSetPodManager(config *ManagerConfig, labelSelector *metav1.LabelSe
 		informer:         informer,
 		lister:           lister,
 		getComputeDomain: getComputeDomain,
-		computeDomainUID: computeDomainUID,
 	}
 
 	m.cleanupManager = NewCleanupManager[*corev1.Pod](informer, getComputeDomain, m.cleanup)
@@ -135,7 +142,9 @@ func (m *DaemonSetPodManager) Stop() error {
 	if err := m.cleanupManager.Stop(); err != nil {
 		return fmt.Errorf("error stopping cleanup manager: %w", err)
 	}
-	m.cancelContext()
+	if m.cancelContext != nil {
+		m.cancelContext()
+	}
 	m.waitGroup.Wait()
 	return nil
 }
@@ -188,7 +197,7 @@ func (m *DaemonSetPodManager) onPodDelete(ctx context.Context, obj any) error {
 		return fmt.Errorf("failed to cast to Pod")
 	}
 
-	cd, err := m.getComputeDomain(m.computeDomainUID)
+	cd, err := m.getComputeDomain(p.Labels[computeDomainLabelKey])
 	if err != nil {
 		return fmt.Errorf("error getting ComputeDomain: %w", err)
 	}
