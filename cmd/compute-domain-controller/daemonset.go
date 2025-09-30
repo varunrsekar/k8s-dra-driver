@@ -151,6 +151,10 @@ func (m *DaemonSetManager) Start(ctx context.Context) (rerr error) {
 		return fmt.Errorf("informer cache sync for DaemonSet failed")
 	}
 
+	if err := m.daemonsetPodManager.Start(ctx); err != nil {
+		return fmt.Errorf("error starting ResourceClaimTemplate manager: %w", err)
+	}
+
 	if err := m.resourceClaimTemplateManager.Start(ctx); err != nil {
 		return fmt.Errorf("error starting ResourceClaimTemplate manager: %w", err)
 	}

@@ -41,8 +41,6 @@ type DaemonSetPodManager struct {
 	lister   corev1listers.PodLister
 
 	getComputeDomain GetComputeDomainFunc
-
-	cleanupManager *CleanupManager[*corev1.Pod]
 }
 
 func NewDaemonSetPodManager(config *ManagerConfig, getComputeDomain GetComputeDomainFunc) *DaemonSetPodManager {
@@ -74,8 +72,6 @@ func NewDaemonSetPodManager(config *ManagerConfig, getComputeDomain GetComputeDo
 		lister:           lister,
 		getComputeDomain: getComputeDomain,
 	}
-
-	m.cleanupManager = NewCleanupManager[*corev1.Pod](informer, getComputeDomain, m.cleanup)
 
 	return m
 }
@@ -131,63 +127,14 @@ func (m *DaemonSetPodManager) Start(ctx context.Context) (rerr error) {
 		return fmt.Errorf("error syncing pod informer: %w", err)
 	}
 
-	if err := m.cleanupManager.Start(ctx); err != nil {
-		return fmt.Errorf("error starting cleanup manager: %w", err)
-	}
-
 	return nil
 }
 
 func (m *DaemonSetPodManager) Stop() error {
-	if err := m.cleanupManager.Stop(); err != nil {
-		return fmt.Errorf("error stopping cleanup manager: %w", err)
-	}
 	if m.cancelContext != nil {
 		m.cancelContext()
 	}
 	m.waitGroup.Wait()
-	return nil
-}
-
-// cleanup removes nodes from the ComputeDomain status that no longer have backing pods.
-func (m *DaemonSetPodManager) cleanup(ctx context.Context, cdUID string) error {
-	cd, err := m.getComputeDomain(cdUID)
-	if err != nil {
-		return fmt.Errorf("error getting ComputeDomain: %w", err)
-	}
-	if cd == nil {
-		return nil
-	}
-
-	pods, err := m.lister.List(nil)
-	if err != nil {
-		return fmt.Errorf("error listing pods: %w", err)
-	}
-
-	newCD := cd.DeepCopy()
-
-	// Create a set of pod IPs for efficient lookup
-	podIPs := make(map[string]struct{})
-	for _, pod := range pods {
-		if pod.Status.PodIP != "" {
-			podIPs[pod.Status.PodIP] = struct{}{}
-		}
-	}
-
-	// Check if any nodes in the ComputeDomain status don't have backing pods
-	var updatedNodes []*nvapi.ComputeDomainNode
-	for _, node := range newCD.Status.Nodes {
-		if _, exists := podIPs[node.IPAddress]; exists {
-			updatedNodes = append(updatedNodes, node)
-		}
-	}
-
-	// Update the ComputeDomain status
-	if err := m.updateComputeDomainNodes(ctx, newCD, updatedNodes); err != nil {
-		return fmt.Errorf("error updating ComputeDomain status after removing stale nodes: %w", err)
-	}
-
-	klog.Infof("Successfully cleaned up stale nodes from ComputeDomain %s/%s", cd.Namespace, cd.Name)
 	return nil
 }
 
