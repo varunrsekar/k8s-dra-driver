@@ -45,16 +45,31 @@ iupgrade_wait() {
   # Expect array as third argument.
   local -n ADDITIONAL_INSTALL_ARGS=$3
 
-  timeout -v 10 helm upgrade --install "${TEST_HELM_RELEASE_NAME}" \
+  timeout -v 120 helm upgrade --install "${TEST_HELM_RELEASE_NAME}" \
     "${REPO}" \
     --version="${VERSION}" \
+    --wait \
+    --timeout=1m5s \
     --create-namespace \
     --namespace nvidia-dra-driver-gpu \
     --set resources.gpus.enabled=false \
     --set nvidiaDriverRoot="${TEST_NVIDIA_DRIVER_ROOT}" "${ADDITIONAL_INSTALL_ARGS[@]}"
 
-  kubectl wait --for=condition=READY pods -A -l nvidia-dra-driver-gpu-component=kubelet-plugin --timeout=10s
-  kubectl wait --for=condition=READY pods -A -l nvidia-dra-driver-gpu-component=controller --timeout=10s
+  # Valueable output to have in the logs in case things went pearshaped.
+  kubectl get pods -n nvidia-dra-driver-gpu
+
+  # Some part of this waiting work is done by helm as of `--wait` with
+  # `--timeout`. Note that the below in itself would not be sufficient: in case
+  # of an upgrade we need to isolate the _new_ pods and not accidentally observe
+  # the currently disappearing pods. Also note that despite the `--wait` above,
+  # the kubelet plugins may still be in `PodInitializing` after the Helm command
+  # returned. My conclusion is that helm waits for the controller to be READY,
+  # but not for the plugin pods to be READY.
+  kubectl wait --for=condition=READY pods -A -l nvidia-dra-driver-gpu-component=kubelet-plugin --timeout=15s
+
+  # Again, log current state.
+  kubectl get pods -n nvidia-dra-driver-gpu
+
   # maybe: check version on labels (to confirm that we set labels correctly)
 }
 
