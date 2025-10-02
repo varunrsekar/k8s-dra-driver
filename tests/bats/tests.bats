@@ -1,11 +1,11 @@
 # shellcheck disable=SC2148
 # shellcheck disable=SC2329
 setup() {
-  load '/bats-libraries/bats-support/load.bash'
-  load '/bats-libraries/bats-assert/load.bash'
-  load '/bats-libraries/bats-file/load.bash'
-  load 'helpers.sh'
+  # Executed before entering each test in this file.
+   load 'helpers.sh'
+  _common_setup
 }
+
 
 # Currently, the tests defined in this file deliberately depend on each other
 # and are expected to execute in the order defined. In the future, we want to
@@ -14,10 +14,6 @@ setup() {
 # reliable strategies to conceptually prevent cross-contamination from
 # happening. Tools like `etcdctl` will be helpful.
 
-
-# Use a name that upon cluster inspection reveals that this
-# Helm chart release was installed/managed by this test suite.
-export TEST_HELM_RELEASE_NAME="nvidia-dra-driver-gpu-batssuite"
 
 # Note(JP): bats swallows output of setup upon success (regardless of cmdline
 # args such as `--show-output-of-passing-tests`). Ref:
@@ -41,45 +37,28 @@ setup_file() {
   # Prepare for installing releases from NGC (that merely mutates local
   # filesystem state).
   helm repo add nvidia https://helm.ngc.nvidia.com/nvidia && helm repo update
-
-  # A helper arg for `iupgrade_wait` w/o additional install args.
-  export NOARGS=()
-}
-
-# Install or upgrade, and wait for pods to be READY.
-# 1st arg: helm chart repo
-# 2nd arg: helm chart version
-# 3rd arg: array with additional args (provide `NOARGS` if none)
-iupgrade_wait() {
-  # E.g. `nvidia/nvidia-dra-driver-gpu` or
-  # `oci://ghcr.io/nvidia/k8s-dra-driver-gpu`
-  local REPO="$1"
-
-  # E.g. `25.3.1` or `25.8.0-dev-f2eaddd6-chart`
-  local VERSION="$2"
-
-  # Expect array as third argument.
-  local -n ADDITIONAL_INSTALL_ARGS=$3
-
-  timeout -v 10 helm upgrade --install "${TEST_HELM_RELEASE_NAME}" \
-    "${REPO}" \
-    --version="${VERSION}" \
-    --create-namespace \
-    --namespace nvidia-dra-driver-gpu \
-    --set resources.gpus.enabled=false \
-    --set nvidiaDriverRoot="${TEST_NVIDIA_DRIVER_ROOT}" "${ADDITIONAL_INSTALL_ARGS[@]}"
-
-  kubectl wait --for=condition=READY pods -A -l nvidia-dra-driver-gpu-component=kubelet-plugin --timeout=10s
-  kubectl wait --for=condition=READY pods -A -l nvidia-dra-driver-gpu-component=controller --timeout=10s
-  # maybe: check version on labels (to confirm that we set labels correctly)
 }
 
 apply_check_delete_workload_imex_chan_inject() {
   kubectl apply -f demo/specs/imex/channel-injection.yaml
-  kubectl wait --for=condition=READY pods imex-channel-injection --timeout=70s
+  kubectl wait --for=condition=READY pods imex-channel-injection --timeout=100s
   run kubectl logs imex-channel-injection
-  assert_output --partial "channel0"
   kubectl delete -f demo/specs/imex/channel-injection.yaml
+  # Check output after attempted deletion.
+  assert_output --partial "channel0"
+
+  # Wait for deletion to complete; this is critical before moving on to the next
+  # test (as long as we don't wipe state entirely between tests).
+  kubectl wait --for=delete pods imex-channel-injection --timeout=10s
+}
+
+log_objects() {
+  # Never fail, but show output in case a test fails, to facilitate debugging.
+  # Could this be part of setup()? If setup succeeds and when a test fails:
+  # does this show the output of setup? Then we could do this.
+  kubectl get resourceclaims || true
+  kubectl get computedomain || true
+  kubectl get pods -o wide || true
 }
 
 # A test that covers local dev tooling, we don't want to
@@ -100,8 +79,7 @@ apply_check_delete_workload_imex_chan_inject() {
 }
 
 @test "helm-install ${TEST_CHART_REPO}/${TEST_CHART_VERSION}" {
-  local _iargs=("--set" "featureGates.IMEXDaemonsWithDNSNames=true")
-  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
+  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" NOARGS
 }
 
 @test "helm list: validate output" {
@@ -146,10 +124,12 @@ apply_check_delete_workload_imex_chan_inject() {
 }
 
 @test "IMEX channel injection (single)" {
+  log_objects
   apply_check_delete_workload_imex_chan_inject
 }
 
 @test "IMEX channel injection (all)" {
+  log_objects
   # Example: with TEST_CHART_VERSION="v25.3.2-12390-chart"
   # the command below returns 0 (true: the tested version is smaller)
   if dpkg --compare-versions "${TEST_CHART_VERSION#v}" lt "25.8.0"; then
@@ -164,6 +144,8 @@ apply_check_delete_workload_imex_chan_inject() {
 }
 
 @test "NodePrepareResources: catch unknown field in opaque cfg in ResourceClaim" {
+  log_objects
+
   envsubst < tests/bats/specs/rc-opaque-cfg-unknown-field.yaml.tmpl > \
     "${BATS_TEST_TMPDIR}"/rc-opaque-cfg-unknown-field.yaml
   cd "${BATS_TEST_TMPDIR}"
@@ -206,6 +188,8 @@ apply_check_delete_workload_imex_chan_inject() {
 }
 
 @test "nickelpie (NCCL send/recv/broadcast, 2 pods, 2 nodes, small payload)" {
+  log_objects
+
   # Do not run in checkout dir (to not pollute that).
   cd "${BATS_TEST_TMPDIR}"
   git clone https://github.com/jgehrcke/jpsnips-nv
@@ -220,6 +204,8 @@ apply_check_delete_workload_imex_chan_inject() {
 }
 
 @test "nvbandwidth (2 nodes, 2 GPUs each)" {
+  log_objects
+
   kubectl create -f https://github.com/kubeflow/mpi-operator/releases/download/v0.6.0/mpi-operator.yaml || echo "ignore"
   kubectl apply -f demo/specs/imex/nvbandwidth-test-job-1.yaml
   # The canonical k8s job interface works even for MPIJob (the MPIJob has an
@@ -232,6 +218,8 @@ apply_check_delete_workload_imex_chan_inject() {
 }
 
 @test "downgrade: current-dev -> last-stable" {
+  log_objects
+
   # Stage 1: apply workload, but do not delete.
   kubectl apply -f demo/specs/imex/channel-injection.yaml
   kubectl wait --for=condition=READY pods imex-channel-injection --timeout=60s
@@ -250,8 +238,10 @@ apply_check_delete_workload_imex_chan_inject() {
 }
 
 @test "upgrade: wipe-state, install-last-stable, upgrade-to-current-dev" {
+  log_objects
+
   # Stage 1: clean slate
-  helm uninstall "${TEST_HELM_RELEASE_NAME}" -n nvidia-dra-driver-gpu
+  helm uninstall "${TEST_HELM_RELEASE_NAME}" -n nvidia-dra-driver-gpu --wait --timeout=30s
   kubectl wait --for=delete pods -A -l app.kubernetes.io/name=nvidia-dra-driver-gpu --timeout=10s
   bash tests/bats/clean-state-dirs-all-nodes.sh
   kubectl get crd computedomains.resource.nvidia.com
@@ -271,8 +261,7 @@ apply_check_delete_workload_imex_chan_inject() {
   kubectl apply -f "${CRD_UPGRADE_URL}"
 
   # Stage 5: install target version (as users would do).
-  local _iargs=("--set" "featureGates.IMEXDaemonsWithDNSNames=true")
-  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
+  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" NOARGS
 
   # Stage 6: confirm deleting old workload works (critical, see above).
   timeout -v 60 kubectl delete -f demo/specs/imex/channel-injection.yaml

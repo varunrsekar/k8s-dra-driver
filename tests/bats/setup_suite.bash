@@ -25,6 +25,11 @@ setup_suite () {
     # Probe: kubectl configured against a k8s cluster.
     kubectl cluster-info | grep "control plane is running at"
 
+    # Fail fast in case there seems to be a DRA driver Helm chart installed at
+    # this point (maybe one _not_ managed by this test suite).
+    helm list -A
+    helm list -A | grep "nvidia-dra-driver-gpu" && { echo "error: helm list not clean"; return 1; }
+
     # Show, for debugging.
     kubectl api-resources --api-group=resource.k8s.io
 
