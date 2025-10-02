@@ -19,6 +19,14 @@
 # Helm chart release was installed/managed by this test suite.
 export TEST_HELM_RELEASE_NAME="nvidia-dra-driver-gpu-batssuite"
 
+
+_common_setup() {
+  load '/bats-libraries/bats-support/load.bash'
+  load '/bats-libraries/bats-assert/load.bash'
+  load '/bats-libraries/bats-file/load.bash'
+}
+
+
 # A helper arg for `iupgrade_wait` w/o additional install args.
 export NOARGS=()
 

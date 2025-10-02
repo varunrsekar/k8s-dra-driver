@@ -1,10 +1,9 @@
 # shellcheck disable=SC2148
 # shellcheck disable=SC2329
 setup() {
-  load '/bats-libraries/bats-support/load.bash'
-  load '/bats-libraries/bats-assert/load.bash'
-  load '/bats-libraries/bats-file/load.bash'
-  load 'helpers.sh'
+  # Executed before entering each test in this file.
+   load 'helpers.sh'
+  _common_setup
 }
 
 # Currently, the tests defined in this file deliberately depend on each other
