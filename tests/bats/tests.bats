@@ -79,8 +79,7 @@ log_objects() {
 }
 
 @test "helm-install ${TEST_CHART_REPO}/${TEST_CHART_VERSION}" {
-  local _iargs=("--set" "featureGates.IMEXDaemonsWithDNSNames=true")
-  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
+  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" NOARGS
 }
 
 @test "helm list: validate output" {
@@ -262,8 +261,7 @@ log_objects() {
   kubectl apply -f "${CRD_UPGRADE_URL}"
 
   # Stage 5: install target version (as users would do).
-  local _iargs=("--set" "featureGates.IMEXDaemonsWithDNSNames=true")
-  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
+  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" NOARGS
 
   # Stage 6: confirm deleting old workload works (critical, see above).
   timeout -v 60 kubectl delete -f demo/specs/imex/channel-injection.yaml
