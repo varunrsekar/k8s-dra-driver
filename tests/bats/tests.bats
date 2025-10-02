@@ -242,7 +242,7 @@ log_objects() {
   log_objects
 
   # Stage 1: clean slate
-  helm uninstall "${TEST_HELM_RELEASE_NAME}" -n nvidia-dra-driver-gpu
+  helm uninstall "${TEST_HELM_RELEASE_NAME}" -n nvidia-dra-driver-gpu --wait --timeout=30s
   kubectl wait --for=delete pods -A -l app.kubernetes.io/name=nvidia-dra-driver-gpu --timeout=10s
   bash tests/bats/clean-state-dirs-all-nodes.sh
   kubectl get crd computedomains.resource.nvidia.com
