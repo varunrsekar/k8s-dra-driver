@@ -6,6 +6,7 @@ setup() {
   _common_setup
 }
 
+
 # Currently, the tests defined in this file deliberately depend on each other
 # and are expected to execute in the order defined. In the future, we want to
 # build test dependency injection (with fixtures), and work towards clean
@@ -45,6 +46,14 @@ apply_check_delete_workload_imex_chan_inject() {
   run kubectl logs imex-channel-injection
   assert_output --partial "channel0"
   kubectl delete -f demo/specs/imex/channel-injection.yaml
+
+log_objects() {
+  # Never fail, but show output in case a test fails, to facilitate debugging.
+  # Could this be part of setup()? If setup succeeds and when a test fails:
+  # does this show the output of setup? Then we could do this.
+  kubectl get resourceclaims || true
+  kubectl get computedomain || true
+  kubectl get pods -o wide || true
 }
 
 # A test that covers local dev tooling, we don't want to
@@ -111,10 +120,12 @@ apply_check_delete_workload_imex_chan_inject() {
 }
 
 @test "IMEX channel injection (single)" {
+  log_objects
   apply_check_delete_workload_imex_chan_inject
 }
 
 @test "IMEX channel injection (all)" {
+  log_objects
   # Example: with TEST_CHART_VERSION="v25.3.2-12390-chart"
   # the command below returns 0 (true: the tested version is smaller)
   if dpkg --compare-versions "${TEST_CHART_VERSION#v}" lt "25.8.0"; then
@@ -129,6 +140,8 @@ apply_check_delete_workload_imex_chan_inject() {
 }
 
 @test "NodePrepareResources: catch unknown field in opaque cfg in ResourceClaim" {
+  log_objects
+
   envsubst < tests/bats/specs/rc-opaque-cfg-unknown-field.yaml.tmpl > \
     "${BATS_TEST_TMPDIR}"/rc-opaque-cfg-unknown-field.yaml
   cd "${BATS_TEST_TMPDIR}"
@@ -171,6 +184,8 @@ apply_check_delete_workload_imex_chan_inject() {
 }
 
 @test "nickelpie (NCCL send/recv/broadcast, 2 pods, 2 nodes, small payload)" {
+  log_objects
+
   # Do not run in checkout dir (to not pollute that).
   cd "${BATS_TEST_TMPDIR}"
   git clone https://github.com/jgehrcke/jpsnips-nv
@@ -185,6 +200,8 @@ apply_check_delete_workload_imex_chan_inject() {
 }
 
 @test "nvbandwidth (2 nodes, 2 GPUs each)" {
+  log_objects
+
   kubectl create -f https://github.com/kubeflow/mpi-operator/releases/download/v0.6.0/mpi-operator.yaml || echo "ignore"
   kubectl apply -f demo/specs/imex/nvbandwidth-test-job-1.yaml
   # The canonical k8s job interface works even for MPIJob (the MPIJob has an
@@ -197,6 +214,8 @@ apply_check_delete_workload_imex_chan_inject() {
 }
 
 @test "downgrade: current-dev -> last-stable" {
+  log_objects
+
   # Stage 1: apply workload, but do not delete.
   kubectl apply -f demo/specs/imex/channel-injection.yaml
   kubectl wait --for=condition=READY pods imex-channel-injection --timeout=60s
@@ -215,6 +234,8 @@ apply_check_delete_workload_imex_chan_inject() {
 }
 
 @test "upgrade: wipe-state, install-last-stable, upgrade-to-current-dev" {
+  log_objects
+
   # Stage 1: clean slate
   helm uninstall "${TEST_HELM_RELEASE_NAME}" -n nvidia-dra-driver-gpu
   kubectl wait --for=delete pods -A -l app.kubernetes.io/name=nvidia-dra-driver-gpu --timeout=10s
