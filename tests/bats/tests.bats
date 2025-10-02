@@ -39,13 +39,18 @@ setup_file() {
   helm repo add nvidia https://helm.ngc.nvidia.com/nvidia && helm repo update
 }
 
-
 apply_check_delete_workload_imex_chan_inject() {
   kubectl apply -f demo/specs/imex/channel-injection.yaml
   kubectl wait --for=condition=READY pods imex-channel-injection --timeout=100s
   run kubectl logs imex-channel-injection
-  assert_output --partial "channel0"
   kubectl delete -f demo/specs/imex/channel-injection.yaml
+  # Check output after attempted deletion.
+  assert_output --partial "channel0"
+
+  # Wait for deletion to complete; this is critical before moving on to the next
+  # test (as long as we don't wipe state entirely between tests).
+  kubectl wait --for=delete pods imex-channel-injection --timeout=10s
+}
 
 log_objects() {
   # Never fail, but show output in case a test fails, to facilitate debugging.
