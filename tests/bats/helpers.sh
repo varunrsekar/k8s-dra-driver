@@ -15,6 +15,41 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+# Use a name that upon cluster inspection reveals that this
+# Helm chart release was installed/managed by this test suite.
+export TEST_HELM_RELEASE_NAME="nvidia-dra-driver-gpu-batssuite"
+
+# A helper arg for `iupgrade_wait` w/o additional install args.
+export NOARGS=()
+
+# Install or upgrade, and wait for pods to be READY.
+# 1st arg: helm chart repo
+# 2nd arg: helm chart version
+# 3rd arg: array with additional args (provide `NOARGS` if none)
+iupgrade_wait() {
+  # E.g. `nvidia/nvidia-dra-driver-gpu` or
+  # `oci://ghcr.io/nvidia/k8s-dra-driver-gpu`
+  local REPO="$1"
+
+  # E.g. `25.3.1` or `25.8.0-dev-f2eaddd6-chart`
+  local VERSION="$2"
+
+  # Expect array as third argument.
+  local -n ADDITIONAL_INSTALL_ARGS=$3
+
+  timeout -v 10 helm upgrade --install "${TEST_HELM_RELEASE_NAME}" \
+    "${REPO}" \
+    --version="${VERSION}" \
+    --create-namespace \
+    --namespace nvidia-dra-driver-gpu \
+    --set resources.gpus.enabled=false \
+    --set nvidiaDriverRoot="${TEST_NVIDIA_DRIVER_ROOT}" "${ADDITIONAL_INSTALL_ARGS[@]}"
+
+  kubectl wait --for=condition=READY pods -A -l nvidia-dra-driver-gpu-component=kubelet-plugin --timeout=10s
+  kubectl wait --for=condition=READY pods -A -l nvidia-dra-driver-gpu-component=controller --timeout=10s
+  # maybe: check version on labels (to confirm that we set labels correctly)
+}
+
 # Events accumulate over time, so for certainty it's best to use a unique pod
 # name. Right now, this inspects an entire line which includes REASON, MESSAGE,
 # and OBJECT, so choose the needle (grepped for) precisely enough.
