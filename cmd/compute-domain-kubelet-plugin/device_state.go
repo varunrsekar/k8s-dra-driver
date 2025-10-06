@@ -437,6 +437,12 @@ func (s *DeviceState) applyComputeDomainChannelConfig(ctx context.Context, confi
 		ComputeDomain: config.DomainID,
 	}
 
+	// Treat each request as a request for channel zero, even if
+	// AllocationModeAll.
+	if err := s.assertImexChannelNotAllocated(0); err != nil {
+		return nil, fmt.Errorf("allocation failed: %w", err)
+	}
+
 	// Create any necessary ComputeDomain channels and gather their CDI container edits.
 	if err := s.computeDomainManager.AssertComputeDomainNamespace(ctx, claim.Namespace, config.DomainID); err != nil {
 		return nil, permanentError{fmt.Errorf("error asserting ComputeDomain's namespace: %w", err)}
@@ -570,6 +576,47 @@ func (s *DeviceState) getConfigResultsMap(rcs *resourceapi.ResourceClaimStatus, 
 		}
 	}
 	return configResultsMap, nil
+}
+
+// assertImexChannelNotAllocated() consults the absolute, node-local source of
+// truth (the checkpoint data). It fails when the IMEX channel with ID `id` is
+// already in use by another resource claim.
+//
+// Must be performed in the Prepare() path for any claim asking for a channel.
+// This makes sure that Prepare() and Unprepare() calls acting on the same
+// resource are processed in the correct order (this prevents for example
+// unprepare-after-prepare, cf. issue 641).
+//
+// The implementation may become more involved when the same IMEX channel may be
+// shared across pods on the same node).
+func (s *DeviceState) assertImexChannelNotAllocated(id int) error {
+	cp, err := s.getCheckpoint()
+	if err != nil {
+		return fmt.Errorf("unable to get checkpoint: %w", err)
+	}
+
+	for claimUID, claim := range cp.V2.PreparedClaims {
+		// Ignore non-completed preparations: file-based locking guarantees that
+		// only one Prepare() runs at any given time. If a claim is in the
+		// `PrepareStarted` state then it is not actually currently in progress
+		// of being prepared, but either retried soon (in which case we are
+		// faster and win over it) or never retried (in which case we can also
+		// safely allocate).
+		if claim.CheckpointState != "PrepareCompleted" {
+			continue
+		}
+
+		for _, devs := range claim.PreparedDevices {
+			for _, d := range devs.Devices {
+				if d.Channel != nil && d.Channel.Info.ID == id {
+					// Maybe log something based on `claim.Status.ReservedFor`
+					// to facilitate debugging.
+					return fmt.Errorf("channel %d already allocated by claim %s (according to checkpoint)", id, claimUID)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // validateDriverVersionForIMEXDaemonsWithDNSNames validates that the driver version
