@@ -60,7 +60,7 @@ type ComputeDomainManager struct {
 
 type ComputeDomainDaemonSettings struct {
 	manager         *ComputeDomainManager
-	domain          string
+	domainID        string
 	rootDir         string
 	configTmplPath  string
 	nodesConfigPath string
@@ -128,13 +128,13 @@ func (m *ComputeDomainManager) Stop() error {
 	return nil
 }
 
-func (m *ComputeDomainManager) NewSettings(domain string) *ComputeDomainDaemonSettings {
+func (m *ComputeDomainManager) NewSettings(domainID string) *ComputeDomainDaemonSettings {
 	return &ComputeDomainDaemonSettings{
 		manager:         m,
-		domain:          domain,
-		rootDir:         fmt.Sprintf("%s/%s", m.configFilesRoot, domain),
-		configTmplPath:  fmt.Sprintf("%s/%s/%s", m.configFilesRoot, domain, "config.tmpl.cfg"),
-		nodesConfigPath: fmt.Sprintf("%s/%s/%s", m.configFilesRoot, domain, "nodes_config.cfg"),
+		domainID:        domainID,
+		rootDir:         fmt.Sprintf("%s/%s", m.configFilesRoot, domainID),
+		configTmplPath:  fmt.Sprintf("%s/%s/%s", m.configFilesRoot, domainID, "config.tmpl.cfg"),
+		nodesConfigPath: fmt.Sprintf("%s/%s/%s", m.configFilesRoot, domainID, "nodes_config.cfg"),
 	}
 }
 
@@ -154,17 +154,16 @@ func (m *ComputeDomainManager) GetComputeDomainChannelContainerEdits(devRoot str
 	}
 }
 
-func (s *ComputeDomainDaemonSettings) GetDomain() string {
-	return s.domain
-}
-
-func (s *ComputeDomainDaemonSettings) GetCDIContainerEdits(ctx context.Context, devRoot string, info *nvcapDeviceInfo) (*cdiapi.ContainerEdits, error) {
-	cd, err := s.manager.GetComputeDomain(ctx, s.domain)
+// GetCDIContainerEditsCommon() returns the CDI spec edits always required for
+// launching the CD Daemon (whether or not it tries to launch an IMEX daemon
+// internally).
+func (s *ComputeDomainDaemonSettings) GetCDIContainerEditsCommon(ctx context.Context) (*cdiapi.ContainerEdits, error) {
+	cd, err := s.manager.GetComputeDomain(ctx, s.domainID)
 	if err != nil {
-		return nil, fmt.Errorf("error getting compute domain: %w", err)
+		return nil, fmt.Errorf("error getting compute domain %s: %w", s.domainID, err)
 	}
 	if cd == nil {
-		return nil, fmt.Errorf("compute domain not found: %s", s.domain)
+		return nil, fmt.Errorf("compute domain not found: %s", s.domainID)
 	}
 
 	edits := &cdiapi.ContainerEdits{
@@ -182,6 +181,20 @@ func (s *ComputeDomainDaemonSettings) GetCDIContainerEdits(ctx context.Context, 
 					Options:       []string{"rw", "nosuid", "nodev", "bind"},
 				},
 			},
+		},
+	}
+	return edits, nil
+}
+
+func (s *ComputeDomainDaemonSettings) GetDomainID() string {
+	return s.domainID
+}
+
+// GetCDIContainerEditsForImex() returns the CDI spec edits only required for
+// launching the CD daemon when it actually wraps an IMEX daemon.
+func (s *ComputeDomainDaemonSettings) GetCDIContainerEditsForImex(ctx context.Context, devRoot string, info *nvcapDeviceInfo) *cdiapi.ContainerEdits {
+	edits := &cdiapi.ContainerEdits{
+		ContainerEdits: &cdispec.ContainerEdits{
 			DeviceNodes: []*cdispec.DeviceNode{
 				{
 					Path:     info.path,
@@ -193,8 +206,7 @@ func (s *ComputeDomainDaemonSettings) GetCDIContainerEdits(ctx context.Context, 
 			},
 		},
 	}
-
-	return edits, nil
+	return edits
 }
 
 func (s *ComputeDomainDaemonSettings) Prepare(ctx context.Context) error {

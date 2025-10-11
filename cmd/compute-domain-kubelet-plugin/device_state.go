@@ -462,7 +462,8 @@ func (s *DeviceState) applyComputeDomainChannelConfig(ctx context.Context, confi
 	}
 
 	for _, info := range s.nvdevlib.nvCapImexChanDevInfos[:chancount] {
-		configState.containerEdits = configState.containerEdits.Append(s.computeDomainManager.GetComputeDomainChannelContainerEdits(s.cdi.devRoot, info))
+		edits := s.computeDomainManager.GetComputeDomainChannelContainerEdits(s.cdi.devRoot, info)
+		configState.containerEdits = configState.containerEdits.Append(edits)
 	}
 
 	return &configState, nil
@@ -491,27 +492,36 @@ func (s *DeviceState) applyComputeDomainDaemonConfig(ctx context.Context, config
 		ComputeDomain: config.DomainID,
 	}
 
-	// Only prepare files to inject to the daemon if IMEX is supported.
+	// Create new ComputeDomain daemon settings from the ComputeDomainManager.
+	computeDomainDaemonSettings := s.computeDomainManager.NewSettings(config.DomainID)
+
+	// Prepare injecting IMEX daemon config files even if IMEX is not supported.
+	// This for example creates
+	// '/var/lib/kubelet/plugins/compute-domain.nvidia.com/domains/<uid>' on the
+	// host which is used as mount source mapped to /etc/nvidia-imex in the CD
+	// daemon container.
+	if err := computeDomainDaemonSettings.Prepare(ctx); err != nil {
+		return nil, fmt.Errorf("error preparing ComputeDomain daemon settings for requests '%v' in claim '%v': %w", requests, claim.UID, err)
+	}
+
+	// Always inject CD config details into the CD daemon (regardless of clique
+	// ID being empty or not).
+	edits, err := computeDomainDaemonSettings.GetCDIContainerEditsCommon(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error getting common container edits for ComputeDomain daemon '%s': %w", config.DomainID, err)
+	}
+	configState.containerEdits = configState.containerEdits.Append(edits)
+
+	// Only inject dev nodes related to
+	// /proc/driver/nvidia/capabilities/fabric-imex-mgmt if IMEX is supported
+	// (if we want to start the IMEX daemon process in the CD daemon pod).
 	if s.computeDomainManager.cliqueID != "" {
-		// Parse the device node info for the fabic-imex-mgmt nvcap.
+		// Parse the device node info for the fabric-imex-mgmt nvcap.
 		nvcapDeviceInfo, err := s.nvdevlib.parseNVCapDeviceInfo(nvidiaCapFabricImexMgmtPath)
 		if err != nil {
-			return nil, fmt.Errorf("error parsing nvcap device info for fabic-imex-mgmt: %w", err)
+			return nil, fmt.Errorf("error parsing nvcap device info for fabric-imex-mgmt: %w", err)
 		}
-
-		// Create new ComputeDomain daemon settings from the ComputeDomainManager.
-		computeDomainDaemonSettings := s.computeDomainManager.NewSettings(config.DomainID)
-
-		// Prepare the new ComputeDomain daemon.
-		if err := computeDomainDaemonSettings.Prepare(ctx); err != nil {
-			return nil, fmt.Errorf("error preparing ComputeDomain daemon settings for requests '%v' in claim '%v': %w", requests, claim.UID, err)
-		}
-
-		// Store information about the ComputeDomain daemon in the configState.
-		edits, err := computeDomainDaemonSettings.GetCDIContainerEdits(ctx, s.cdi.devRoot, nvcapDeviceInfo)
-		if err != nil {
-			return nil, fmt.Errorf("error getting container edits for ComputeDomain daemon for requests '%v' in claim '%v': %w", requests, claim.UID, err)
-		}
+		edits := computeDomainDaemonSettings.GetCDIContainerEditsForImex(ctx, s.cdi.devRoot, nvcapDeviceInfo)
 		configState.containerEdits = configState.containerEdits.Append(edits)
 	}
 

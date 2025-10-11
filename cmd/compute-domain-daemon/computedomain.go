@@ -184,7 +184,10 @@ func (m *ComputeDomainManager) Get(uid string) (*nvapi.ComputeDomain, error) {
 	return cds[0], nil
 }
 
-// onAddOrUpdate handles the addition or update of a ComputeDomain.
+// onAddOrUpdate handles the addition or update of a ComputeDomain. Here, we
+// receive updates not for all CDs in the system, but only for the CD that we
+// are registered for (filtered by CD name). Note that the informer triggers
+// this callback once upon startup for all existing objects.
 func (m *ComputeDomainManager) onAddOrUpdate(ctx context.Context, obj any) error {
 	// Cast the object to a ComputeDomain object
 	o, ok := obj.(*nvapi.ComputeDomain)
@@ -203,13 +206,14 @@ func (m *ComputeDomainManager) onAddOrUpdate(ctx context.Context, obj any) error
 		return nil
 	}
 
+	// Because the informer only filters by name:
 	// Skip ComputeDomains that don't match on UUID
 	if string(cd.UID) != m.config.computeDomainUUID {
-		klog.Errorf("ComputeDomain processed with non-matching UID (%v, %v)", cd.UID, m.config.computeDomainUUID)
+		klog.Warningf("ComputeDomain processed with non-matching UID (%v, %v)", cd.UID, m.config.computeDomainUUID)
 		return nil
 	}
 
-	// Update node info in ComputeDomain
+	// Update node info in ComputeDomain.
 	if err := m.UpdateComputeDomainNodeInfo(ctx, cd); err != nil {
 		return fmt.Errorf("error updating node info in ComputeDomain: %w", err)
 	}
@@ -257,7 +261,10 @@ func (m *ComputeDomainManager) UpdateComputeDomainNodeInfo(ctx context.Context, 
 			Name:     m.config.nodeName,
 			CliqueID: m.config.cliqueID,
 			Index:    nextIndex,
+			Status:   nvapi.ComputeDomainStatusNotReady,
 		}
+
+		klog.Infof("CD status does not contain node name '%s' yet, try to insert myself: %v", m.config.nodeName, nodeInfo)
 		newCD.Status.Nodes = append(newCD.Status.Nodes, nodeInfo)
 	}
 
@@ -266,7 +273,7 @@ func (m *ComputeDomainManager) UpdateComputeDomainNodeInfo(ctx context.Context, 
 	// across pod restarts.
 	nodeInfo.IPAddress = m.config.podIP
 
-	// Conditionally update its status
+	// Conditionally update global CD status if it's still in its initial status
 	if newCD.Status.Status == "" {
 		newCD.Status.Status = nvapi.ComputeDomainStatusNotReady
 	}
@@ -279,6 +286,7 @@ func (m *ComputeDomainManager) UpdateComputeDomainNodeInfo(ctx context.Context, 
 	}
 	m.mutationCache.Mutation(newCD)
 
+	klog.V(2).Infof("Successfully updated CD")
 	return nil
 }
 
@@ -318,6 +326,14 @@ func getNextAvailableIndex(currentCliqueID string, nodes []*nvapi.ComputeDomainN
 		nextIndex++
 	}
 
+	// Skip `maxNodesPerIMEXDomain` check in the special case of no clique ID
+	// being set: this means that this node does not actually run an IMEX daemon
+	// managed by us and the set of nodes in this "noop" mode in this CD is
+	// allowed to grow larger than maxNodesPerIMEXDomain.
+	if currentCliqueID == "" {
+		return nextIndex, nil
+	}
+
 	// Ensure nextIndex is within the range 0..maxNodesPerIMEXDomain
 	if nextIndex < 0 || nextIndex >= maxNodesPerIMEXDomain {
 		return -1, fmt.Errorf("no available indices within maxNodesPerIMEXDomain (%d) for cliqueID %s", maxNodesPerIMEXDomain, currentCliqueID)
@@ -352,7 +368,7 @@ func (m *ComputeDomainManager) MaybePushNodesUpdate(cd *nvapi.ComputeDomain) {
 		m.previousNodes = cd.Status.Nodes
 		m.updatedNodesChan <- cd.Status.Nodes
 	} else {
-		klog.Infof("IP set did not change")
+		klog.V(6).Infof("IP set did not change")
 	}
 }
 
