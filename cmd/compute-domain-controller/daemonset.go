@@ -52,6 +52,7 @@ type DaemonSetTemplateData struct {
 	ImageName                 string
 	MaxNodesPerIMEXDomain     int
 	FeatureGates              map[string]bool
+	LogVerbosity              int
 }
 
 type DaemonSetManager struct {
@@ -118,7 +119,7 @@ func (m *DaemonSetManager) Start(ctx context.Context) (rerr error) {
 	}()
 
 	if err := addComputeDomainLabelIndexer[*appsv1.DaemonSet](m.informer); err != nil {
-		return fmt.Errorf("error adding indexer for MulitNodeEnvironment label: %w", err)
+		return fmt.Errorf("error adding indexer for MultiNodeEnvironment label: %w", err)
 	}
 
 	m.mutationCache = cache.NewIntegerResourceVersionMutationCache(
@@ -207,6 +208,7 @@ func (m *DaemonSetManager) Create(ctx context.Context, cd *nvapi.ComputeDomain) 
 		ImageName:                 m.config.imageName,
 		MaxNodesPerIMEXDomain:     m.config.maxNodesPerIMEXDomain,
 		FeatureGates:              featuregates.ToMap(),
+		LogVerbosity:              m.config.logVerbosityCDDaemon,
 	}
 
 	tmpl, err := template.ParseFiles(DaemonSetTemplatePath)
@@ -363,7 +365,7 @@ func (m *DaemonSetManager) onAddOrUpdate(ctx context.Context, obj any) error {
 		return fmt.Errorf("failed to cast to DaemonSet")
 	}
 
-	klog.Infof("Processing added or updated DaemonSet: %s/%s", d.Namespace, d.Name)
+	klog.V(2).Infof("Processing added or updated DaemonSet: %s/%s", d.Namespace, d.Name)
 
 	cd, err := m.getComputeDomain(d.Labels[computeDomainLabelKey])
 	if err != nil {

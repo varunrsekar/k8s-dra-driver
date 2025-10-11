@@ -6,7 +6,6 @@ setup() {
   _common_setup
 }
 
-
 # Currently, the tests defined in this file deliberately depend on each other
 # and are expected to execute in the order defined. In the future, we want to
 # build test dependency injection (with fixtures), and work towards clean
@@ -14,6 +13,10 @@ setup() {
 # reliable strategies to conceptually prevent cross-contamination from
 # happening. Tools like `etcdctl` will be helpful.
 
+# Hint: when developing/testing a specific test, for faster iteration add the
+# comment `# bats test_tags=bats:focus` on top of the current test. This can
+# help (requires the test to be self-contained though, i.e. it sets up its
+# dependencies' does not rely on a previous test for that).
 
 # Note(JP): bats swallows output of setup upon success (regardless of cmdline
 # args such as `--show-output-of-passing-tests`). Ref:
@@ -59,6 +62,7 @@ log_objects() {
   kubectl get resourceclaims || true
   kubectl get computedomain || true
   kubectl get pods -o wide || true
+  kubectl get pods -o wide -n nvidia-dra-driver-gpu || true
 }
 
 # A test that covers local dev tooling, we don't want to
@@ -141,6 +145,7 @@ log_objects() {
   assert_output --partial "channel2047"
   assert_output --partial "channel222"
   kubectl delete -f demo/specs/imex/channel-injection-all.yaml
+  kubectl wait --for=delete pods imex-channel-injection-all --timeout=10s
 }
 
 @test "CD daemon shutdown: confirm CD status cleanup" {
@@ -228,6 +233,7 @@ log_objects() {
   # Clean up.
   kubectl delete "${POD}"
   kubectl delete resourceclaim batssuite-rc-bad-opaque-config
+  kubectl wait --for=delete "${POD}" --timeout=10s
 }
 
 @test "nickelpie (NCCL send/recv/broadcast, 2 pods, 2 nodes, small payload)" {
@@ -258,6 +264,127 @@ log_objects() {
   run kubectl logs --tail=-1 --prefix -l job-name=nvbandwidth-test-1-launcher
   kubectl delete -f demo/specs/imex/nvbandwidth-test-job-1.yaml
   echo "${output}" | grep -E '^.*SUM multinode_device_to_device_memcpy_read_ce [0-9]+\.[0-9]+.*$'
+}
+
+@test "CD controller: test log verbosity levels" {
+  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" NOARGS
+
+  # Deploy workload: give the controller something to log about.
+  log_objects
+  kubectl apply -f demo/specs/imex/channel-injection.yaml
+  kubectl wait --for=condition=READY pods imex-channel-injection --timeout=100s
+  run kubectl logs imex-channel-injection
+  assert_output --partial "channel0"
+
+  echo "test level 0"
+  local _iargs=("--set" "logVerbosity=0")
+  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
+  kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  run kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  assert_output --partial 'controller manager config'
+  assert_output --partial 'maxNodesPerIMEXDomain'
+
+  echo "test level 1"
+  local _iargs=("--set" "logVerbosity=1")
+  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
+  run kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  refute_output --partial 'Processing added or updated ComputeDomain'
+  refute_output --partial 'reflector.go'
+  refute_output --partial 'Caches populated'
+  refute_output --partial 'round_trippers.go'
+  refute_output --partial 'Listing and watching'
+
+  echo "test level 2"
+  local _iargs=("--set" "logVerbosity=2")
+  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
+  run kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  assert_output --partial 'Processing added or updated ComputeDomain'
+  assert_output --partial 'reflector.go'
+  assert_output --partial 'Caches populated'
+  refute_output --partial 'Listing and watching'
+  refute_output --partial 'round_trippers.go'
+
+  echo "test level 3"
+  local _iargs=("--set" "logVerbosity=3")
+  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
+  run kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  assert_output --partial 'reflector.go'
+  assert_output --partial 'Caches populated'
+  assert_output --partial 'Listing and watching'
+  refute_output --partial 'round_trippers.go'
+
+  echo "test level 4"
+  local _iargs=("--set" "logVerbosity=4")
+  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
+  run kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  refute_output --partial 'round_trippers.go'
+
+  echo "test level 5"
+  local _iargs=("--set" "logVerbosity=5")
+  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
+  run kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  refute_output --partial 'round_trippers.go'
+
+  echo "test level 6"
+  local _iargs=("--set" "logVerbosity=6")
+  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
+  run kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  assert_output --partial 'Cleanup: perform for'
+  assert_output --partial 'round_trippers.go'
+  assert_output --partial '"Response" verb="GET"'
+
+  # Delete workload and hence CD daemon
+  kubectl delete -f demo/specs/imex/channel-injection.yaml
+  kubectl wait --for=delete pods imex-channel-injection --timeout=10s
+}
+
+@test "CD daemon: test log verbosity levels" {
+  log_objects
+  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" NOARGS
+
+  echo "test level 6"
+  local _iargs=("--set" "logVerbosity=6")
+  iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
+
+  kubectl apply -f demo/specs/imex/channel-injection.yaml
+  kubectl wait --for=condition=READY pods imex-channel-injection --timeout=100s
+
+  # Confirm that the CD daemon logs on level six
+  run get_all_cd_daemon_logs_for_cd_name "imex-channel-injection"
+  assert_output --partial 'wait for nodes update'  # level 1 msg
+  assert_output --partial 'round_trippers.go'  # level 6 msg
+
+  # Delete workload and hence CD daemon
+  kubectl delete -f demo/specs/imex/channel-injection.yaml
+  kubectl wait --for=delete pods imex-channel-injection --timeout=10s
+
+  echo "test level 0"
+  log_objects
+  # Reconfigure (only the) log verbosity for CD daemons spawned in the future.
+  # The deployment mutation via `set env` below is expected to restart the
+  # controller. Wait for the old controller pod to go away (to be sure that the
+  # new LOG_VERBOSITY_CD_DAEMON setting applies), and make sure controller
+  # deployment is still READY before moving on (make sure 1/1 READY).
+  CPOD_OLD="$(get_current_controller_pod_name)"
+  kubectl set env deployment nvidia-dra-driver-gpu-controller -n nvidia-dra-driver-gpu  LOG_VERBOSITY_CD_DAEMON=0
+  echo "wait --for=delete: $CPOD_OLD"
+  kubectl wait --for=delete pods "$CPOD_OLD" -n nvidia-dra-driver-gpu --timeout=10s
+  echo "returned: wait --for=delete"
+  CPOD_NEW="$(get_current_controller_pod_name)"
+  kubectl wait --for=condition=READY pods "$CPOD_NEW" -n nvidia-dra-driver-gpu --timeout=10s
+  echo "new controller pod is in effect"
+
+  # Spawn new workload
+  kubectl apply -f demo/specs/imex/channel-injection.yaml
+  kubectl wait --for=condition=READY pods imex-channel-injection --timeout=100s
+
+  # Confirm that the CD daemon now does not contain a level 1 msg
+  run get_all_cd_daemon_logs_for_cd_name "imex-channel-injection"
+  refute_output --partial 'wait for nodes update'  # expected level 1 msg
+
+  # Delete workload
+  kubectl delete -f demo/specs/imex/channel-injection.yaml
+  kubectl wait --for=delete pods imex-channel-injection --timeout=10s
 }
 
 @test "downgrade: current-dev -> last-stable" {
