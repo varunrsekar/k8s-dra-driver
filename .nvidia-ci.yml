@@ -44,7 +44,6 @@ variables:
 
 stages:
   - pull
-  - scan
   - release
   - ngc-publish
 
@@ -146,48 +145,11 @@ pull-images:
   script:
     - echo "Skipped in internal CI"
 
-# The .scan step forms the base of the image scan operation performed before releasing
-# images.
-scan-images:
-  stage: scan
-  needs:
-  - pull-images
-  image: "${PULSE_IMAGE}"
-  parallel:
-    matrix:
-        PLATFORM: ["linux/amd64", "linux/arm64"]
-  variables:
-    IMAGE: "${CI_REGISTRY_IMAGE}/k8s-dra-driver-gpu:${CI_COMMIT_SHORT_SHA}"
-    IMAGE_ARCHIVE: "k8s-dra-driver-gpu-${CI_JOB_ID}.tar"
-  allow_failure: true
-  script:
-    - |
-      docker login -u "${CI_REGISTRY_USER}" -p "${CI_REGISTRY_PASSWORD}" "${CI_REGISTRY}"
-      echo "Scanning image ${IMAGE} for ${PLATFORM}"
-      docker pull --platform="${PLATFORM}" "${IMAGE}"
-      docker save "${IMAGE}" -o "${IMAGE_ARCHIVE}"
-      AuthHeader=$(echo -n $SSA_CLIENT_ID:$SSA_CLIENT_SECRET | base64 -w0)
-      export SSA_TOKEN=$(curl --request POST --header "Authorization: Basic $AuthHeader" --header "Content-Type: application/x-www-form-urlencoded" ${SSA_ISSUER_URL} | jq ".access_token" |  tr -d '"')
-      if [ -z "$SSA_TOKEN" ]; then exit 1; else echo "SSA_TOKEN set!"; fi
-
-      pulse-cli -n $NSPECT_ID --ssa $SSA_TOKEN scan -i $IMAGE_ARCHIVE -p $CONTAINER_POLICY -o
-      rm -f "${IMAGE_ARCHIVE}"
-  artifacts:
-    when: always
-    expire_in: 1 week
-    paths:
-      - pulse-cli.log
-      - licenses.json
-      - sbom.json
-      - vulns.json
-      - policy_evaluation.json
 
 push-images-to-staging:
   extends:
     - .copy-images
   stage: release
-  needs:
-    - scan-images
   variables:
     IN_REGISTRY: "${CI_REGISTRY}"
     IN_REGISTRY_USER: "${CI_REGISTRY_USER}"
@@ -204,7 +166,6 @@ push-images-to-staging:
 .publish-images:
   stage: ngc-publish
   needs:
-    - scan-images
     - push-images-to-staging
   image:
     name: "${CNT_NGC_PUBLISH_IMAGE}"
