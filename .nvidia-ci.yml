@@ -215,7 +215,7 @@ push-images-to-staging:
       - "${PROJECT_NAME}.yaml"
 
 
-publish-images-to-ngc:
+create-ngc-publish-mr:
   extends:
     - .publish-images
   rules:
@@ -223,7 +223,7 @@ publish-images-to-ngc:
 
 # We create a dummy MR that exercises the publishing logic.
 # TODO: This MR should be closed automatically.
-publish-images-dummy:
+create-ngc-publish-mr-dummy:
   extends:
     - .publish-images
   variables:
