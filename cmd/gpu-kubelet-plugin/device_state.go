@@ -514,7 +514,10 @@ func (s *DeviceState) unprepareVfioDevices(ctx context.Context, devices Prepared
 
 func (s *DeviceState) discoverSiblingAllocatables(device *AllocatableDevice) error {
 	switch device.Type() {
-	case GpuDeviceType, MigDeviceType:
+	case GpuDeviceType:
+		if !device.Gpu.vfioEnabled {
+			return nil
+		}
 		vfio, err := s.nvdevlib.discoverVfioDevice(device.Gpu)
 		if err != nil {
 			return fmt.Errorf("error discovering vfio device: %w", err)
@@ -530,6 +533,9 @@ func (s *DeviceState) discoverSiblingAllocatables(device *AllocatableDevice) err
 		for _, mig := range migs {
 			s.allocatable[mig.CanonicalName()] = mig
 		}
+	case MigDeviceType:
+		// TODO: Implement once dynamic MIG is supported.
+		return nil
 	}
 	return nil
 }

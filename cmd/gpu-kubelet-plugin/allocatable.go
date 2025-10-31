@@ -190,10 +190,11 @@ func (d AllocatableDevices) RemoveSiblingDevices(device *AllocatableDevice) {
 	switch device.Type() {
 	case GpuDeviceType:
 		pciBusID = device.Gpu.pcieBusID
-	case MigDeviceType:
-		pciBusID = device.Mig.parent.pcieBusID
 	case VfioDeviceType:
 		pciBusID = device.Vfio.pcieBusID
+	case MigDeviceType:
+		// TODO: Implement once dynamic MIG is supported.
+		return
 	}
 
 	siblings := d.getDevicesByGPUPCIBusID(pciBusID)
@@ -204,10 +205,11 @@ func (d AllocatableDevices) RemoveSiblingDevices(device *AllocatableDevice) {
 		switch sibling.Type() {
 		case GpuDeviceType:
 			delete(d, sibling.Gpu.CanonicalName())
-		case MigDeviceType:
-			delete(d, sibling.Mig.CanonicalName())
 		case VfioDeviceType:
 			delete(d, sibling.Vfio.CanonicalName())
+		case MigDeviceType:
+			// TODO: Implement once dynamic MIG is supported.
+			continue
 		}
 	}
 }

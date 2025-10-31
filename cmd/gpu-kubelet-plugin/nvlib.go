@@ -153,6 +153,10 @@ func (l deviceLib) enumerateGpusAndMigDevices(config *Config) (AllocatableDevice
 		if err != nil {
 			return fmt.Errorf("error discovering MIG devices for GPU %q: %w", gpuInfo.CanonicalName(), err)
 		}
+		if featuregates.Enabled(featuregates.PassthroughSupport) {
+			// If no MIG devices are found, allow VFIO devices.
+			gpuInfo.vfioEnabled = len(migs) == 0
+		}
 		for _, migDeviceInfo := range migs {
 			devices[migDeviceInfo.CanonicalName()] = migDeviceInfo
 		}
@@ -203,12 +207,14 @@ func (l deviceLib) discoverGPUByPCIBusID(pcieBusID string) (*AllocatableDevice, 
 		if err != nil {
 			return fmt.Errorf("error getting info for GPU %d: %w", i, err)
 		}
-		gpu = &AllocatableDevice{
-			Gpu: gpuInfo,
-		}
 		migs, err = l.discoverMigDevicesByGPU(gpuInfo)
 		if err != nil {
 			return fmt.Errorf("error discovering MIG devices for GPU %q: %w", gpuInfo.CanonicalName(), err)
+		}
+		// If no MIG devices are found, allow VFIO devices.
+		gpuInfo.vfioEnabled = len(migs) == 0
+		gpu = &AllocatableDevice{
+			Gpu: gpuInfo,
 		}
 		return nil
 	})
@@ -372,14 +378,15 @@ func (l deviceLib) enumerateGpuPciDevices(config *Config, gms AllocatableDevices
 		return nil, fmt.Errorf("error getting GPU PCI devices: %w", err)
 	}
 	for idx, pci := range gpuPciDevices {
+		parent := gms.GetGPUByPCIeBusID(pci.Address)
+		if parent == nil || !parent.Gpu.vfioEnabled {
+			continue
+		}
 		vfioDeviceInfo, err := l.getVfioDeviceInfo(idx, pci)
 		if err != nil {
 			return nil, fmt.Errorf("error getting GPU info from PCI device: %w", err)
 		}
-		parent := gms.GetGPUByPCIeBusID(vfioDeviceInfo.pcieBusID)
-		if parent != nil {
-			vfioDeviceInfo.parent = parent.Gpu
-		}
+		vfioDeviceInfo.parent = parent.Gpu
 		devices[vfioDeviceInfo.CanonicalName()] = &AllocatableDevice{
 			Vfio: vfioDeviceInfo,
 		}

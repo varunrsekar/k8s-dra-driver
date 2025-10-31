@@ -195,6 +195,10 @@ func (cdi *CDIHandler) createStandardVfioDeviceSpecFile(allocatable AllocatableD
 		deviceSpecs = append(deviceSpecs, dspec)
 	}
 
+	if len(deviceSpecs) == 0 {
+		return nil
+	}
+
 	spec, err := spec.New(
 		spec.WithVendor(cdiVendor),
 		spec.WithClass(cdiDeviceClass),

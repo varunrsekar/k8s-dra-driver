@@ -32,6 +32,7 @@ type GpuInfo struct {
 	UUID                  string `json:"uuid"`
 	minor                 int
 	migEnabled            bool
+	vfioEnabled           bool
 	memoryBytes           uint64
 	productName           string
 	brand                 string
