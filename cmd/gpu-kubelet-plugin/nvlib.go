@@ -182,8 +182,8 @@ func (l deviceLib) enumerateGpusAndMigDevices(config *Config) (AllocatableDevice
 	return devices, nil
 }
 
-func (l deviceLib) discoverMigDevicesByGPU(gpuInfo *GpuInfo) (AllocatableDeviceList, error) {
-	var devices AllocatableDeviceList
+func (l deviceLib) discoverMigDevicesByGPU(gpuInfo *GpuInfo) ([]*AllocatableDevice, error) {
+	var devices []*AllocatableDevice
 	migs, err := l.getMigDevices(gpuInfo)
 	if err != nil {
 		return nil, fmt.Errorf("error getting MIG devices for GPU %q: %w", gpuInfo.CanonicalName(), err)
@@ -199,14 +199,14 @@ func (l deviceLib) discoverMigDevicesByGPU(gpuInfo *GpuInfo) (AllocatableDeviceL
 }
 
 // TODO: Need go-nvlib util for this.
-func (l deviceLib) discoverGPUByPCIBusID(pcieBusID string) (*AllocatableDevice, AllocatableDeviceList, error) {
+func (l deviceLib) discoverGPUByPCIBusID(pcieBusID string) (*AllocatableDevice, []*AllocatableDevice, error) {
 	if err := l.Init(); err != nil {
 		return nil, nil, err
 	}
 	defer l.alwaysShutdown()
 
 	var gpu *AllocatableDevice
-	var migs AllocatableDeviceList
+	var migs []*AllocatableDevice
 	err := l.VisitDevices(func(i int, d nvdev.Device) error {
 		gpuPCIBusID, err := d.GetPCIBusID()
 		if err != nil {

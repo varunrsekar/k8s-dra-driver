@@ -73,7 +73,7 @@ func NewVfioPciManager(containerDriverRoot string, hostDriverRoot string, nvlib 
 }
 
 // PreChecks tests if vfio-pci device allocations can be used.
-func (vm *VfioPciManager) Prechecks() error {
+func (vm *VfioPciManager) VerifyPassthroughSupport() error {
 	if !vm.isVfioPCIModuleLoaded() {
 		return fmt.Errorf("vfio_pci module is not loaded")
 	}
@@ -89,10 +89,10 @@ func (vm *VfioPciManager) Prechecks() error {
 
 func (vm *VfioPciManager) isIommuEnabled() (bool, error) {
 	f, err := os.Open(kernelIommuGroupPath)
-	if os.IsNotExist(err) {
-		return false, nil
-	}
 	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
 		return false, err
 	}
 	defer f.Close()
@@ -110,6 +110,9 @@ func (vm *VfioPciManager) isIommuEnabled() (bool, error) {
 func (vm *VfioPciManager) isVfioPCIModuleLoaded() bool {
 	f, err := os.Stat(filepath.Join(sysModulesRoot, vfioPciModule))
 	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
 		klog.Fatalf("failed to check if vfio_pci module is loaded: %v", err)
 	}
 
@@ -171,9 +174,6 @@ func (vm *VfioPciManager) verifyDisabledVFs(pcieBusID string) error {
 
 // Configure binds the GPU to the vfio-pci driver.
 func (vm *VfioPciManager) Configure(ctx context.Context, info *VfioDeviceInfo) error {
-	perGpuLock.Get(info.pcieBusID).Lock()
-	defer perGpuLock.Get(info.pcieBusID).Unlock()
-
 	driver, err := getDriver(pciDevicesRoot, info.pcieBusID)
 	if err != nil {
 		return err
@@ -202,9 +202,6 @@ func (vm *VfioPciManager) Configure(ctx context.Context, info *VfioDeviceInfo) e
 
 // Unconfigure binds the GPU to the nvidia driver.
 func (vm *VfioPciManager) Unconfigure(ctx context.Context, info *VfioDeviceInfo) error {
-	perGpuLock.Get(info.pcieBusID).Lock()
-	defer perGpuLock.Get(info.pcieBusID).Unlock()
-
 	// Do nothing if we dont expect to switch to nvidia driver.
 	if !vm.nvidiaEnabled {
 		return nil

@@ -18,8 +18,6 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/featuregates"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -31,9 +29,6 @@ type VfioDeviceConfig struct {
 
 // DefaultVfioDeviceConfig provides the default configuration of a VFIO device.
 func DefaultVfioDeviceConfig() *VfioDeviceConfig {
-	if !featuregates.Enabled(featuregates.PassthroughSupport) {
-		return nil
-	}
 	return &VfioDeviceConfig{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: GroupName + "/" + Version,

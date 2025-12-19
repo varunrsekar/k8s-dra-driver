@@ -98,15 +98,16 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 
 	var vfioPciManager *VfioPciManager
 	if featuregates.Enabled(featuregates.PassthroughSupport) {
-		manager := NewVfioPciManager(string(containerDriverRoot), string(hostDriverRoot), nvdevlib, true /* nvidiaEnabled */)
-		if err := manager.Prechecks(); err == nil {
-			vfioPciManager = manager
-		} else {
-			klog.Warningf("vfio-pci manager failed prechecks, will not be initialize: %v", err)
-		}
+		vfioPciManager = NewVfioPciManager(string(containerDriverRoot), string(hostDriverRoot), nvdevlib, true /* nvidiaEnabled */)
 	}
 
-	if err := cdi.CreateStandardDeviceSpecFile(allocatable); err != nil {
+	// Verify if the node supports running GPUs in passthrough-mode.
+	if featuregates.Enabled(featuregates.PassthroughSupport) {
+		if err := vfioPciManager.VerifyPassthroughSupport(); err != nil {
+			klog.Fatalf("vfio-pci manager failed prechecks, will not be initialize: %v", err)
+		}
+	}
+	if err := cdi.CreateStandardDeviceSpecFiles(allocatable); err != nil {
 		return nil, fmt.Errorf("unable to create base CDI spec file: %v", err)
 	}
 
@@ -120,11 +121,11 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 		tsManager:         tsManager,
 		mpsManager:        mpsManager,
 		vfioPciManager:    vfioPciManager,
+		allocatable:       allocatable,
 		config:            config,
 		nvdevlib:          nvdevlib,
 		checkpointManager: checkpointManager,
 	}
-	state.allocatable = allocatable
 
 	checkpoints, err := state.checkpointManager.ListCheckpoints()
 	if err != nil {
@@ -474,7 +475,7 @@ func (s *DeviceState) unprepareDevices(ctx context.Context, claimUID string, dev
 		if featuregates.Enabled(featuregates.PassthroughSupport) {
 			err := s.unprepareVfioDevices(ctx, group.Devices.VfioDevices())
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to unprepare vfio devices: %w", err)
 			}
 		}
 
@@ -615,9 +616,6 @@ func (s *DeviceState) applySharingConfig(ctx context.Context, config configapi.S
 }
 
 func (s *DeviceState) applyVfioDeviceConfig(ctx context.Context, config *configapi.VfioDeviceConfig, claim *resourceapi.ResourceClaim, results []*resourceapi.DeviceRequestAllocationResult) (*DeviceConfigState, error) {
-	if !featuregates.Enabled(featuregates.PassthroughSupport) {
-		return nil, nil
-	}
 	var configState DeviceConfigState
 
 	// Configure the vfio-pci devices.
@@ -625,7 +623,7 @@ func (s *DeviceState) applyVfioDeviceConfig(ctx context.Context, config *configa
 		info := s.allocatable[r.Device]
 		err := s.vfioPciManager.Configure(ctx, info.Vfio)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error configuring vfio device for allocatable '%v' in claim '%v': %w", r.Device, claim.UID, err)
 		}
 	}
 

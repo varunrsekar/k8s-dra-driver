@@ -28,6 +28,8 @@ type AllocatableDevice struct {
 	Vfio *VfioDeviceInfo
 }
 
+type AllocatableDevices map[string]*AllocatableDevice
+
 func (d AllocatableDevice) Type() string {
 	if d.Gpu != nil {
 		return GpuDeviceType
@@ -78,45 +80,8 @@ func (d AllocatableDevice) UUID() string {
 	panic("unexpected type for AllocatableDevice")
 }
 
-type AllocatableDeviceList []*AllocatableDevice
-
-type AllocatableDevices map[string]*AllocatableDevice
-
-func (d AllocatableDevices) getDevicesByGPUPCIBusID(pcieBusID string) AllocatableDeviceList {
-	var devices AllocatableDeviceList
-	for _, device := range d {
-		switch device.Type() {
-		case GpuDeviceType:
-			if device.Gpu.pcieBusID == pcieBusID {
-				devices = append(devices, device)
-			}
-		case MigDeviceType:
-			if device.Mig.parent.pcieBusID == pcieBusID {
-				devices = append(devices, device)
-			}
-		case VfioDeviceType:
-			if device.Vfio.pcieBusID == pcieBusID {
-				devices = append(devices, device)
-			}
-		}
-	}
-	return devices
-}
-
-func (d AllocatableDevices) GetGPUByPCIeBusID(pcieBusID string) *AllocatableDevice {
-	for _, device := range d {
-		if device.Type() != GpuDeviceType {
-			continue
-		}
-		if device.Gpu.pcieBusID == pcieBusID {
-			return device
-		}
-	}
-	return nil
-}
-
-func (d AllocatableDevices) GetGPUs() AllocatableDeviceList {
-	var devices AllocatableDeviceList
+func (d AllocatableDevices) GetGPUs() []*AllocatableDevice {
+	var devices []*AllocatableDevice
 	for _, device := range d {
 		if device.Type() == GpuDeviceType {
 			devices = append(devices, device)
@@ -125,8 +90,8 @@ func (d AllocatableDevices) GetGPUs() AllocatableDeviceList {
 	return devices
 }
 
-func (d AllocatableDevices) GetMigDevices() AllocatableDeviceList {
-	var devices AllocatableDeviceList
+func (d AllocatableDevices) GetMigDevices() []*AllocatableDevice {
+	var devices []*AllocatableDevice
 	for _, device := range d {
 		if device.Type() == MigDeviceType {
 			devices = append(devices, device)
@@ -135,8 +100,8 @@ func (d AllocatableDevices) GetMigDevices() AllocatableDeviceList {
 	return devices
 }
 
-func (d AllocatableDevices) GetVfioDevices() AllocatableDeviceList {
-	var devices AllocatableDeviceList
+func (d AllocatableDevices) GetVfioDevices() []*AllocatableDevice {
+	var devices []*AllocatableDevice
 	for _, device := range d {
 		if device.Type() == VfioDeviceType {
 			devices = append(devices, device)
@@ -185,6 +150,52 @@ func (d AllocatableDevices) UUIDs() []string {
 	return uuids
 }
 
+func (d *AllocatableDevice) IsHealthy() bool {
+	switch d.Type() {
+	case GpuDeviceType:
+		return d.Gpu.Health == Healthy
+	case MigDeviceType:
+		return d.Mig.Health == Healthy
+	}
+	panic("unexpected type for AllocatableDevice")
+}
+
+// varunrsekar: The functions below are a temporary workaround until the PassthroughSupport feature is integrated into
+// partitionable devices.
+
+func (d AllocatableDevices) getDevicesByGPUPCIBusID(pcieBusID string) []*AllocatableDevice {
+	var devices []*AllocatableDevice
+	for _, device := range d {
+		switch device.Type() {
+		case GpuDeviceType:
+			if device.Gpu.pcieBusID == pcieBusID {
+				devices = append(devices, device)
+			}
+		case MigDeviceType:
+			if device.Mig.parent.pcieBusID == pcieBusID {
+				devices = append(devices, device)
+			}
+		case VfioDeviceType:
+			if device.Vfio.pcieBusID == pcieBusID {
+				devices = append(devices, device)
+			}
+		}
+	}
+	return devices
+}
+
+func (d AllocatableDevices) GetGPUByPCIeBusID(pcieBusID string) *AllocatableDevice {
+	for _, device := range d {
+		if device.Type() != GpuDeviceType {
+			continue
+		}
+		if device.Gpu.pcieBusID == pcieBusID {
+			return device
+		}
+	}
+	return nil
+}
+
 func (d AllocatableDevices) RemoveSiblingDevices(device *AllocatableDevice) {
 	var pciBusID string
 	switch device.Type() {
@@ -212,14 +223,4 @@ func (d AllocatableDevices) RemoveSiblingDevices(device *AllocatableDevice) {
 			continue
 		}
 	}
-}
-
-func (d *AllocatableDevice) IsHealthy() bool {
-	switch d.Type() {
-	case GpuDeviceType:
-		return d.Gpu.Health == Healthy
-	case MigDeviceType:
-		return d.Mig.Health == Healthy
-	}
-	panic("unexpected type for AllocatableDevice")
 }
