@@ -214,7 +214,8 @@ bats::on_failure() {
   kubectl apply -f demo/specs/imex/channel-injection.yaml
   kubectl wait --for=condition=READY pods imex-channel-injection --timeout=100s
 
-  # Expect global CD status to be `Ready`.
+  # Expect global CD status to be `Ready`. TODO: check periodicaly, until deadline
+  sleep 4
   run bats_pipe kubectl get computedomain imex-channel-injection -o json \| jq '.status.status'
   assert_output --partial 'Ready'
   refute_output --partial 'NotReady'
