@@ -22,8 +22,8 @@ RUN git clone https://github.com/bats-core/bats-assert /bats-libraries/bats-asse
 RUN git clone https://github.com/bats-core/bats-file /bats-libraries/bats-file
 
 RUN curl -sSfLO --retry 8 --retry-all-errors --connect-timeout 10 --retry-delay 5 \
-    https://get.helm.sh/helm-v3.20.0-linux-${BUILDARCH}.tar.gz && \
-    tar -zxvf helm-v3*${BUILDARCH}.tar.gz && mv linux-${BUILDARCH}/helm /usr/bin
+    https://get.helm.sh/helm-v4.1.1-linux-${BUILDARCH}.tar.gz && \
+    tar -zxvf helm-*${BUILDARCH}.tar.gz && mv linux-${BUILDARCH}/helm /usr/bin
 
 RUN curl -sSfLO --retry 8 --retry-all-errors --connect-timeout 10 --retry-delay 5 \
     https://dl.k8s.io/release/v1.35.2/bin/linux/${BUILDARCH}/kubectl && \
