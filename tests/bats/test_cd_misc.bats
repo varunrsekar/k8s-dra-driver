@@ -63,6 +63,7 @@ bats::on_failure() {
   log "CD daemon pod name: ${PNAME}"
 
   # Expect `nodes` key to be present in CD status.
+  sleep 4
   run bats_pipe kubectl get computedomain imex-channel-injection -o json \| jq '.status'
   assert_output --partial 'nodes'
 
