@@ -179,20 +179,23 @@ get_device_attrs_from_any_gpu_slice() {
   local slicename
 
   # Get contents of first listed GPU plugin resource slice, and dump it into a
-  # file. Then, for the first device in that slice (of given type), extract the
-  # set of device attribute _keys_. Emit those keys, one per line. If a
-  # node_name was provided, filter for the GPU plugin resource slice on that
-  # node.
-
+  # file.
   if [ -n "$node_name" ]; then
     slicename="$(kubectl get resourceslices.resource.k8s.io | grep 'gpu.nvidia.com' | grep "$node_name" | head -n1 | awk '{print $1}')"
   else
     slicename="$(kubectl get resourceslices.resource.k8s.io | grep 'gpu.nvidia.com' | head -n1 | awk '{print $1}')"
   fi
+  log "resource slice name: $slicename"
 
-  echo "resource slice name: $slicename" >&2
-
+  # For debugging, show current set of slices.
+  kubectl get resourceslice >&2
   kubectl get resourceslices.resource.k8s.io -o yaml "${slicename}" > "${spath}"
+  log "wrote resource slice content to: ${spath}"
+
+  # For the first device in that slice (of given type), extract the set of
+  # device attribute _keys_. Emit those keys, one per line. If a node_name was
+  # provided, filter for the GPU plugin resource slice on that node. Using
+  # --raw-output strips quotes.
   yq --raw-output "[.spec.devices[] | select(.attributes.type.string == \"${device_type}\")] | .[0] | .attributes | keys | .[]" "${spath}"
 }
 
