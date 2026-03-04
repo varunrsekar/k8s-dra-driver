@@ -142,6 +142,8 @@ bats::on_failure() {
   kubectl wait --for=delete "${POD}" --timeout=10s
 }
 
+
+# bats test_tags=fastfeedback
 @test "CDs: self-initiated unprepare of stale RCs in PrepareStarted" {
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" NOARGS
 
