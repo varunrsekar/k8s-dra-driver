@@ -31,10 +31,11 @@ kubectl get pods -n nvidia-dra-driver-gpu
 helm list -A
 
 
-# Facilitate containerized invocation, otherwise sometimes
-# users may see `mkdir /.cache: permission denied`
-HELM_REPOSITORY_CACHE=$(mktemp -d -t helm-XXXXX)
-export HELM_REPOSITORY_CACHE
+# Facilitate containerized and also direct invocation
+# without depending on HOME being set.
+HELM_CACHE_HOME=$(mktemp -d -t helm-XXXXX)
+export HELM_CACHE_HOME
+
 
 set -x
 
