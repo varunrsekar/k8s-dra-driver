@@ -355,7 +355,7 @@ kplog () {
 
 
 _log_ts_no_newline() {
-    echo -n "$(date -u +'%Y-%m-%dT%H:%M:%S.%3NZ ')"
+    echo -n "$(date -u +'%Y-%m-%dT%H:%M:%S.%3NZ ')" >&2
 }
 
 
@@ -365,5 +365,5 @@ log() {
   _TNOW=$(awk '{print $1}' /proc/uptime)
   _DUR=$(echo "$_TNOW - $_T0" | bc)
   _log_ts_no_newline
-  printf "[%6.1fs] $1\n" "$_DUR"
+  printf "[%6.1fs] $1\n" "$_DUR" >&2
 }
