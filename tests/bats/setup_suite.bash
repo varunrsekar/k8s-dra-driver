@@ -61,11 +61,11 @@ setup_suite () {
     validate_prerequisites
     # Create Helm repo cache dir and point `helm` to it, otherwise `Error:
     # INSTALLATION FAILED: mkdir /.cache: permission denied`
-    HELM_REPOSITORY_CACHE=$(mktemp -d -t helm-XXXXX)
-    export HELM_REPOSITORY_CACHE
+    HELM_CACHE_HOME=$(mktemp -d -t helm-XXXXX)
+    export HELM_CACHE_HOME
 
     # Consumed by the helm CLI.
-    export HELM_REPOSITORY_CONFIG=${HELM_REPOSITORY_CACHE}/repo.cfg
+    export HELM_REPOSITORY_CONFIG=${HELM_CACHE_HOME}/repo.cfg
 
     # Prepare CRD upgrade URL.
     export CRD_URL_PFX="https://raw.githubusercontent.com/NVIDIA/k8s-dra-driver-gpu/"

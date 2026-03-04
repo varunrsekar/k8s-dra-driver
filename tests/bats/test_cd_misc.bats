@@ -63,6 +63,7 @@ bats::on_failure() {
   log "CD daemon pod name: ${PNAME}"
 
   # Expect `nodes` key to be present in CD status.
+  sleep 4
   run bats_pipe kubectl get computedomain imex-channel-injection -o json \| jq '.status'
   assert_output --partial 'nodes'
 
@@ -141,6 +142,8 @@ bats::on_failure() {
   kubectl wait --for=delete "${POD}" --timeout=10s
 }
 
+
+# bats test_tags=fastfeedback
 @test "CDs: self-initiated unprepare of stale RCs in PrepareStarted" {
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" NOARGS
 

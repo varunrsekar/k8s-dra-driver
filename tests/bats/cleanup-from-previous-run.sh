@@ -30,6 +30,13 @@ kubectl get computedomains.resource.nvidia.com
 kubectl get pods -n nvidia-dra-driver-gpu
 helm list -A
 
+
+# Facilitate containerized and also direct invocation
+# without depending on HOME being set.
+HELM_CACHE_HOME=$(mktemp -d -t helm-XXXXX)
+export HELM_CACHE_HOME
+
+
 set -x
 
 # If a previous run leaves e.g. the controller behind in CrashLoopBackOff then

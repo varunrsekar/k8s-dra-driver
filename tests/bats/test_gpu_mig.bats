@@ -24,6 +24,14 @@ setup() {
 
 # Run after each test in this file.
 teardown() {
+  # We desire to uninstall the DRA driver in any case between tests in this
+  # file. It makes sense to do this before trying to tear down the MIG devices
+  # created by a particular test. This may help addressing a rare scenario of
+  # "in use by another client", see
+  # https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/907 (it's conceivable
+  # that the kubelet plugin's nvml-based interaction with the GPU conflicted
+  # with the teardown).
+  helm uninstall -n nvidia-dra-driver-gpu nvidia-dra-driver-gpu-batssuite --wait || true
   mig_ensure_teardown_on_all_nodes
 }
 

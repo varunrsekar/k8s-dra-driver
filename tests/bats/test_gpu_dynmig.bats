@@ -12,6 +12,11 @@ setup_file () {
     -c gpus \
     --prefix --tail=-1
   assert_output --partial "About to announce device gpu-0-mig-1g"
+
+  # Give a bit of time for the kubelet plugins to update
+  # resource slices. See
+  # https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/902
+  sleep 2
 }
 
 # Executed before entering each test in this file.
