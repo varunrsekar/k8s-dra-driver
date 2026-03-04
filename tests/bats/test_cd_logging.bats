@@ -151,4 +151,10 @@ setup () {
   # Delete workload
   kubectl delete -f demo/specs/imex/channel-injection.yaml
   kubectl wait --for=delete pods imex-channel-injection --timeout=10s
+
+  # The last `kubectl set env deployment` above may mutate a field owner to
+  # `kubectl-set` and that may negatively impact the next `helm upgrade -i ...`.
+  # Explicitly uninstall the Helm chart now, to not affect other tests with
+  # that.
+  helm uninstall -n nvidia-dra-driver-gpu nvidia-dra-driver-gpu-batssuite
 }
