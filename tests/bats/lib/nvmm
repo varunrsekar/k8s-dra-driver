@@ -47,8 +47,9 @@ set -o nounset
 # fine.
 KUBECONFIG_HASH=$(echo -n "$KUBECONFIG" | md5sum | awk '{print $1}')
 
-WORKDIR_PATH="${TMPDIR:-/tmp}/migutils-${USER:-defaultuser}-${KUBECONFIG_HASH}"
+WORKDIR_PATH="${TMPDIR:-/tmp}/migutils-${USER:-default}-${KUBECONFIG_HASH}"
 mkdir -p "${WORKDIR_PATH}"
+chmod 777 "${WORKDIR_PATH}"
 cd "${WORKDIR_PATH}"
 
 NODES_FILE_NAME="nodesnames"
