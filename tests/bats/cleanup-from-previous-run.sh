@@ -30,6 +30,12 @@ kubectl get computedomains.resource.nvidia.com
 kubectl get pods -n nvidia-dra-driver-gpu
 helm list -A
 
+
+# Facilitate containerized invocation, otherwise sometimes
+# users may see `mkdir /.cache: permission denied`
+HELM_REPOSITORY_CACHE=$(mktemp -d -t helm-XXXXX)
+export HELM_REPOSITORY_CACHE
+
 set -x
 
 # If a previous run leaves e.g. the controller behind in CrashLoopBackOff then
