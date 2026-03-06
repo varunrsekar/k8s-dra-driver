@@ -96,7 +96,9 @@ bats::on_failure() {
     "addressingMode"
   )
 
-  local attrs=$(get_device_attrs_from_any_gpu_slice "mig" "$node")
+  run get_device_attrs_from_any_gpu_slice "mig" "$node"
+  assert_success
+  local attrs="$output"
   assert_attrs_equal "$attrs" "${reference[@]}"
 }
 

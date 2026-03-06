@@ -135,6 +135,8 @@ bats::on_failure() {
     "addressingMode"
   )
 
-  local attrs=$(get_device_attrs_from_any_gpu_slice "gpu")
+  run get_device_attrs_from_any_gpu_slice "gpu"
+  assert_success
+  local attrs="$output"
   assert_attrs_equal "$attrs" "${reference[@]}"
 }

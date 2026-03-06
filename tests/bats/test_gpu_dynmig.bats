@@ -60,7 +60,9 @@ confirm_mig_mode_disabled_all_nodes() {
     "addressingMode"
   )
 
-  local attrs=$(get_device_attrs_from_any_gpu_slice "gpu")
+  run get_device_attrs_from_any_gpu_slice "gpu"
+  assert_success
+  local attrs="$output"
   assert_attrs_equal "$attrs" "${reference[@]}"
 }
 
@@ -82,7 +84,9 @@ confirm_mig_mode_disabled_all_nodes() {
     "profile"
   )
 
-  local attrs=$(get_device_attrs_from_any_gpu_slice "mig")
+  run get_device_attrs_from_any_gpu_slice "mig"
+  assert_success
+  local attrs="$output"
   assert_attrs_equal "$attrs" "${reference[@]}"
 }
 

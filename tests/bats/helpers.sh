@@ -192,6 +192,9 @@ get_device_attrs_from_any_gpu_slice() {
   kubectl get resourceslices.resource.k8s.io -o yaml "${slicename}" > "${spath}"
   log "wrote resource slice content to: ${spath}"
 
+  # Log contents, for https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/902
+  cat "${spath}" >&2
+
   # For the first device in that slice (of given type), extract the set of
   # device attribute _keys_. Emit those keys, one per line. If a node_name was
   # provided, filter for the GPU plugin resource slice on that node. Using
