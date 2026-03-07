@@ -95,10 +95,12 @@ log_objects() {
   # Never fail, but show output in case a test fails, to facilitate debugging.
   # Could this be part of setup()? If setup succeeds and when a test fails:
   # does this show the output of setup? Then we could do this.
-  kubectl get resourceclaims || true
-  kubectl get computedomain || true
-  kubectl get pods -o wide || true
+  log "LOG_OBJECTS START"
+  echo "claims:"; kubectl get resourceclaims --ignore-not-found || true
+  echo "CDs:   "; kubectl get computedomain --ignore-not-found || true
+  echo "pods:  "; kubectl get pods -o wide --ignore-not-found || true
   kubectl get pods -o wide -n nvidia-dra-driver-gpu || true
+  log "LOG_OBJECTS END"
 }
 
 
@@ -126,6 +128,40 @@ wait_for_pod_event() {
   done
 }
 
+# The number of expected GPU resource slices per node depends on the Kubernetes
+# version. Wait for each node to announce at least one of them.
+wait_for_all_gpu_resource_slices() {
+  local timeout=$1
+  local start_time=$SECONDS
+  local driver_name="gpu.nvidia.com"
+  local expected_count=$2
+  expected_count="$(get_node_count)"
+
+  log "Waiting up to ${timeout} s for at least ${expected_count} unique node(s) to show at least one '${driver_name}' ResourceSlice"
+  while (( SECONDS - start_time < timeout )); do
+    # 1. Fetch DRIVER and NODE columns for all slices.
+    # 2. filter for GPU DRA driver and print the nodeName ($2)
+    # 3. sort -u removes duplicate node names (since one node can have multiple GPU slices).
+    # 4. wc -l counts the unique nodes.
+    # 5. awk strips any extra whitespace from wc output.
+    current_node_count=$(kubectl get resourceslices.resource.k8s.io -A \
+      -o custom-columns=DRIVER:.spec.driver,NODE:.spec.nodeName --no-headers 2>/dev/null \
+      | awk -v d="${driver_name}" '$1 == d { print $2 }' \
+      | sort -u \
+      | wc -l \
+      | awk '{print $1}')
+
+    if [[ "$current_node_count" -ge "$expected_count" ]]; then
+      log "Success: Found ${current_node_count} unique node(s) with ResourceSlices for '${driver_name}'"
+      return 0
+    fi
+
+    sleep 0.5
+  done
+
+  log "wait for resource slices: deadline reached"
+  return 1
+}
 
 get_all_cd_daemon_logs_for_cd_name() {
   CD_NAME="$1"
@@ -169,17 +205,23 @@ assert_attrs_equal() {
 }
 
 
-# Helper function to get device attributes from a GPU resource slice
+# Get device attributes for a device in a GPU resource slice.
+# Emit attributes to stdout.
+# Log to stderr.
+# If node name is provided, query first slice from that node.
+# If no node name is provided, query first slice overall.
 # Usage: get_device_attrs_from_any_gpu_slice "gpu"
 #        get_device_attrs_from_any_gpu_slice "mig"
+#        get_device_attrs_from_any_gpu_slice "mig" "<nodename>"
 get_device_attrs_from_any_gpu_slice() {
   local device_type="$1"
   local node_name="$2"
   local spath="${BATS_TEST_TMPDIR}/gpu_resource_slice_content"
   local slicename
 
-  # Get contents of first listed GPU plugin resource slice, and dump it into a
-  # file.
+  # Get contents of first listed GPU plugin resource slice; dump into file. If a
+  # node_name was provided, filter for the GPU plugin resource slice on that
+  # node.
   if [ -n "$node_name" ]; then
     slicename="$(kubectl get resourceslices.resource.k8s.io | grep 'gpu.nvidia.com' | grep "$node_name" | head -n1 | awk '{print $1}')"
   else
@@ -192,11 +234,30 @@ get_device_attrs_from_any_gpu_slice() {
   kubectl get resourceslices.resource.k8s.io -o yaml "${slicename}" > "${spath}"
   log "wrote resource slice content to: ${spath}"
 
+  # Log contents, for https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/902
+  cat "${spath}" >&2
+
   # For the first device in that slice (of given type), extract the set of
-  # device attribute _keys_. Emit those keys, one per line. If a node_name was
-  # provided, filter for the GPU plugin resource slice on that node. Using
-  # --raw-output strips quotes.
+  # device attribute _keys_. Emit those keys, one per line. --raw-output strips
+  # quotes.
   yq --raw-output "[.spec.devices[] | select(.attributes.type.string == \"${device_type}\")] | .[0] | .attributes | keys | .[]" "${spath}"
+}
+
+
+# Get Kubernetes node count, emit to stdout. Fail function
+# if kubectl fails.
+get_node_count() {
+  local nodes
+
+  if ! nodes=$(kubectl get nodes --no-headers 2>/dev/null); then
+    return 1
+  fi
+
+  if [[ -z "$nodes" ]]; then
+    echo 0
+  else
+    echo "$nodes" | wc -l | awk '{print $1}'
+  fi
 }
 
 
