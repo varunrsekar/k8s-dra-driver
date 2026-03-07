@@ -4,6 +4,14 @@
 setup_file () {
   load 'helpers.sh'
   _common_setup
+
+  # Try to establish well-known state before entering tests. Any previous
+  # partial cleanup or partial test might leave an exotic resource slice state
+  # behind. Delete slices, and to do that reliably: delete DRA driver before, if
+  # it exists.
+  helm uninstall -n nvidia-dra-driver-gpu nvidia-dra-driver-gpu-batssuite --wait || true
+  kubectl delete resourceslices.resource.k8s.io --all
+
   local _iargs=("--set" "logVerbosity=6" "--set" "featureGates.DynamicMIG=true")
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
   run kubectl logs \
@@ -13,10 +21,15 @@ setup_file () {
     --prefix --tail=-1
   assert_output --partial "About to announce device gpu-0-mig-1g"
 
-  # Give a bit of time for the kubelet plugins to update
-  # resource slices. See
-  # https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/902
-  sleep 6
+  # Wait until resource slices are announced. See
+  # https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/902 -- Maybe we should
+  # fail the liveness probe until the first resource slice update is known to
+  # have been performed? That may be too invasive. In any case, the resource
+  # slice update controller running in the DRA plugin helper might enable us to
+  # to something smart here. For the purpose of testing, deleting all resource
+  # slices above and then waiting until resource slices pop up again: that seems
+  # to be robust.
+  wait_for_all_gpu_resource_slices 15
 }
 
 # Executed before entering each test in this file.
@@ -60,9 +73,9 @@ confirm_mig_mode_disabled_all_nodes() {
     "addressingMode"
   )
 
-  run get_device_attrs_from_any_gpu_slice "gpu"
-  assert_success
-  local attrs="$output"
+  local attrs
+  attrs=$(get_device_attrs_from_any_gpu_slice "gpu")
+  log "attributes seen: $attrs"
   assert_attrs_equal "$attrs" "${reference[@]}"
 }
 
@@ -84,9 +97,9 @@ confirm_mig_mode_disabled_all_nodes() {
     "profile"
   )
 
-  run get_device_attrs_from_any_gpu_slice "mig"
-  assert_success
-  local attrs="$output"
+  local attrs
+  attrs=$(get_device_attrs_from_any_gpu_slice "mig")
+  log "attributes seen: $attrs"
   assert_attrs_equal "$attrs" "${reference[@]}"
 }
 

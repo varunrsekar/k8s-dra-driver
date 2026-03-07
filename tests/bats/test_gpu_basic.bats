@@ -119,6 +119,7 @@ bats::on_failure() {
 }
 
 
+
 # bats test_tags=fastfeedback
 @test "GPUs: inspect device attributes in resource slice (gpu)" {
   local reference=(
@@ -135,8 +136,7 @@ bats::on_failure() {
     "addressingMode"
   )
 
-  run get_device_attrs_from_any_gpu_slice "gpu"
-  assert_success
-  local attrs="$output"
+  local attrs
+  attrs=$(get_device_attrs_from_any_gpu_slice "gpu")
   assert_attrs_equal "$attrs" "${reference[@]}"
 }
