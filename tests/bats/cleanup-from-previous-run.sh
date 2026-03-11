@@ -32,15 +32,18 @@ helm list -A
 
 
 # Facilitate containerized and also direct invocation
-# without depending on HOME being set.
+# of this script, without depending on HOME being set.
 HELM_CACHE_HOME=$(mktemp -d -t helm-XXXXX)
 export HELM_CACHE_HOME
 
-
-set -x
+# Facilitate direct (manual) invocation of this script.
+TEST_CLEANUP_CHART_REPO="${TEST_CHART_REPO:-oci://ghcr.io/nvidia/k8s-dra-driver-gpu}"
+TEST_CLEANUP_CHART_VERSION="${TEST_CHART_VERSION:-26.4.0-dev-f9de1ef3-chart}"
+TEST_NVIDIA_DRIVER_ROOT="${TEST_NVIDIA_DRIVER_ROOT:-/run/nvidia/driver}"
 
 # If a previous run leaves e.g. the controller behind in CrashLoopBackOff then
 # the next installation with --wait won't succeed.
+set -x
 timeout -v 15 helm uninstall nvidia-dra-driver-gpu-batssuite -n nvidia-dra-driver-gpu
 
 # When the CRD has been left behind deleted by a partially performed
@@ -52,66 +55,49 @@ kubectl apply -f "${CRD_URL}"
 # up. Install _a_ version temporarily, towards best-effort. Install
 # to-be-tested-version for now, latest-on-GHCR might be smarter though. Again,
 # this command may fail and in best-effort fashion this cleanup script proceeds.
-iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" NOARGS
+set +x
+iupgrade_wait "${TEST_CLEANUP_CHART_REPO}" "${TEST_CLEANUP_CHART_VERSION}" NOARGS
+set -x
 
-# Some effort to delete workloads potentially left-over from a previous
-# interrupted run. TODO: try to affect all-at-once, maybe with a special label.
-# Note: the following commands are OK to fail -- the `errexit` shell option is
-# deliberately not set here.
-timeout -v 5 kubectl delete -f demo/specs/imex/channel-injection.yaml 2> /dev/null
-timeout -v 5 kubectl delete -f demo/specs/imex/channel-injection-all.yaml 2> /dev/null
-
-timeout -v 5 kubectl delete jobs nickelpie-test 2> /dev/null
-timeout -v 5 kubectl delete computedomain nickelpie-test-compute-domain 2> /dev/null
-
-timeout -v 5 kubectl delete mpijobs.kubeflow.org --all
-
-timeout -v 5 kubectl delete -f demo/specs/imex/nvbandwidth-test-job-1.yaml 2> /dev/null
-timeout -v 5 kubectl delete -f demo/specs/imex/nvbandwidth-test-job-2.yaml 2> /dev/null
-timeout -v 5 kubectl delete -f tests/bats/specs/nvb2.yaml 2> /dev/null
-
+# Attempt cleanup. One goal is to never hang forever, hence the `timeout`
+# wrappers. The following commands are OK to fail -- the `errexit` shell option
+# is deliberately not set here. Repeated invocation of this cleanup script may
+# break circular dependencies.
+timeout -v 10 kubectl delete mpijobs.kubeflow.org --all
+timeout -v 10 kubectl delete jobs --all --namespace=default
+timeout -v 10 kubectl delete jobs --all --namespace=batssuite
+timeout -v 10 kubectl delete pods --all --namespace=default
+timeout -v 10 kubectl delete pods --all --namespace=batssuite
+timeout -v 10 kubectl delete computedomain --all --namespace=default
+timeout -v 10 kubectl delete computedomain --all --namespace=batssuite
+timeout -v 10 kubectl delete resourceclaimtemplates --all --namespace=default
+timeout -v 10 kubectl delete resourceclaimtemplates --all --namespace=batssuite
+timeout -v 10 kubectl delete resourceclaim --all --namespace=default
+timeout -v 10 kubectl delete resourceclaim --all --namespace=batssuite
 timeout -v 2 kubectl delete resourceclaim batssuite-rc-bad-opaque-config --force 2> /dev/null
-
-timeout -v 5 kubectl delete -f tests/bats/specs/rc-shared-gpu.yaml 2> /dev/null
-timeout -v 5 kubectl delete -f tests/bats/specs/gpu-simple-full.yaml 2> /dev/null
-timeout -v 5 kubectl delete -f tests/bats/specs/gpu-anymig.yaml 2> /dev/null
-timeout -v 5 kubectl delete -f tests/bats/specs/gpu-multiple-mig.yaml 2> /dev/null
-timeout -v 5 kubectl delete -f tests/bats/specs/gpu-simple-mig.yaml 2> /dev/null
-timeout -v 5 kubectl delete -f tests/bats/specs/gpu-simple-mig-ts.yaml 2> /dev/null
-
-timeout -v 10 kubectl delete pods -l 'env=batssuite' 2> /dev/null
-
-# Try a little longer cleaning any GPU stress test pods left behind
-timeout -v 30 kubectl delete pods -l 'test=stress-shared' 2> /dev/null
 
 kubectl wait --for=delete pods -l 'env=batssuite,test=stress-shared' \
     --timeout=60s \
     || echo "wait-for-delete failed"
 
-# TODO: make more use of that (currently used for cleanup pods).
-timeout -v 5 kubectl delete --all pods --namespace=batssuite 2> /dev/null
-
-# Delete all RCs and RCTs with the testsuite label.
 kubectl delete resourceclaimtemplate -l env=batssuite
 kubectl delete resourceclaim -l env=batssuite
 
 # Delete any previous remainder of `clean-state-dirs-all-nodes.sh` invocation.
 kubectl delete pods privpod-rm-plugindirs 2> /dev/null
 
-# Make sure to wait till the chart is completely removed
+# Uninstall chart (it was set up only to facilitate resource deletion).
 helm uninstall nvidia-dra-driver-gpu-batssuite --wait -n nvidia-dra-driver-gpu
-
-# Double check that the pods are deleted
 kubectl wait \
     --for=delete pods -A \
     -l app.kubernetes.io/name=nvidia-dra-driver-gpu \
-    --timeout=10s \
+    --timeout=15s \
         || echo "wait-for-delete failed"
 
-# The next `helm install` should freshly install CRDs, and this is one way to
-# try to achieve that. This might time out in case workload wasn't cleaned up
-# properly. If that happens, the next test suite invocation will have failures
-# like "create not allowed while custom resource definition is terminating".
+# The next `helm install` must freshly install CRDs. Delete CRD now to achieve
+# that. This might time out in case workload wasn't cleaned up properly. If that
+# happens, the next test suite invocation will have failures like "create not
+# allowed while custom resource definition is terminating".
 timeout -v 10 kubectl delete crds computedomains.resource.nvidia.com || echo "CRD deletion failed"
 
 # Remove kubelet plugin state directories from all nodes (critical part of
