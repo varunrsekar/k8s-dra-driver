@@ -45,6 +45,10 @@ jobs:
           export TEST_FILTER_TAGS="${TESTFILTER:-fastfeedback}"
           make bats
 
+          # Confirm that `cleanup-from-previous-run.sh` works when started
+          # independently of Makefile-based flow (this is useful test coverage).
+          bash tests/bats/cleanup-from-previous-run.sh
+
   bats-k8s135:
     runs-on: compute-domain-runner-k8s135
     steps:
