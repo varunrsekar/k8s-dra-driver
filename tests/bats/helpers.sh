@@ -50,6 +50,7 @@ iupgrade_wait() {
   # Expect array as third argument.
   local -n ADDITIONAL_INSTALL_ARGS=$3
 
+  log "iupgrade_wait: start"
   timeout -v 120 helm upgrade --install "${TEST_HELM_RELEASE_NAME}" \
     "${REPO}" \
     --version="${VERSION}" \
