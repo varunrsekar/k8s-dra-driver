@@ -136,18 +136,25 @@ endef
 
 default: tests
 
-# Temporary image tag, see
-# https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/908. The `$$$$` below
-# evaluates to $$ in the recipe-executing shell, which resolves to its process
-# ID. With that, concurrent recipe executions use different image tags,
-# preventing rare export errors. Note that `docker tag` is atomic (never fails
-# with "already exists").
+# Use flock to serialize local image builds in GHA CI. See
+# https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/908 and
+# https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/941.
 .PHONY: runner-image
 runner-image:
-	TMP_TAG="$(BATS_IMAGE)-tmp-$$$$" && \
-	docker buildx build . -t $$TMP_TAG -f tests/bats/Dockerfile && \
-	docker tag $$TMP_TAG $(BATS_IMAGE) && \
-	docker rmi $$TMP_TAG
+	@( \
+		set -e; \
+		if [ "$$GITHUB_ACTIONS" = "true" ]; then \
+			echo "GHA CI: acquiring runner image build lock"; \
+			exec 9>/tmp/runner-image-build.lock; \
+			_START=$$(date +%s.%N); \
+			flock 9; \
+			_END=$$(date +%s.%N); \
+			_DUR=$$(awk "BEGIN {printf \"%.4f\", $$_END - $$_START}"); \
+			echo "lock acquired after $$_DUR s"; \
+		fi; \
+		docker buildx build . -t $(BATS_IMAGE) -f tests/bats/Dockerfile; \
+	)
+
 
 # Warning: destructive against currently configured k8s cluster.
 #
