@@ -145,11 +145,11 @@ runner-image:
 		set -e; \
 		if [ "$$GITHUB_ACTIONS" = "true" ]; then \
 			echo "GHA CI: acquiring runner image build lock"; \
-			exec 9>/tmp/runner-image-build.lock; \
+			exec 9>/tmp/gh-runner-locks/runner-image-build.lock; \
 			_START=$$(date +%s.%N); \
 			flock 9; \
 			_END=$$(date +%s.%N); \
-			_DUR=$$(awk "BEGIN {printf \"%.4f\", $$_END - $$_START}"); \
+			_DUR=$$(awk "BEGIN {printf \"%.5f\", $$_END - $$_START}"); \
 			echo "lock acquired after $$_DUR s"; \
 		fi; \
 		docker buildx build . -t $(BATS_IMAGE) -f tests/bats/Dockerfile; \
