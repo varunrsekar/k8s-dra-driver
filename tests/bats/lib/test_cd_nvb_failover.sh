@@ -3,6 +3,12 @@
 set -o nounset
 set -o errexit
 
+# Optional job and compute domain name suffix. Default: empty string.
+# Use this when running multiple copies of this script in parallel
+# against the same Kubernetes cluster (choose a unique suffix for each
+# script invocation).
+NVB_SFX="${NVB_SFX-}"
+
 # Requires MPI Operator, use
 # kubectl create -f https://github.com/kubeflow/mpi-operator/releases/download/v0.7.0/mpi-operator.yaml
 # or newer.
@@ -10,8 +16,8 @@ set -o errexit
 SPECTMPLPATH="$1"
 FAULT_TYPE="$2"
 
-BASE_NAME="test-failover-job"
-CD_NAME="test-failover-cd"
+BASE_NAME="test-failover-job${NVB_SFX}"
+CD_NAME="test-failover-cd${NVB_SFX}"
 
 # External supervisor can inject run ID (for many-repetition-tests), used mainly
 # in output file names.
@@ -68,7 +74,10 @@ log "do: apply -f ${SPECPATH}"
 kubectl apply -f "${SPECPATH}" > /dev/null
 log "done"
 log "do: wait --for=create"
-kubectl wait --for=create job/"${JOB_NAME}" --timeout=70s > /dev/null
+
+# For huge numbers of repetitions, rarely, this was seen to take ~90 seconds,
+# for whichever reason.
+kubectl wait --for=create job/"${JOB_NAME}" --timeout=110s > /dev/null
 log "done"
 CDUID=$(kubectl describe computedomains.resource.nvidia.com "${CD_NAME}" | grep UID | awk '{print $2}')
 
@@ -79,8 +88,8 @@ log "workload pods:"
 kubectl get pods -o wide
 
 
-LAUNCHER_LOG_PATH="${RUNID}_launcher_logs.log"
-LAUNCHER_ERRORS_LOG_PATH="${RUNID}_launcher_errors.log"
+LAUNCHER_LOG_PATH="${RUNID}_launcher_logs${NVB_SFX}.log"
+LAUNCHER_ERRORS_LOG_PATH="${RUNID}_launcher_errors${NVB_SFX}.log"
 echo "" > "${LAUNCHER_LOG_PATH}"
 echo "" > "${LAUNCHER_LOG_PATH}".dup
 
@@ -88,6 +97,11 @@ FAULT_INJECTED=0
 NVB_COMMS_STARTED=0
 LAST_LAUNCHER_RESTART_OUTPUT=""
 STATUS="nil"
+
+# Job creation might have taken a while (1 min or more,
+# in edge cases). Deadline-control the loop below independent
+# of that. 
+SECONDS_AFTER_CREATE_SUCCEEDED="$SECONDS"
 
 while true; do
 
@@ -213,7 +227,7 @@ while true; do
         fi
     fi
 
-    if [ "$SECONDS" -ge $TIMEOUT ]; then
+    if [ "$SECONDS_AFTER_CREATE_SUCCEEDED" -ge $TIMEOUT ]; then
         log "global deadline reached ($TIMEOUT seconds), collect debug data -- and leave control loop"
         kubectl get pods -A -o wide
         kubectl get computedomain
