@@ -118,7 +118,7 @@ while true; do
     # (when they are Running). I have added this very late in the game because I
     # think we're missing CD daemon log around container shutdown; I want to be
     # extra sure.
-    kubectl get pods -n nvidia-dra-driver-gpu | grep "${CD_NAME}" | grep Running | awk '{print $1}' | while read pname; do
+    kubectl get pods -n nvidia-dra-driver-gpu | grep "${CDUID}" | grep Running | awk '{print $1}' | while read pname; do
         _logfname="${RUNID}_cddaemon_follow_${pname}.log"
         if [ -f "$_logfname" ]; then
             continue
