@@ -27,15 +27,15 @@ import (
 
 	"github.com/urfave/cli/v2"
 
+	"k8s.io/component-base/logs"
 	"k8s.io/dynamic-resource-allocation/kubeletplugin"
 	"k8s.io/klog/v2"
-
-	"k8s.io/component-base/logs"
 
 	"sigs.k8s.io/nvidia-dra-driver-gpu/internal/common"
 	"sigs.k8s.io/nvidia-dra-driver-gpu/internal/info"
 	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
 	pkgflags "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/flags"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/metrics"
 )
 
 const (
@@ -48,6 +48,8 @@ type Flags struct {
 	kubeClientConfig pkgflags.KubeClientConfig
 
 	nodeName                      string
+	httpEndpoint                  string
+	metricsPath                   string
 	namespace                     string
 	cdiRoot                       string
 	containerDriverRoot           string
@@ -94,6 +96,19 @@ func newApp() *cli.App {
 			Value:       "default",
 			Destination: &flags.namespace,
 			EnvVars:     []string{"NAMESPACE"},
+		},
+		&cli.StringFlag{
+			Name:        "http-endpoint",
+			Usage:       "The TCP network `address` where the metrics HTTP server will listen (example: `:8080`). The default is the empty string, which means the server is disabled.",
+			Destination: &flags.httpEndpoint,
+			EnvVars:     []string{"HTTP_ENDPOINT"},
+		},
+		&cli.StringFlag{
+			Name:        "metrics-path",
+			Usage:       "The HTTP `path` where Prometheus metrics are exposed, disabled if empty.",
+			Value:       "/metrics",
+			Destination: &flags.metricsPath,
+			EnvVars:     []string{"METRICS_PATH"},
 		},
 		&cli.StringFlag{
 			Name:        "cdi-root",
@@ -238,6 +253,12 @@ func RunPlugin(ctx context.Context, config *Config) error {
 
 	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer cancel()
+
+	if config.flags.httpEndpoint != "" {
+		if err := metrics.RunPrometheusMetricsServer(ctx, config.flags.httpEndpoint, config.flags.metricsPath); err != nil {
+			return fmt.Errorf("setup metrics endpoint: %w", err)
+		}
+	}
 
 	// Create and start the driver
 	driver, err := NewDriver(ctx, config)

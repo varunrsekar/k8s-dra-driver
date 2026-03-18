@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/nvidia-dra-driver-gpu/internal/info"
 	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
 	pkgflags "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/flags"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/metrics"
 )
 
 const (
@@ -47,6 +48,8 @@ type Flags struct {
 
 	nodeName                      string
 	namespace                     string
+	httpEndpoint                  string
+	metricsPath                   string
 	cdiRoot                       string
 	containerDriverRoot           string
 	hostDriverRoot                string
@@ -159,6 +162,19 @@ func newApp() *cli.App {
 			Destination: &flags.additionalXidsToIgnore,
 			EnvVars:     []string{"ADDITIONAL_XIDS_TO_IGNORE"},
 		},
+		&cli.StringFlag{
+			Name:        "http-endpoint",
+			Usage:       "The TCP network `address` where the metrics HTTP server will listen (example: `:8080`). The default is the empty string, which means the server is disabled.",
+			Destination: &flags.httpEndpoint,
+			EnvVars:     []string{"HTTP_ENDPOINT"},
+		},
+		&cli.StringFlag{
+			Name:        "metrics-path",
+			Usage:       "The HTTP `path` where Prometheus metrics are exposed, disabled if empty.",
+			Value:       "/metrics",
+			Destination: &flags.metricsPath,
+			EnvVars:     []string{"METRICS_PATH"},
+		},
 	}
 	cliFlags = append(cliFlags, flags.kubeClientConfig.Flags()...)
 	cliFlags = append(cliFlags, featureGateConfig.Flags()...)
@@ -252,6 +268,12 @@ func RunPlugin(ctx context.Context, config *Config) error {
 
 	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer cancel()
+
+	if config.flags.httpEndpoint != "" {
+		if err := metrics.RunPrometheusMetricsServer(ctx, config.flags.httpEndpoint, config.flags.metricsPath); err != nil {
+			return fmt.Errorf("setup metrics endpoint: %w", err)
+		}
+	}
 
 	// Create and start the driver
 	driver, err := NewDriver(ctx, config)

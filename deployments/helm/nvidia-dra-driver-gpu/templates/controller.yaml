@@ -56,6 +56,15 @@ spec:
         resources:
           {{- toYaml .Values.controller.containers.computeDomain.resources | nindent 10 }}
         env:
+        {{- if .Values.controller.metrics.enabled }}
+        # HTTP_ENDPOINT and METRICS_PATH are used to configure the metrics HTTP server.
+        - name: HTTP_ENDPOINT
+          value: "{{ .Values.controller.metrics.httpEndpoint }}"
+        - name: METRICS_PATH
+          value: "{{ .Values.controller.metrics.metricsPath }}"
+        - name: PPROF_PATH
+          value: "{{ .Values.controller.metrics.profilePath }}"
+        {{- end }}
         # LOG_VERBOSITY is the source of truth for this program's klog
         # configuration. Currently injected via CLI argument (see above) because
         # klog's verbosity for now cannot be sanely set from an env var.

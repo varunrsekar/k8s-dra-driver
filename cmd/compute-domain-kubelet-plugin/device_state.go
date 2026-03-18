@@ -34,6 +34,7 @@ import (
 	configapi "sigs.k8s.io/nvidia-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
 	"sigs.k8s.io/nvidia-dra-driver-gpu/internal/common"
 	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
+	drametrics "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/metrics"
 )
 
 type OpaqueDeviceConfig struct {
@@ -132,6 +133,11 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 	for _, c := range checkpoints {
 		if c == DriverPluginCheckpointFileBasename {
 			klog.Infof("Found previous checkpoint: %s", c)
+			cp, err := state.getCheckpoint()
+			if err != nil {
+				return nil, fmt.Errorf("unable to get checkpoint: %w", err)
+			}
+			syncPreparedDevicesGaugeFromCheckpoint(config.flags.nodeName, cp)
 			return state, nil
 		}
 	}
@@ -288,7 +294,11 @@ func (s *DeviceState) Unprepare(ctx context.Context, claimRef kubeletplugin.Name
 }
 
 func (s *DeviceState) createCheckpoint(cp *Checkpoint) error {
-	return s.checkpointManager.CreateCheckpoint(DriverPluginCheckpointFileBasename, cp)
+	if err := s.checkpointManager.CreateCheckpoint(DriverPluginCheckpointFileBasename, cp); err != nil {
+		return err
+	}
+	syncPreparedDevicesGaugeFromCheckpoint(s.config.flags.nodeName, cp)
+	return nil
 }
 
 func (s *DeviceState) getCheckpoint() (*Checkpoint, error) {
@@ -317,6 +327,7 @@ func (s *DeviceState) updateCheckpoint(mutate func(*Checkpoint)) error {
 		return fmt.Errorf("unable to create checkpoint: %w", err)
 	}
 
+	syncPreparedDevicesGaugeFromCheckpoint(s.config.flags.nodeName, checkpoint)
 	return nil
 }
 
@@ -824,4 +835,35 @@ func (s *DeviceState) validateNoOverlappingPreparedDevices(checkpoint *Checkpoin
 		}
 	}
 	return nil
+}
+
+func syncPreparedDevicesGaugeFromCheckpoint(nodeName string, cp *Checkpoint) {
+	counts := make(map[string]int)
+	if cp == nil {
+		return
+	}
+	lv := cp.ToLatestVersion()
+	if lv != nil && lv.V2 != nil {
+		for _, pc := range lv.V2.PreparedClaims {
+			if pc.CheckpointState != ClaimCheckpointStatePrepareCompleted {
+				continue
+			}
+			for _, g := range pc.PreparedDevices {
+				for _, dev := range g.Devices {
+					if _, ok := counts[dev.Type()]; !ok {
+						counts[dev.Type()] = 0
+					}
+					counts[dev.Type()]++
+				}
+			}
+		}
+	}
+
+	for _, dt := range []string{ComputeDomainChannelType, ComputeDomainDaemonType, UnknownDeviceType} {
+		if count, ok := counts[dt]; !ok {
+			drametrics.SetPreparedDevicesCounts(nodeName, DriverName, dt, 0)
+		} else {
+			drametrics.SetPreparedDevicesCounts(nodeName, DriverName, dt, count)
+		}
+	}
 }

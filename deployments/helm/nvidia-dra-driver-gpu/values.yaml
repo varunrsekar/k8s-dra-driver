@@ -73,6 +73,7 @@ resources:
   computeDomains:
     enabled: true
 
+
 # Feature gates configuration following Kubernetes patterns
 # Configure feature gates as key-value pairs (feature_name: true/false)
 # Examples:
@@ -191,6 +192,11 @@ controller:
     leaseDuration: "15s"
     renewDeadline: "10s"
     retryPeriod: "2s"
+  metrics:
+    enabled: true
+    httpEndpoint: ":8080"
+    metricsPath: "/metrics"
+    profilePath: ""
   priorityClassName: "system-node-critical"
   podAnnotations: {}
   podSecurityContext: {}
@@ -228,6 +234,11 @@ controller:
     enabled: false
 
 kubeletPlugin:
+  metrics:
+    enabled: true
+    gpuHttpEndpoint: ":8080"
+    computeDomainHttpEndpoint: ":8081"
+    metricsPath: "/metrics"
   priorityClassName: "system-node-critical"
   updateStrategy:
     type: RollingUpdate

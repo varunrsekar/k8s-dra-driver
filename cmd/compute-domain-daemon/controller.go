@@ -36,6 +36,8 @@ type DaemonInfoManager interface {
 
 // ManagerConfig holds the configuration for the compute domain manager.
 type ManagerConfig struct {
+	httpEndpoint           string
+	metricsPath            string
 	workQueue              *workqueue.WorkQueue
 	clientsets             flags.ClientSets
 	nodeName               string
@@ -52,6 +54,8 @@ type ManagerConfig struct {
 
 // ControllerConfig holds the configuration for the controller.
 type ControllerConfig struct {
+	httpEndpoint           string
+	metricsPath            string
 	clientsets             flags.ClientSets
 	nodeName               string
 	computeDomainUUID      string
@@ -77,6 +81,8 @@ func NewController(config *ControllerConfig) (*Controller, error) {
 
 	mc := &ManagerConfig{
 		workQueue:              workQueue,
+		httpEndpoint:           config.httpEndpoint,
+		metricsPath:            config.metricsPath,
 		clientsets:             config.clientsets,
 		nodeName:               config.nodeName,
 		computeDomainUUID:      config.computeDomainUUID,

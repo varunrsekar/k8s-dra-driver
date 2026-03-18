@@ -28,6 +28,7 @@ import (
 	"k8s.io/klog/v2"
 
 	nvapi "sigs.k8s.io/nvidia-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/metrics"
 	nvinformers "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/informers/externalversions"
 	nvlisters "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/listers/resource/v1beta1"
 )
@@ -207,6 +208,8 @@ func (m *ComputeDomainManager) UpdateStatus(ctx context.Context, cd *nvapi.Compu
 	// Recalculate global status based on current state
 	cd.Status.Status = m.calculateGlobalStatus(cd)
 
+	metrics.ObserveComputeDomainStatus(string(cd.UID), cd.Status.Status)
+
 	updatedCD, err := m.config.clientsets.Nvidia.ResourceV1beta1().ComputeDomains(cd.Namespace).UpdateStatus(ctx, cd, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, err
@@ -344,6 +347,7 @@ func (m *ComputeDomainManager) onAddOrUpdate(ctx context.Context, obj any) error
 			return fmt.Errorf("error removing finalizer: %w", err)
 		}
 
+		metrics.ForgetComputeDomain(string(cd.UID))
 		return nil
 	}
 
