@@ -142,7 +142,7 @@ func NewDriver(ctx context.Context, config *Config) (*driver, error) {
 	driver.healthcheck = healthcheck
 
 	if featuregates.Enabled(featuregates.NVMLDeviceHealthCheck) {
-		deviceHealthMonitor, err := newNvmlDeviceHealthMonitor(config, state.allocatable, state.nvdevlib)
+		deviceHealthMonitor, err := newNvmlDeviceHealthMonitor(config, state.perGPUAllocatable, state.nvdevlib)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create NVML device health monitor: %w", err)
 		}
@@ -190,8 +190,8 @@ func (d *driver) generateSplitResourceSlices(nodeName string) resourceslice.Driv
 	var allCounterSets []resourceapi.CounterSet
 
 	// Iterate through `perGPUAllocatable` map in predictable order
-	for _, minor := range slices.Sorted(maps.Keys(d.state.perGPUAllocatable)) {
-		allocatable := d.state.perGPUAllocatable[minor]
+	for _, pciBusID := range slices.Sorted(maps.Keys(d.state.perGPUAllocatable.allocatablesMap)) {
+		allocatable := d.state.perGPUAllocatable.allocatablesMap[pciBusID]
 		var deviceSlice resourceslice.Slice
 
 		// Stable sort order by devicename
@@ -232,8 +232,8 @@ func (d *driver) generateCombinedResourceSlices(nodeName string) resourceslice.D
 
 	// Iterate through `perGPUAllocatable` map in predictable order so that the
 	// slices get published in predictable order.
-	for _, minor := range slices.Sorted(maps.Keys(d.state.perGPUAllocatable)) {
-		allocatable := d.state.perGPUAllocatable[minor]
+	for _, pciBusID := range slices.Sorted(maps.Keys(d.state.perGPUAllocatable.allocatablesMap)) {
+		allocatable := d.state.perGPUAllocatable.allocatablesMap[pciBusID]
 		var slice resourceslice.Slice
 		countersets := []resourceapi.CounterSet{}
 
@@ -419,9 +419,11 @@ func (d *driver) publishResources(ctx context.Context, config *Config) error {
 
 	// Enumerate the set of GPU, MIG and VFIO devices and publish them
 	var resourceSlice resourceslice.Slice
-	for _, device := range d.state.allocatable {
-		klog.V(4).Infof("About to announce device %s", device.GetDevice().Name)
-		resourceSlice.Devices = append(resourceSlice.Devices, device.GetDevice())
+	for _, devices := range d.state.perGPUAllocatable.allocatablesMap {
+		for _, device := range devices {
+			klog.V(4).Infof("About to announce device %s", device.GetDevice().Name)
+			resourceSlice.Devices = append(resourceSlice.Devices, device.GetDevice())
+		}
 	}
 
 	resources := resourceslice.DriverResources{
@@ -467,13 +469,15 @@ func (d *driver) deviceHealthEvents(ctx context.Context, nodeName string) {
 			// There is no remediation loop right now meaning if the unhealthy device is fixed,
 			// driver needs to be restarted to publish the ResourceSlice with all devices
 			var resourceSlice resourceslice.Slice
-			for _, dev := range d.state.allocatable {
-				uuid := dev.UUID()
-				if dev.IsHealthy() {
-					klog.V(6).Infof("Device: %s is healthy, added to ResoureSlice", uuid)
-					resourceSlice.Devices = append(resourceSlice.Devices, dev.GetDevice())
-				} else {
-					klog.Warningf("Device: %s is unhealthy, will be removed from ResoureSlice", uuid)
+			for _, devices := range d.state.perGPUAllocatable.allocatablesMap {
+				for _, dev := range devices {
+					uuid := dev.UUID()
+					if dev.IsHealthy() {
+						klog.V(6).Infof("Device: %s is healthy, added to ResoureSlice", uuid)
+						resourceSlice.Devices = append(resourceSlice.Devices, dev.GetDevice())
+					} else {
+						klog.Warningf("Device: %s is unhealthy, will be removed from ResoureSlice", uuid)
+					}
 				}
 			}
 

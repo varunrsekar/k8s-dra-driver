@@ -108,7 +108,7 @@ func (c *PreparedComputeDomainChannel2503RC2) ToV1() *PreparedComputeDomainChann
 			Requests:     c.Device.RequestNames,
 			PoolName:     c.Device.PoolName,
 			DeviceName:   c.Device.DeviceName,
-			CDIDeviceIDs: c.Device.CDIDeviceIDs,
+			CDIDeviceIDs: c.Device.CdiDeviceIds,
 		}
 	}
 	return channel
@@ -125,7 +125,7 @@ func (d *PreparedComputeDomainDaemon2503RC2) ToV1() *PreparedComputeDomainDaemon
 			Requests:     d.Device.RequestNames,
 			PoolName:     d.Device.PoolName,
 			DeviceName:   d.Device.DeviceName,
-			CDIDeviceIDs: d.Device.CDIDeviceIDs,
+			CDIDeviceIDs: d.Device.CdiDeviceIds,
 		}
 	}
 	return daemon

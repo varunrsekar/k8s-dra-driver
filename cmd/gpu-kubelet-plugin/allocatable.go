@@ -17,9 +17,12 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
+	"maps"
 	"slices"
 
 	resourceapi "k8s.io/api/resource/v1"
+	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
 )
@@ -33,7 +36,13 @@ import (
 // device inside that pool').
 type DeviceName = string
 
+// Represents the PCI address (BDF format) of a physical GPU device.
+type PCIBusID = string
+
 type AllocatableDevices map[DeviceName]*AllocatableDevice
+type PerGPUAllocatableDevices struct {
+	allocatablesMap map[PCIBusID]AllocatableDevices
+}
 
 // AllocatableDevice represents an individual device that can be allocated.
 type AllocatableDevice struct {
@@ -42,8 +51,6 @@ type AllocatableDevice struct {
 	MigStatic  *MigDeviceInfo
 	Vfio       *VfioDeviceInfo
 }
-
-type AllocatableDeviceList []*AllocatableDevice
 
 func (d AllocatableDevice) Type() string {
 	if d.Gpu != nil {
@@ -124,45 +131,38 @@ func (d AllocatableDevice) UUID() string {
 	panic("unexpected type for AllocatableDevice")
 }
 
-func (d AllocatableDevices) getDevicesByGPUPCIBusID(pcieBusID string) AllocatableDeviceList {
-	var devices AllocatableDeviceList
-	for _, device := range d {
-		switch device.Type() {
-		case GpuDeviceType:
-			if device.Gpu.pcieBusID == pcieBusID {
-				devices = append(devices, device)
-			}
-		case MigStaticDeviceType:
-			if device.MigStatic.parent.pcieBusID == pcieBusID {
-				devices = append(devices, device)
-			}
-		case MigDynamicDeviceType:
-			if device.MigDynamic.Parent.pcieBusID == pcieBusID {
-				devices = append(devices, device)
-			}
-		case VfioDeviceType:
-			if device.Vfio.pcieBusID == pcieBusID {
-				devices = append(devices, device)
-			}
-		}
+func (d *AllocatableDevice) GetGPUPCIBusID() string {
+	switch d.Type() {
+	case GpuDeviceType:
+		return d.Gpu.pciBusID
+	case MigStaticDeviceType:
+		return d.MigStatic.parent.pciBusID
+	case MigDynamicDeviceType:
+		return d.MigDynamic.Parent.pciBusID
+	case VfioDeviceType:
+		return d.Vfio.PciBusID
 	}
-	return devices
+	panic("unexpected type for AllocatableDevice")
 }
 
-func (d AllocatableDevices) GetGPUByPCIeBusID(pcieBusID string) *AllocatableDevice {
-	for _, device := range d {
-		if device.Type() != GpuDeviceType {
-			continue
-		}
-		if device.Gpu.pcieBusID == pcieBusID {
-			return device
-		}
+func (d *AllocatableDevice) IsHealthy() bool {
+	switch d.Type() {
+	case GpuDeviceType:
+		return d.Gpu.health == Healthy
+	case MigStaticDeviceType:
+		// TODO: review -- what about the parent?
+		return d.MigStatic.health == Healthy
+	case MigDynamicDeviceType:
+		// TODOMIG: For now, pretend health -- this device maybe hasn't
+		// manifested yet. Or has it? We could adopt the health status of the
+		// parent, but that's also not meaningful I think.
+		return true
 	}
-	return nil
+	panic("unexpected type for AllocatableDevice")
 }
 
-func (d AllocatableDevices) GetGPUs() AllocatableDeviceList {
-	var devices AllocatableDeviceList
+func (d AllocatableDevices) GetGPUs() []*AllocatableDevice {
+	var devices []*AllocatableDevice
 	for _, device := range d {
 		if device.Type() == GpuDeviceType {
 			devices = append(devices, device)
@@ -171,8 +171,8 @@ func (d AllocatableDevices) GetGPUs() AllocatableDeviceList {
 	return devices
 }
 
-func (d AllocatableDevices) GetVfioDevices() AllocatableDeviceList {
-	var devices AllocatableDeviceList
+func (d AllocatableDevices) GetVfioDevices() []*AllocatableDevice {
+	var devices []*AllocatableDevice
 	for _, device := range d {
 		if device.Type() == VfioDeviceType {
 			devices = append(devices, device)
@@ -232,16 +232,70 @@ func (d AllocatableDevices) UUIDs() []string {
 	return uuids
 }
 
+func (d *PerGPUAllocatableDevices) GetGPUDeviceByPCIBusID(pciBusID string) *AllocatableDevice {
+	if devices, ok := d.allocatablesMap[pciBusID]; ok {
+		for _, device := range devices {
+			if device.Type() != GpuDeviceType {
+				continue
+			}
+			return device
+		}
+	}
+	return nil
+}
+
+func (d *PerGPUAllocatableDevices) AddGPUAllocatables(pciBusID string, allocatables AllocatableDevices) error {
+	if allocatables == nil {
+		return fmt.Errorf("allocatables is nil")
+	}
+	if _, ok := d.allocatablesMap[pciBusID]; !ok {
+		d.allocatablesMap[pciBusID] = make(AllocatableDevices)
+	}
+	klog.Infof("Adding allocatables for PCI bus ID: %s", pciBusID)
+	d.allocatablesMap[pciBusID] = allocatables
+	return nil
+}
+
+func (d *PerGPUAllocatableDevices) AddAllocatableDevice(allocatable *AllocatableDevice) error {
+	if allocatable == nil {
+		return fmt.Errorf("allocatable is nil")
+	}
+	pciBusID := allocatable.GetGPUPCIBusID()
+	if _, ok := d.allocatablesMap[pciBusID]; !ok {
+		d.allocatablesMap[pciBusID] = make(AllocatableDevices)
+	}
+	klog.Infof("Adding allocatable device %q for PCI bus ID: %s", allocatable.CanonicalName(), pciBusID)
+	d.allocatablesMap[pciBusID][allocatable.CanonicalName()] = allocatable
+	return nil
+}
+
+func (d *PerGPUAllocatableDevices) GetAllocatableDevice(deviceName DeviceName) *AllocatableDevice {
+	for _, devices := range d.allocatablesMap {
+		if device, ok := devices[deviceName]; ok {
+			return device
+		}
+	}
+	return nil
+}
+
+func (d *PerGPUAllocatableDevices) GetAllDevices() AllocatableDevices {
+	all := make(AllocatableDevices)
+	for _, devices := range d.allocatablesMap {
+		maps.Copy(all, devices)
+	}
+	return all
+}
+
 // TODO: This needs a code comment, clarifying the complexity across device
 // types. This function is tied to PassthroughSuppert and hence for now
 // guaranteed to not be exercised when DynamicMIG is enabled.
-func (d AllocatableDevices) RemoveSiblingDevices(device *AllocatableDevice) {
+func (d *PerGPUAllocatableDevices) RemoveSiblingDevices(device *AllocatableDevice) {
 	var pciBusID string
 	switch device.Type() {
 	case GpuDeviceType:
-		pciBusID = device.Gpu.pcieBusID
+		pciBusID = device.Gpu.pciBusID
 	case VfioDeviceType:
-		pciBusID = device.Vfio.pcieBusID
+		pciBusID = device.Vfio.PciBusID
 	case MigStaticDeviceType:
 		// TODO: Implement once/if static MIG is supported in the context of
 		// PassthroughSupport.
@@ -252,16 +306,15 @@ func (d AllocatableDevices) RemoveSiblingDevices(device *AllocatableDevice) {
 		return
 	}
 
-	siblings := d.getDevicesByGPUPCIBusID(pciBusID)
-	for _, sibling := range siblings {
+	for _, sibling := range d.allocatablesMap[pciBusID] {
 		if sibling.Type() == device.Type() {
 			continue
 		}
 		switch sibling.Type() {
 		case GpuDeviceType:
-			delete(d, sibling.Gpu.CanonicalName())
+			delete(d.allocatablesMap[pciBusID], sibling.Gpu.CanonicalName())
 		case VfioDeviceType:
-			delete(d, sibling.Vfio.CanonicalName())
+			delete(d.allocatablesMap[pciBusID], sibling.Vfio.CanonicalName())
 		case MigStaticDeviceType:
 			// TODO
 			continue
@@ -270,20 +323,4 @@ func (d AllocatableDevices) RemoveSiblingDevices(device *AllocatableDevice) {
 			continue
 		}
 	}
-}
-
-func (d *AllocatableDevice) IsHealthy() bool {
-	switch d.Type() {
-	case GpuDeviceType:
-		return d.Gpu.health == Healthy
-	case MigStaticDeviceType:
-		// TODO: review -- what about the parent?
-		return d.MigStatic.health == Healthy
-	case MigDynamicDeviceType:
-		// TODOMIG: For now, pretend health -- this device maybe hasn't
-		// manifested yet. Or has it? We could adopt the health status of the
-		// parent, but that's also not meaningful I think.
-		return true
-	}
-	panic("unexpected type for AllocatableDevice")
 }

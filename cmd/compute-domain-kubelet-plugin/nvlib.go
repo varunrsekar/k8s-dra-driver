@@ -101,7 +101,10 @@ func newDeviceLib(driverRoot root) (*deviceLib, error) {
 }
 
 func (l deviceLib) init() error {
-	ret := l.nvmllib.Init()
+	// Its possible there are no GPUs available in NVML.
+	// (Eg: All gpus prepared in passthrough-mode)
+	// We use the INIT_FLAG_NO_GPUS flag to avoid failing if there are no GPUs.
+	ret := l.nvmllib.InitWithFlags(nvml.INIT_FLAG_NO_GPUS)
 	if ret != nvml.SUCCESS {
 		return fmt.Errorf("error initializing NVML: %v", ret)
 	}

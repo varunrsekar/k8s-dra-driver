@@ -85,10 +85,14 @@ validate_and_exit_on_success () {
         # Run with clean environment (only LD_PRELOAD; nvidia-smi has only this
         # dependency). Emit message before invocation (nvidia-smi may be slow or
         # hang).
-        echo "invoke: env -i LD_PRELOAD=${NV_LIB_PATH} ${NV_PATH}"
+        # At this point, we only want to check if the nvidia driver is installed
+        # correctly. All GPUs on the node may be on the vfio-pci driver
+        # (prepared in passthrough-mode for KubeVirt/Kata workloads etc). So we
+        # run 'nvidia-smi --version' to avoid GPU initialization.
+        echo "invoke: env -i LD_PRELOAD=${NV_LIB_PATH} ${NV_PATH} --version"
 
         # Always show stderr, maybe hide or filter stdout?
-        env -i LD_PRELOAD="${NV_LIB_PATH}" "${NV_PATH}"
+        env -i LD_PRELOAD="${NV_LIB_PATH}" "${NV_PATH}" --version
         RCODE="$?"
 
         # For checking GPU driver health: rely on nvidia-smi's exit code. Rely

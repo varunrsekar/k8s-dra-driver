@@ -321,6 +321,8 @@ spec:
           path: {{ .Values.nvidiaDriverRoot }}
           type: DirectoryOrCreate
       {{- if and .Values.featureGates (and (hasKey .Values.featureGates "PassthroughSupport") .Values.featureGates.PassthroughSupport) }}
+      # This is the root filesystem of the host. This is used to execute the required
+      # system commands on the host. For example, to check if a gpu's device node is free.
       - name: host-root
         hostPath:
           path: /

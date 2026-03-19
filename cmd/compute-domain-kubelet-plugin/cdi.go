@@ -141,7 +141,10 @@ func NewCDIHandler(opts ...cdiOption) (*CDIHandler, error) {
 
 func (cdi *CDIHandler) CreateStandardDeviceSpecFile(allocatable AllocatableDevices) error {
 	// Initialize NVML in order to get the device edits.
-	if r := cdi.nvml.Init(); r != nvml.SUCCESS {
+	// Its possible there are no GPUs available in NVML.
+	// (Eg: All gpus prepared in passthrough-mode)
+	// We use the INIT_FLAG_NO_GPUS flag to avoid failing if there are no GPUs.
+	if r := cdi.nvml.InitWithFlags(nvml.INIT_FLAG_NO_GPUS); r != nvml.SUCCESS {
 		return fmt.Errorf("failed to initialize NVML: %v", r)
 	}
 	defer func() {
