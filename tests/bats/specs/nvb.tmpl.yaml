@@ -2,17 +2,17 @@
 apiVersion: resource.nvidia.com/v1beta1
 kind: ComputeDomain
 metadata:
-  name: test-failover-cd
+  name: test-failover-cd${NVB_SFX}
 spec:
   numNodes: ${NVB_NUM_NODES}
   channel:
     resourceClaimTemplate:
-      name: test-failover-rct-channel
+      name: test-failover-rct-channel${NVB_SFX}
 ---
 apiVersion: kubeflow.org/v2beta1
 kind: MPIJob
 metadata:
-  name: test-failover-job
+  name: test-failover-job${NVB_SFX}
 spec:
   slotsPerWorker: ${NVB_GPUS_PER_NODE}
   launcherCreationPolicy: WaitForWorkersReady
@@ -81,4 +81,4 @@ spec:
               - name: test-failover-rc-channel
           resourceClaims:
           - name: test-failover-rc-channel
-            resourceClaimTemplateName: test-failover-rct-channel
+            resourceClaimTemplateName: test-failover-rct-channel${NVB_SFX}
