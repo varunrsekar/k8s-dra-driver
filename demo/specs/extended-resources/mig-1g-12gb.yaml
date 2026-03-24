@@ -14,7 +14,8 @@
 #
 # Prerequisites:
 #   - Kubernetes >= 1.35 with feature gate DRAExtendedResource=true
-#   - NVIDIA DRA driver installed
+#   - NVIDIA device plugin for Kubernetes is not installed or disabled
+#   - NVIDIA DRA Driver for GPUs installed via Helm
 #   - GPU(s) with MIG mode enabled and 1g.12gb instances created
 #
 # MIG partition config (mig-partition.yaml):
