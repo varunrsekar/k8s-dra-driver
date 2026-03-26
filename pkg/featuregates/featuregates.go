@@ -26,7 +26,7 @@ import (
 	"k8s.io/component-base/featuregate"
 	logsapi "k8s.io/component-base/logs/api/v1"
 
-	"github.com/NVIDIA/k8s-dra-driver-gpu/internal/info"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/internal/info"
 )
 
 const (

@@ -19,7 +19,7 @@ package v1beta1
 import (
 	"fmt"
 
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/featuregates"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
 )
 
 // Validate ensures that GpuSharingStrategy has a valid set of values.

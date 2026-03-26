@@ -133,7 +133,7 @@ LABEL release="N/A"
 LABEL summary="NVIDIA DRA Driver for GPUs"
 LABEL description="NVIDIA DRA Driver for GPUs"
 LABEL org.opencontainers.image.description="NVIDIA DRA Driver for GPUs"
-LABEL org.opencontainers.image.source="https://github.com/NVIDIA/k8s-dra-driver-gpu"
+LABEL org.opencontainers.image.source="https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu"
 
 # Add top-level license (AL2) file into the container image
 COPY LICENSE /

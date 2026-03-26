@@ -33,8 +33,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 
-	nvapi "github.com/NVIDIA/k8s-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/flags"
+	nvapi "sigs.k8s.io/nvidia-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/flags"
 )
 
 const (

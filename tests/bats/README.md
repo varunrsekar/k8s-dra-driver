@@ -4,7 +4,7 @@
 
 General instructions:
 
-1) Review the `TEST_*` variables [at around the top of the Makefile](https://github.com/NVIDIA/k8s-dra-driver-gpu/blob/main/tests/bats/Makefile#L22). Most of them can be overridden via environment.
+1) Review the `TEST_*` variables [at around the top of the Makefile](https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/blob/main/tests/bats/Makefile#L22). Most of them can be overridden via environment.
 Use this configuration interface to customize your test run.
 
 2) Invoke `make bats` in the root of the repository.

@@ -22,7 +22,7 @@ setup_file () {
   assert_output --partial "About to announce device gpu-0-mig-1g"
 
   # Wait until resource slices are announced. See
-  # https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/902 -- Maybe we should
+  # https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/902 -- Maybe we should
   # fail the liveness probe until the first resource slice update is known to
   # have been performed? That may be too invasive. In any case, the resource
   # slice update controller running in the DRA plugin helper might enable us to

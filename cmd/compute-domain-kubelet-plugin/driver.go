@@ -32,8 +32,8 @@ import (
 	"k8s.io/dynamic-resource-allocation/resourceslice"
 	"k8s.io/klog/v2"
 
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/flock"
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/workqueue"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/flock"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/workqueue"
 )
 
 const (

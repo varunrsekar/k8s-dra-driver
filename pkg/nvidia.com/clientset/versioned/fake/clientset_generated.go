@@ -19,9 +19,9 @@
 package fake
 
 import (
-	clientset "github.com/NVIDIA/k8s-dra-driver-gpu/pkg/nvidia.com/clientset/versioned"
-	resourcev1beta1 "github.com/NVIDIA/k8s-dra-driver-gpu/pkg/nvidia.com/clientset/versioned/typed/resource/v1beta1"
-	fakeresourcev1beta1 "github.com/NVIDIA/k8s-dra-driver-gpu/pkg/nvidia.com/clientset/versioned/typed/resource/v1beta1/fake"
+	clientset "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/clientset/versioned"
+	resourcev1beta1 "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/clientset/versioned/typed/resource/v1beta1"
+	fakeresourcev1beta1 "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/clientset/versioned/typed/resource/v1beta1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"

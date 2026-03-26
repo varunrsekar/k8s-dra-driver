@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/dump"
 	"k8s.io/klog/v2"
 
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/featuregates"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
 )
 
 func pflagToCLI(flag *pflag.Flag, category string) cli.Flag {

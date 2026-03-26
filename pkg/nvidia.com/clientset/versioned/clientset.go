@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"net/http"
 
-	resourcev1beta1 "github.com/NVIDIA/k8s-dra-driver-gpu/pkg/nvidia.com/clientset/versioned/typed/resource/v1beta1"
+	resourcev1beta1 "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/clientset/versioned/typed/resource/v1beta1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"

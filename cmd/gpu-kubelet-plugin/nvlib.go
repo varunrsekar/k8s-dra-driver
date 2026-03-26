@@ -35,7 +35,7 @@ import (
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"k8s.io/dynamic-resource-allocation/deviceattribute"
 
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/featuregates"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
 )
 
 type deviceLib struct {

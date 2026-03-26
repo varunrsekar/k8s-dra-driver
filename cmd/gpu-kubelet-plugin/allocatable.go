@@ -21,7 +21,7 @@ import (
 
 	resourceapi "k8s.io/api/resource/v1"
 
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/featuregates"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
 )
 
 // The device name is the canonical device name announced by us a DRA

@@ -31,10 +31,10 @@ import (
 	cdiapi "tags.cncf.io/container-device-interface/pkg/cdi"
 	cdispec "tags.cncf.io/container-device-interface/specs-go"
 
-	nvapi "github.com/NVIDIA/k8s-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
-	"github.com/NVIDIA/k8s-dra-driver-gpu/internal/common"
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/featuregates"
-	nvinformers "github.com/NVIDIA/k8s-dra-driver-gpu/pkg/nvidia.com/informers/externalversions"
+	nvapi "sigs.k8s.io/nvidia-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/internal/common"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
+	nvinformers "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/informers/externalversions"
 )
 
 const (

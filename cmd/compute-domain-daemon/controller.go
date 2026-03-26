@@ -20,10 +20,10 @@ import (
 	"context"
 	"fmt"
 
-	nvapi "github.com/NVIDIA/k8s-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/featuregates"
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/flags"
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/workqueue"
+	nvapi "sigs.k8s.io/nvidia-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/flags"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/workqueue"
 )
 
 // DaemonInfoManager is an interface for managing daemon info updates.

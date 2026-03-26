@@ -32,10 +32,10 @@ import (
 
 	"k8s.io/component-base/logs"
 
-	"github.com/NVIDIA/k8s-dra-driver-gpu/internal/common"
-	"github.com/NVIDIA/k8s-dra-driver-gpu/internal/info"
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/featuregates"
-	pkgflags "github.com/NVIDIA/k8s-dra-driver-gpu/pkg/flags"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/internal/common"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/internal/info"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
+	pkgflags "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/flags"
 )
 
 const (

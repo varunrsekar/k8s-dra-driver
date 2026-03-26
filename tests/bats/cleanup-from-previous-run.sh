@@ -19,7 +19,7 @@
 set -o nounset
 set -o pipefail
 
-CRD_URL="https://raw.githubusercontent.com/NVIDIA/k8s-dra-driver-gpu/main/deployments/helm/nvidia-dra-driver-gpu/crds/resource.nvidia.com_computedomains.yaml"
+CRD_URL="https://raw.githubusercontent.com/kubernetes-sigs/nvidia-dra-driver-gpu/main/deployments/helm/nvidia-dra-driver-gpu/crds/resource.nvidia.com_computedomains.yaml"
 
 
 THIS_DIR_PATH=$(dirname "$(realpath $0)")

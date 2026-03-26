@@ -137,8 +137,8 @@ endef
 default: tests
 
 # Use flock to serialize local image builds in GHA CI. See
-# https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/908 and
-# https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/941.
+# https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/908 and
+# https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/941.
 .PHONY: runner-image
 runner-image:
 	@( \

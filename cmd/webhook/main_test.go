@@ -37,8 +37,8 @@ import (
 	utilversion "k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/utils/ptr"
 
-	configapi "github.com/NVIDIA/k8s-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/featuregates"
+	configapi "sigs.k8s.io/nvidia-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
 )
 
 func TestReadyEndpoint(t *testing.T) {

@@ -19,7 +19,7 @@
 package fake
 
 import (
-	v1beta1 "github.com/NVIDIA/k8s-dra-driver-gpu/pkg/nvidia.com/clientset/versioned/typed/resource/v1beta1"
+	v1beta1 "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/clientset/versioned/typed/resource/v1beta1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )

@@ -28,7 +28,7 @@ teardown() {
   # file. It makes sense to do this before trying to tear down the MIG devices
   # created by a particular test. This may help addressing a rare scenario of
   # "in use by another client", see
-  # https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/907 (it's conceivable
+  # https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/907 (it's conceivable
   # that the kubelet plugin's nvml-based interaction with the GPU conflicted
   # with the teardown).
   helm uninstall -n nvidia-dra-driver-gpu nvidia-dra-driver-gpu-batssuite --wait || true
@@ -144,7 +144,7 @@ bats::on_failure() {
   echo "devices announced (after): ${dev_count_after}"
 
   # The following check detects the bug described in
-  # https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/719
+  # https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/719
   if [ $dev_count_before != $dev_count_after ]; then
     echo "the number of announced devices must stay the same"
     return 1

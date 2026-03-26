@@ -68,7 +68,7 @@ setup_suite () {
     export HELM_REPOSITORY_CONFIG=${HELM_CACHE_HOME}/repo.cfg
 
     # Prepare CRD upgrade URL.
-    export CRD_URL_PFX="https://raw.githubusercontent.com/NVIDIA/k8s-dra-driver-gpu/"
+    export CRD_URL_PFX="https://raw.githubusercontent.com/kubernetes-sigs/nvidia-dra-driver-gpu/"
     export CRD_URL_SFX="/deployments/helm/nvidia-dra-driver-gpu/crds/resource.nvidia.com_computedomains.yaml"
     export CRD_UPGRADE_URL="${CRD_URL_PFX}${TEST_CRD_UPGRADE_TARGET_GIT_REF}${CRD_URL_SFX}"
 

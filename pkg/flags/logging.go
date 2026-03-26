@@ -25,7 +25,7 @@ import (
 
 	_ "k8s.io/component-base/logs/json/register" // for JSON log output support
 
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/featuregates"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
 )
 
 type LoggingConfig struct {

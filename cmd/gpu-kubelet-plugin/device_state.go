@@ -34,9 +34,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	configapi "github.com/NVIDIA/k8s-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/featuregates"
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/flock"
+	configapi "sigs.k8s.io/nvidia-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/flock"
 )
 
 type OpaqueDeviceConfig struct {

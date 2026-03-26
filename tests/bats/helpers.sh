@@ -247,7 +247,7 @@ get_device_attrs_from_any_gpu_slice() {
 
   log "wrote resource slice content to: ${spath}"
 
-  # Log contents, for https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/902
+  # Log contents, for https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/902
   cat "${spath}" >&2
 
   # For the first device in that slice (of given type), extract the set of

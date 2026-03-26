@@ -19,7 +19,7 @@
 package v1beta1
 
 import (
-	internalinterfaces "github.com/NVIDIA/k8s-dra-driver-gpu/pkg/nvidia.com/informers/externalversions/internalinterfaces"
+	internalinterfaces "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to all the informers in this group version.
