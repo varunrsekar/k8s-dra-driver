@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-DRIVER_NAME := k8s-dra-driver-gpu
-HELM_DRIVER_NAME := nvidia-dra-driver-gpu
-MODULE := github.com/NVIDIA/$(DRIVER_NAME)
+DRIVER_NAME := nvidia-dra-driver-gpu
+MODULE := sigs.k8s.io/$(DRIVER_NAME)
 
-REGISTRY ?= nvcr.io/nvidia
+REGISTRY ?= registry.k8s.io/nvidia
 
 VERSION  ?= v26.4.0-dev
 

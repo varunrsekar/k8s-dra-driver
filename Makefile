@@ -109,9 +109,9 @@ generate-crds: generate-deepcopy .remove-crds
 			paths=$(CURDIR)/$${dir} \
 			output:crd:dir=$(CURDIR)/deployments/helm/tmp_crds; \
 	done
-	mkdir -p $(CURDIR)/deployments/helm/$(HELM_DRIVER_NAME)/crds
+	mkdir -p $(CURDIR)/deployments/helm/$(DRIVER_N)/crds
 	cp -R $(CURDIR)/deployments/helm/tmp_crds/* \
-		$(CURDIR)/deployments/helm/$(HELM_DRIVER_NAME)/crds
+		$(CURDIR)/deployments/helm/$(DRIVER_NAME)/crds
 	rm -rf $(CURDIR)/deployments/helm/tmp_crds
 
 
@@ -166,7 +166,7 @@ generate-clientset: .remove-clientset
 	rm -rf $(CURDIR)/pkg/tmp_clientset
 
 .remove-crds:
-	rm -rf $(CURDIR)/deployments/helm/$(HELM_DRIVER_NAME)/crds
+	rm -rf $(CURDIR)/deployments/helm/$(DRIVER_NAME)/crds
 
 .remove-deepcopy:
 	for dir in $(DEEPCOPY_SOURCES); do \
@@ -236,4 +236,4 @@ bats-gpu:
 .PHONY: image-build-and-copy-to-nodes
 image-build-and-copy-to-nodes:
 	make -f deployments/container/Makefile build
-	bash hack/copy-image-to-k8s-nodes.sh nvcr.io/nvidia/k8s-dra-driver-gpu:$(VERSION)
+	bash hack/copy-image-to-k8s-nodes.sh registry.k8s.io/nvidia/nvidia-dra-driver-gpu:$(VERSION)

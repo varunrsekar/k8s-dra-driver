@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Default values for k8s-dra-driver-gpu.
+# Default values for nvidia-dra-driver-gpu.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
@@ -50,7 +50,7 @@ resourceApiVersion: ""
 
 imagePullSecrets: []
 image:
-  repository: nvcr.io/nvidia/k8s-dra-driver-gpu
+  repository: registry.k8s.io/nvidia/nvidia-dra-driver-gpu
   pullPolicy: IfNotPresent
   # Note: an empty string is translated to the `appVersion` string from
   # the Helm chart YAML (effectively implementing the default value to be
