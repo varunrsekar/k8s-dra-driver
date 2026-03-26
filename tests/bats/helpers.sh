@@ -39,7 +39,7 @@ export NOARGS=()
 # 3rd arg: array with additional args (provide `NOARGS` if none)
 iupgrade_wait() {
   # E.g. `nvidia/nvidia-dra-driver-gpu` or
-  # `oci://ghcr.io/nvidia/k8s-dra-driver-gpu`
+  # `oci://gcr.io/k8s-staging-nvidia/charts/nvidia-dra-driver-gpu`
   local REPO="$1"
 
   # E.g. `25.3.1` or `25.8.0-dev-f2eaddd6-chart`

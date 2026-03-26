@@ -31,7 +31,8 @@ CMDS := $(patsubst ./cmd/%/,%,$(sort $(dir $(wildcard ./cmd/*/))))
 CMD_TARGETS := $(patsubst %,cmd-%, $(CMDS))
 
 CHECK_TARGETS := golangci-lint check-generate
-MAKE_TARGETS := binaries build build-image check fmt lint-internal test examples cmds coverage generate vendor check-modules $(CHECK_TARGETS)
+
+MAKE_TARGETS := binaries build build-image check fmt lint-internal test examples cmds coverage generate vendor check-modules helm-lint helm-package $(CHECK_TARGETS)
 
 TARGETS := $(MAKE_TARGETS) $(CMD_TARGETS)
 
@@ -83,6 +84,14 @@ goimports:
 golangci-lint:
 	golangci-lint run ./...
 
+lint-internal: golangci-lint
+
+helm-lint:
+	helm lint deployments/helm/nvidia-dra-driver-gpu
+
+helm-package:
+	helm package deployments/helm/nvidia-dra-driver-gpu
+
 vendor:
 	go mod tidy
 	go mod vendor
@@ -109,12 +118,13 @@ generate-crds: generate-deepcopy .remove-crds
 			paths=$(CURDIR)/$${dir} \
 			output:crd:dir=$(CURDIR)/deployments/helm/tmp_crds; \
 	done
-	mkdir -p $(CURDIR)/deployments/helm/$(DRIVER_N)/crds
+	mkdir -p $(CURDIR)/deployments/helm/$(DRIVER_NAME)/crds
 	cp -R $(CURDIR)/deployments/helm/tmp_crds/* \
 		$(CURDIR)/deployments/helm/$(DRIVER_NAME)/crds
 	rm -rf $(CURDIR)/deployments/helm/tmp_crds
 
 
+# Regenerate everything and fail if the tree is dirty (used by `make check`).
 check-generate: generate
 	git diff --exit-code HEAD
 
@@ -130,7 +140,7 @@ generate-informers: .remove-informers generate-listers
 	informer-gen \
 		--go-header-file=$(CURDIR)/hack/boilerplate.go.txt \
 		--output-package "$(MODULE)/$(PKG_BASE)/informers" \
-        --input-dirs "$(shell for api in $(CLIENT_APIS); do echo -n "$(MODULE)/$(API_BASE)/$$api,"; done | sed 's/,$$//')" \
+        --input-dirs "$(shell for api in $(CLIENT_APIS); do printf '%s' "$(MODULE)/$(API_BASE)/$$api,"; done | sed 's/,$$//')" \
 		--output-base "$(CURDIR)/pkg/tmp_informers" \
 		--versioned-clientset-package "$(MODULE)/$(PKG_BASE)/clientset/versioned" \
 		--listers-package "$(MODULE)/$(PKG_BASE)/listers"
@@ -143,7 +153,7 @@ generate-listers: .remove-listers generate-clientset
 	lister-gen \
 		--go-header-file=$(CURDIR)/hack/boilerplate.go.txt \
 		--output-package "$(MODULE)/$(PKG_BASE)/listers" \
-        --input-dirs "$(shell for api in $(CLIENT_APIS); do echo -n "$(MODULE)/$(API_BASE)/$$api,"; done | sed 's/,$$//')" \
+        --input-dirs "$(shell for api in $(CLIENT_APIS); do printf '%s' "$(MODULE)/$(API_BASE)/$$api,"; done | sed 's/,$$//')" \
 		--output-base "$(CURDIR)/pkg/tmp_listers"
 	mkdir -p $(CURDIR)/$(PKG_BASE)
 	mv $(CURDIR)/pkg/tmp_listers/$(MODULE)/$(PKG_BASE)/listers \

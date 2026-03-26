@@ -1,3 +1,4 @@
+dist/
 .cache/
 .bash_history
 /compute-domain-controller

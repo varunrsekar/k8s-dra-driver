@@ -35,7 +35,7 @@ HELM_CACHE_HOME=$(mktemp -d -t helm-XXXXX)
 export HELM_CACHE_HOME
 
 # Facilitate direct (manual) invocation of this script.
-TEST_CLEANUP_CHART_REPO="${TEST_CHART_REPO:-oci://ghcr.io/nvidia/k8s-dra-driver-gpu}"
+TEST_CLEANUP_CHART_REPO="${TEST_CHART_REPO:-oci://gcr.io/k8s-staging-nvidia/charts/nvidia-dra-driver-gpu}"
 TEST_CLEANUP_CHART_VERSION="${TEST_CHART_VERSION:-26.4.0-dev-f9de1ef3-chart}"
 TEST_NVIDIA_DRIVER_ROOT="${TEST_NVIDIA_DRIVER_ROOT:-/run/nvidia/driver}"
 
@@ -51,7 +51,7 @@ kubectl apply -f "${CRD_URL}"
 
 # Workload deletion below requires a DRA driver to be present, to actually clean
 # up. Install _a_ version temporarily, towards best-effort. Install
-# to-be-tested-version for now, latest-on-GHCR might be smarter though. Again,
+# to-be-tested-version for now, latest published staging chart might be smarter though. Again,
 # this command may fail and in best-effort fashion this cleanup script proceeds.
 set +x
 iupgrade_wait "${TEST_CLEANUP_CHART_REPO}" "${TEST_CLEANUP_CHART_VERSION}" NOARGS

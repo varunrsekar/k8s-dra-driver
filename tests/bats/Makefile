@@ -16,11 +16,11 @@ include $(CURDIR)/versions.mk
 include $(CURDIR)/common.mk
 
 # The to-be-tested Helm chart. Ignored when setting TEST_CHART_LOCAL.
-TEST_CHART_REPO ?= "oci://ghcr.io/nvidia/k8s-dra-driver-gpu"
-TEST_CHART_VERSION ?= "$(VERSION_GHCR_CHART)"
+TEST_CHART_REPO ?= "oci://gcr.io/k8s-staging-nvidia/charts/nvidia-dra-driver-gpu"
+TEST_CHART_VERSION ?= "$(VERSION_STAGING_CHART)"
 
 # The baseline Helm chart to test upgrades from and downgrades to.
-TEST_CHART_LASTSTABLE_REPO ?= "oci://ghcr.io/nvidia/k8s-dra-driver-gpu"
+TEST_CHART_LASTSTABLE_REPO ?= "oci://gcr.io/k8s-staging-nvidia/charts/nvidia-dra-driver-gpu"
 TEST_CHART_LASTSTABLE_VERSION ?= "25.12.0-0882da87-chart"
 
 # If not "false": the to-be-tested Helm chart is installed from the local

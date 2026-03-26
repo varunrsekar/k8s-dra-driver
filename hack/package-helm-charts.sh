@@ -14,6 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Packages the Helm chart for release or for Prow jobs that push OCI charts to
+# staging/promotion registries. GitHub Actions only uploads the packaged .tgz as
+# a workflow artifact (see .github/workflows/chart.yaml); it does not push charts.
+
 set -o pipefail
 
 # if arg1 is set, it will be used as the version number
