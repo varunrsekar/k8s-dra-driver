@@ -33,7 +33,7 @@ acquire_unbind_lock()
    while [[ $attempt -le ${lock_retries} ]]; do
       echo "[retry $attempt/${lock_retries}] Attempting to acquire unbindLock for $gpu" >&1
 
-      echo 1 > "{$unbind_lock_file}"
+      echo 1 > "${unbind_lock_file}"
       read -r unbind_lock < "${unbind_lock_file}"
       if [ ${unbind_lock} -eq 1 ]; then
          echo "UnbindLock acquired for $gpu" >&1
