@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Copyright 2023 NVIDIA CORPORATION.
+# Copyright The Kubernetes Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#    https://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -139,4 +139,4 @@ kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/container
 kubectl create namespace nvidia
 
 ## Deploy a custom daemonset that prepares a node for use with DRA
-kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-dra-driver-gpu/3498c9a91cb594af94c9e8d65177b131e380e116/demo/prepare-gke-nodes-for-dra.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/nvidia-dra-driver-gpu/3498c9a91cb594af94c9e8d65177b131e380e116/demo/prepare-gke-nodes-for-dra.yaml

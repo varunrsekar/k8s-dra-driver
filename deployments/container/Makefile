@@ -1,10 +1,10 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright The Kubernetes Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#    https://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -36,14 +36,26 @@ IMAGE = $(IMAGE_NAME):$(IMAGE_TAG)
 ##### Public rules #####
 .PHONY: build
 
+# Multi-arch without registry push (e.g. GitHub Actions): BUILD_MULTI_ARCH_GH=true
+# writes an OCI layout tarball. Image push to staging/promotion is done by Prow.
+DIST_DIR ?= $(CURDIR)/dist
+OCI_OUTPUT ?= $(DIST_DIR)/nvidia-dra-driver-gpu.oci.tar
+
 # TODO: revisit compression=zstd,compression-level=15
 ifeq ($(BUILD_MULTI_ARCH_IMAGES),true)
 BUILDX = buildx
+DOCKER_BUILD_PLATFORM_OPTIONS = --platform=linux/amd64,linux/arm64
+ifeq ($(BUILD_MULTI_ARCH_GH),true)
+DOCKER_BUILD_OPTIONS = \
+	--output=type=oci,dest=$(OCI_OUTPUT) \
+	--provenance=false \
+	--sbom=false
+else
 DOCKER_BUILD_OPTIONS = \
 	--output=type=image,push=$(PUSH_ON_BUILD) \
 	--provenance=false \
 	--sbom=false
-DOCKER_BUILD_PLATFORM_OPTIONS = --platform=linux/amd64,linux/arm64
+endif
 else
 # We also support building single-platform images.
 # These are mostly used for local testing and as such we don't allow these to
@@ -56,18 +68,6 @@ DOCKER_BUILD_PLATFORM_OPTIONS = --platform=linux/$(ARCH)
 endif
 
 DOCKERFILE = $(CURDIR)/deployments/container/Dockerfile
-
-DOCKER_BUILD_CACHE_OPTIONS :=
-
-ifeq ($(CACHE_TO_GHCR), true)
-  DOCKER_BUILD_CACHE_OPTIONS +=	\
-	--cache-to type=registry,ref=ghcr.io/nvidia/k8s-dra-driver-gpu:buildcache,mode=max
-endif
-
-ifeq ($(CACHE_FROM_GHCR), true)
-  DOCKER_BUILD_CACHE_OPTIONS +=	\
-	--cache-from type=registry,ref=ghcr.io/nvidia/k8s-dra-driver-gpu:buildcache
-endif
 
 # Use mount cache (on host fs) for Go build&mod cache:
 # 1) Local dev: yes (store on host: get all benefits of the Go build cache).
@@ -86,11 +86,11 @@ ifeq ($(CI), true)
 endif
 
 build:
+	mkdir -p $(DIST_DIR)
 	DOCKER_BUILDKIT=1 \
 		$(DOCKER) buildx build --pull \
 		$(DOCKER_BUILD_OPTIONS) \
 		$(DOCKER_BUILD_PLATFORM_OPTIONS) \
-		$(DOCKER_BUILD_CACHE_OPTIONS) \
 		--tag $(IMAGE) \
 		--build-arg GOLANG_VERSION="$(GOLANG_VERSION)" \
 		--build-arg BASH_STATIC_GIT_REF="$(BASH_STATIC_GIT_REF)" \

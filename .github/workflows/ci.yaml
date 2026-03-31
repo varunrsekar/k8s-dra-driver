@@ -1,51 +1,39 @@
-# Copyright 2025 NVIDIA CORPORATION
+# Copyright The Kubernetes Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#    https://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-name: "ci"
+
+name: ci
 
 on:
   push:
     branches:
-      - "pull-request/[0-9]+"
+      - main
+      - release-*
+  pull_request:
+    branches:
       - main
       - release-*
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
-  image:
-    uses: ./.github/workflows/image.yaml
-    secrets: inherit
-
-  # Separate, concurrent job to populate the image layer cache
-  cache:
-    uses: ./.github/workflows/imgcache.yaml
-    secrets: inherit
-
-  # TODO: rename, to make this more explicit
   basic:
     uses: ./.github/workflows/basic-checks.yaml
 
-  chart:
-    # Push chart early regardless of image build success: at the time of
-    # writing, we lose precious time if we start this job only after image build
-    # success. We push this to a CI-oriented container registry, and pushing
-    # faulty artifacts is generally tolerable. Dev build artifacts should
-    # generally be only consumed for commits on `main`.
-    secrets: inherit
-    uses: ./.github/workflows/chart.yaml
+  image:
+    uses: ./.github/workflows/image.yaml
 
-  test:
-    # The test suite consumes image and chart artifacts pushed to GHCR.
-    needs:
-    - chart
-    - image
-    uses: ./.github/workflows/tests.yaml
+  chart:
+    uses: ./.github/workflows/chart.yaml

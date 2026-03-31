@@ -1,58 +1,28 @@
-name: test
+# Copyright The Kubernetes Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Bats GPU/integration tests are not run in GitHub Actions. They will be configured in kubernetes/test-infra (Prow).
+name: tests
 
 on:
-  # Run periodically, for stability sampling
-  # as well as for detecting changes fast.
-  schedule:
-    - cron: '0 */2 * * *'
-  workflow_call:
   workflow_dispatch:
-    inputs:
-      testfilter:
-        description: 'bats test filter string'
-        required: true
-        default: 'fastfeedback'
-        type: choice
-        options:
-        - fastfeedback
-        - all
-
-
-# Allow only one workflow at any time, and cancel in-progress (only) upon push
-# to the same branch. The jobs below are run in parallel, and they are both
-# cancelled when this cancel criterion hits in. Note that `github.head_ref` is
-# only set for pull_request events. In our repository, after merge-to-main or
-# for copy-pr-bot-managed branches, the `head_ref` is undefined. The || operator
-# below provides a fallback: when github.head_ref is undefined, use github.ref
-# (e.g., refs/heads/main). This ensures each branch gets its own concurrency
-# group, preventing cross-branch cancellations while still canceling in-progress
-# runs when new commits are pushed to the same branch. Note that using `ref`
-# isn't great usage in context of pull_request events (head_ref for pull
-# requests yields the actual source branch name).
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
 
 jobs:
-  bats-k8s134:
-    runs-on: compute-domain-runner
+  skipped:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: batssuite
-        env:
-          TESTFILTER: ${{ inputs.testfilter }}
+      - name: Bats run on Prow
         run: |
-          export TEST_FILTER_TAGS="${TESTFILTER:-fastfeedback}"
-          make bats
-
-  bats-k8s135:
-    runs-on: compute-domain-runner-k8s135
-    steps:
-      - uses: actions/checkout@v6
-      - name: batssuite
-        env:
-          TESTFILTER: ${{ inputs.testfilter }}
-        run: |
-          # export TEST_FILTER_TAGS="${TESTFILTER:-fastfeedback}"
-          # Run only GPU tests for now.
-          make bats
+          echo "Bats suites (make bats) are executed from Prow against the test GPU cluster."

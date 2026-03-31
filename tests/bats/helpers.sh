@@ -1,19 +1,17 @@
 #!/bin/bash
+# Copyright The Kubernetes Authors
 #
-#  SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-#  SPDX-License-Identifier: Apache-2.0
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
+#    https://www.apache.org/licenses/LICENSE-2.0
 #
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 # Use a name that upon cluster inspection reveals that this
 # Helm chart release was installed/managed by this test suite.
@@ -41,7 +39,7 @@ export NOARGS=()
 # 3rd arg: array with additional args (provide `NOARGS` if none)
 iupgrade_wait() {
   # E.g. `nvidia/nvidia-dra-driver-gpu` or
-  # `oci://ghcr.io/nvidia/k8s-dra-driver-gpu`
+  # `oci://gcr.io/k8s-staging-nvidia/charts/nvidia-dra-driver-gpu`
   local REPO="$1"
 
   # E.g. `25.3.1` or `25.8.0-dev-f2eaddd6-chart`
@@ -247,7 +245,7 @@ get_device_attrs_from_any_gpu_slice() {
 
   log "wrote resource slice content to: ${spath}"
 
-  # Log contents, for https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/902
+  # Log contents, for https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/902
   cat "${spath}" >&2
 
   # For the first device in that slice (of given type), extract the set of

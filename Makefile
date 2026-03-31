@@ -1,10 +1,10 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.  All rights reserved.
+# Copyright The Kubernetes Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#    https://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -31,7 +31,8 @@ CMDS := $(patsubst ./cmd/%/,%,$(sort $(dir $(wildcard ./cmd/*/))))
 CMD_TARGETS := $(patsubst %,cmd-%, $(CMDS))
 
 CHECK_TARGETS := golangci-lint check-generate
-MAKE_TARGETS := binaries build build-image check fmt lint-internal test examples cmds coverage generate vendor check-modules $(CHECK_TARGETS)
+
+MAKE_TARGETS := binaries build build-image check fmt lint-internal test examples cmds coverage generate vendor check-modules helm-lint helm-package $(CHECK_TARGETS)
 
 TARGETS := $(MAKE_TARGETS) $(CMD_TARGETS)
 
@@ -83,6 +84,14 @@ goimports:
 golangci-lint:
 	golangci-lint run ./...
 
+lint-internal: golangci-lint
+
+helm-lint:
+	helm lint deployments/helm/nvidia-dra-driver-gpu
+
+helm-package:
+	helm package deployments/helm/nvidia-dra-driver-gpu
+
 vendor:
 	go mod tidy
 	go mod vendor
@@ -109,12 +118,13 @@ generate-crds: generate-deepcopy .remove-crds
 			paths=$(CURDIR)/$${dir} \
 			output:crd:dir=$(CURDIR)/deployments/helm/tmp_crds; \
 	done
-	mkdir -p $(CURDIR)/deployments/helm/$(HELM_DRIVER_NAME)/crds
+	mkdir -p $(CURDIR)/deployments/helm/$(DRIVER_NAME)/crds
 	cp -R $(CURDIR)/deployments/helm/tmp_crds/* \
-		$(CURDIR)/deployments/helm/$(HELM_DRIVER_NAME)/crds
+		$(CURDIR)/deployments/helm/$(DRIVER_NAME)/crds
 	rm -rf $(CURDIR)/deployments/helm/tmp_crds
 
 
+# Regenerate everything and fail if the tree is dirty (used by `make check`).
 check-generate: generate
 	git diff --exit-code HEAD
 
@@ -130,7 +140,7 @@ generate-informers: .remove-informers generate-listers
 	informer-gen \
 		--go-header-file=$(CURDIR)/hack/boilerplate.go.txt \
 		--output-package "$(MODULE)/$(PKG_BASE)/informers" \
-        --input-dirs "$(shell for api in $(CLIENT_APIS); do echo -n "$(MODULE)/$(API_BASE)/$$api,"; done | sed 's/,$$//')" \
+        --input-dirs "$(shell for api in $(CLIENT_APIS); do printf '%s' "$(MODULE)/$(API_BASE)/$$api,"; done | sed 's/,$$//')" \
 		--output-base "$(CURDIR)/pkg/tmp_informers" \
 		--versioned-clientset-package "$(MODULE)/$(PKG_BASE)/clientset/versioned" \
 		--listers-package "$(MODULE)/$(PKG_BASE)/listers"
@@ -143,7 +153,7 @@ generate-listers: .remove-listers generate-clientset
 	lister-gen \
 		--go-header-file=$(CURDIR)/hack/boilerplate.go.txt \
 		--output-package "$(MODULE)/$(PKG_BASE)/listers" \
-        --input-dirs "$(shell for api in $(CLIENT_APIS); do echo -n "$(MODULE)/$(API_BASE)/$$api,"; done | sed 's/,$$//')" \
+        --input-dirs "$(shell for api in $(CLIENT_APIS); do printf '%s' "$(MODULE)/$(API_BASE)/$$api,"; done | sed 's/,$$//')" \
 		--output-base "$(CURDIR)/pkg/tmp_listers"
 	mkdir -p $(CURDIR)/$(PKG_BASE)
 	mv $(CURDIR)/pkg/tmp_listers/$(MODULE)/$(PKG_BASE)/listers \
@@ -166,7 +176,7 @@ generate-clientset: .remove-clientset
 	rm -rf $(CURDIR)/pkg/tmp_clientset
 
 .remove-crds:
-	rm -rf $(CURDIR)/deployments/helm/$(HELM_DRIVER_NAME)/crds
+	rm -rf $(CURDIR)/deployments/helm/$(DRIVER_NAME)/crds
 
 .remove-deepcopy:
 	for dir in $(DEEPCOPY_SOURCES); do \
@@ -236,4 +246,4 @@ bats-gpu:
 .PHONY: image-build-and-copy-to-nodes
 image-build-and-copy-to-nodes:
 	make -f deployments/container/Makefile build
-	bash hack/copy-image-to-k8s-nodes.sh nvcr.io/nvidia/k8s-dra-driver-gpu:$(VERSION)
+	bash hack/copy-image-to-k8s-nodes.sh registry.k8s.io/nvidia/nvidia-dra-driver-gpu:$(VERSION)

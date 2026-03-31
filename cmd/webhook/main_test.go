@@ -1,12 +1,11 @@
 /*
-Copyright 2025 The Kubernetes Authors.
-Copyright 2025 NVIDIA Corporation.
+Copyright The Kubernetes Authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+    https://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -37,8 +36,8 @@ import (
 	utilversion "k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/utils/ptr"
 
-	configapi "github.com/NVIDIA/k8s-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
-	"github.com/NVIDIA/k8s-dra-driver-gpu/pkg/featuregates"
+	configapi "sigs.k8s.io/nvidia-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
 )
 
 func TestReadyEndpoint(t *testing.T) {

@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright The Kubernetes Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#    https://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# Packages the Helm chart for release or for Prow jobs that push OCI charts to
+# staging/promotion registries. GitHub Actions only uploads the packaged .tgz as
+# a workflow artifact (see .github/workflows/chart.yaml); it does not push charts.
 
 set -o pipefail
 

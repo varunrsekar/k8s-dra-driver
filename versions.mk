@@ -1,10 +1,10 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+# Copyright The Kubernetes Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#    https://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-DRIVER_NAME := k8s-dra-driver-gpu
-HELM_DRIVER_NAME := nvidia-dra-driver-gpu
-MODULE := github.com/NVIDIA/$(DRIVER_NAME)
+DRIVER_NAME := nvidia-dra-driver-gpu
+MODULE := sigs.k8s.io/$(DRIVER_NAME)
 
-REGISTRY ?= nvcr.io/nvidia
+REGISTRY ?= registry.k8s.io/nvidia
+# Staging registry before kubernetes/k8s.io promotion (Prow / test-infra jobs).
+STAGING_REGISTRY ?= gcr.io/k8s-staging-nvidia
 
 VERSION  ?= v26.4.0-dev
 
@@ -42,7 +43,8 @@ GIT_COMMIT_SHORT ?= $(shell git rev-parse --short=8 HEAD)
 VERSION_W_COMMIT = $(VERSION)-$(GIT_COMMIT_SHORT)
 
 # Shape: 25.8.0-dev-f2eaddd6-chart (no leading v)
-VERSION_GHCR_CHART ?= $(VERSION_W_COMMIT:v%=%)-chart
+VERSION_STAGING_CHART ?= $(VERSION_W_COMMIT:v%=%)-chart
+VERSION_GHCR_CHART ?= $(VERSION_STAGING_CHART)
 
 print-%:
 	@echo $($*)

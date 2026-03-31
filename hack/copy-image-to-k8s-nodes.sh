@@ -4,7 +4,7 @@ set -o nounset
 set -o pipefail
 
 if [ $# -ne 1 ]; then
-    echo "first arg: required: image ref, example: nvcr.io/nvidia/k8s-dra-driver-gpu:v25.12.0-dev"
+    echo "first arg: required: image ref, example: registry.k8s.io/nvidia/nvidia-dra-driver-gpu:v25.12.0-dev"
     exit 1
 else
     export CONT_IMAGE_REF="$1"

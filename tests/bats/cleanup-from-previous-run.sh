@@ -1,25 +1,23 @@
 #!/bin/bash
+# Copyright The Kubernetes Authors
 #
-#  SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-#  SPDX-License-Identifier: Apache-2.0
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
+#    https://www.apache.org/licenses/LICENSE-2.0
 #
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 
 set -o nounset
 set -o pipefail
 
-CRD_URL="https://raw.githubusercontent.com/NVIDIA/k8s-dra-driver-gpu/main/deployments/helm/nvidia-dra-driver-gpu/crds/resource.nvidia.com_computedomains.yaml"
+CRD_URL="https://raw.githubusercontent.com/kubernetes-sigs/nvidia-dra-driver-gpu/main/deployments/helm/nvidia-dra-driver-gpu/crds/resource.nvidia.com_computedomains.yaml"
 
 
 THIS_DIR_PATH=$(dirname "$(realpath $0)")
@@ -37,7 +35,7 @@ HELM_CACHE_HOME=$(mktemp -d -t helm-XXXXX)
 export HELM_CACHE_HOME
 
 # Facilitate direct (manual) invocation of this script.
-TEST_CLEANUP_CHART_REPO="${TEST_CHART_REPO:-oci://ghcr.io/nvidia/k8s-dra-driver-gpu}"
+TEST_CLEANUP_CHART_REPO="${TEST_CHART_REPO:-oci://gcr.io/k8s-staging-nvidia/charts/nvidia-dra-driver-gpu}"
 TEST_CLEANUP_CHART_VERSION="${TEST_CHART_VERSION:-26.4.0-dev-f9de1ef3-chart}"
 TEST_NVIDIA_DRIVER_ROOT="${TEST_NVIDIA_DRIVER_ROOT:-/run/nvidia/driver}"
 
@@ -53,7 +51,7 @@ kubectl apply -f "${CRD_URL}"
 
 # Workload deletion below requires a DRA driver to be present, to actually clean
 # up. Install _a_ version temporarily, towards best-effort. Install
-# to-be-tested-version for now, latest-on-GHCR might be smarter though. Again,
+# to-be-tested-version for now, latest published staging chart might be smarter though. Again,
 # this command may fail and in best-effort fashion this cleanup script proceeds.
 set +x
 iupgrade_wait "${TEST_CLEANUP_CHART_REPO}" "${TEST_CLEANUP_CHART_VERSION}" NOARGS

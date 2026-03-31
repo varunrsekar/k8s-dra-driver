@@ -4,7 +4,7 @@
 
 General instructions:
 
-1) Review the `TEST_*` variables [at around the top of the Makefile](https://github.com/NVIDIA/k8s-dra-driver-gpu/blob/main/tests/bats/Makefile#L22). Most of them can be overridden via environment.
+1) Review the `TEST_*` variables [at around the top of the Makefile](https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/blob/main/tests/bats/Makefile#L22). Most of them can be overridden via environment.
 Use this configuration interface to customize your test run.
 
 2) Invoke `make bats` in the root of the repository.
@@ -18,7 +18,7 @@ Two examples are shown below.
 $ make image-build-and-copy-to-nodes
 ...
 #37 writing image sha256:9529200b5a5e7a3e09340fc9a1ef5c1058453b3f1a03ddb2bec0fe69efba944c done
-#37 naming to nvcr.io/nvidia/k8s-dra-driver-gpu:v25.12.0-dev done
+#37 naming to registry.k8s.io/nvidia/nvidia-dra-driver-gpu:v25.12.0-dev done
 ...
 internal IPs of k8s nodes:
 10.115.19.11
@@ -30,7 +30,7 @@ export/compress took: 1.87 s
 -rw------- 1 jgehrcke jgehrcke 78M Nov 27 16:22 ./dra-driver-dev-img.LMd4LU2.tar.gz
 push image to nodes ...
 ...
-unpacking nvcr.io/nvidia/k8s-dra-driver-gpu:v25.12.0-dev (sha256:b49decbd5e0dfccb96e0c48727ea19ae59aa4ac475630196ff83c72c53bcc7e6)...done
+unpacking registry.k8s.io/nvidia/nvidia-dra-driver-gpu:v25.12.0-dev (sha256:b49decbd5e0dfccb96e0c48727ea19ae59aa4ac475630196ff83c72c53bcc7e6)...done
 copy/import(10.115.19.14) took: 2.53 s
 done
 ```
@@ -46,14 +46,14 @@ test_basics.bats
 ...
 ```
 
-This installs the  Helm chart currently specified in `deployments/helm/nvidia-dra-driver-gpu` in the local checkout, and expects it to point to the container image spec used for pushing above's image to the nodes (`nvcr.io/nvidia/k8s-dra-driver-gpu:v25.12.0-dev` in the example above).
+This installs the  Helm chart currently specified in `deployments/helm/nvidia-dra-driver-gpu` in the local checkout, and expects it to point to the container image spec used for pushing above's image to the nodes (`registry.k8s.io/nvidia/nvidia-dra-driver-gpu:v25.12.0-dev` in the example above).
 
 Note that `TEST_CHART_LOCAL=1` just overrides `TEST_CHART_REPO` and `TEST_CHART_VERSION`.
 
 `make image-build-and-copy-to-nodes` is just an opinionated helper that expects a certain environment.
 If that does not work for you: make sure (out-of-band) that the container images that the local chart refers to are available to all nodes in the Kubernetes cluster -- placed directly or pullable.
 
-## Test GHCR chart/image artifacts
+## Test staging chart/image artifacts
 
 Example:
 
@@ -64,19 +64,19 @@ $ make bats
 12 tests, 0 failures in 166 seconds
 ```
 
-Note: by default, the test suite assumes availability of a Helm chart on `oci://ghcr.io/nvidia/k8s-dra-driver-gpu`, pointing to a container image also publicly available in that registry.
+Note: by default, the test suite assumes a Helm chart exists at `oci://gcr.io/k8s-staging-nvidia/charts/nvidia-dra-driver-gpu` (after Prow promotion flow), with images from staging or `registry.k8s.io/nvidia/nvidia-dra-driver-gpu`.
 
 
 ### Defaults
 
-By default, `make bats` tries to install a Helm chart from  `oci://ghcr.io/nvidia/k8s-dra-driver-gpu` corresponding to the git revision of the local checkout:
+By default, `make bats` tries to install a Helm chart from `oci://gcr.io/k8s-staging-nvidia/charts/nvidia-dra-driver-gpu` corresponding to the git revision of the local checkout:
 
 ```console
 $ git rev-parse --short=8 HEAD
 e6e1dde4
 $ make bats
 ...
-        --env TEST_CHART_REPO="oci://ghcr.io/nvidia/k8s-dra-driver-gpu" \
+        --env TEST_CHART_REPO="oci://gcr.io/k8s-staging-nvidia/charts/nvidia-dra-driver-gpu" \
         --env TEST_CHART_VERSION=25.8.0-dev-e6e1dde4-chart \
         --env TEST_CRD_UPGRADE_TARGET_GIT_REF=e6e1dde4 \
 ...

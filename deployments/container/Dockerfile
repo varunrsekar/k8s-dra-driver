@@ -1,13 +1,12 @@
 # syntax=docker.io/docker/dockerfile:1.7-labs
 # The above enables the COPY --exclude + --parent flags
-#
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright The Kubernetes Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#    https://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -39,8 +38,7 @@ ARG GOMODCACHE
 ARG BUILDARCH
 ARG TARGETARCH
 
-# Dependencies for Go build. Clear apt cache: we cache this build layer on GHCR
-# in CI, and should make an effort to keep it small.
+# Dependencies for Go build. Clear apt cache; keep this layer small.
 RUN apt-get update && apt-get install -y \
         curl time make \
         gcc \
@@ -92,19 +90,21 @@ RUN --mount=type=cache,target=/mc/go/build-cache,id=gocache \
 # (see non-deterministic segfaults tracked in issues/502; source code download
 # instabilities tracked in issues/743) and generally takes signifiant time even
 # on happy path (dominiates CI duration as of the time of writing). Do not build
-# this every time. Instead, consume it from a previous image on GHCR -- also,
+# this every time. Instead, consume it from a previous image in a registry -- also,
 # leave machinery (out-commented) in place.
 #
 # Choose: 1) fresh bash build or 2) use binary from previous image
 #
 # option 1:
-# WORKDIR /bashbuild
-# COPY hack/build-bash-static.sh .
-# RUN export BASH_STATIC_GIT_REF && bash /bashbuild/build-bash-static.sh
-# RUN cd /bashbuild/bash-static/releases && ./bash*-static --version && mv bash-*-static /bashbuild/bash && file /bashbuild/bash
+ARG BASH_STATIC_GIT_REF=021f5f29f665c92ca16a369d9f27e288c3aed0c6
+ENV BASH_STATIC_GIT_REF=${BASH_STATIC_GIT_REF}
+WORKDIR /bashbuild
+COPY hack/build-bash-static.sh .
+RUN bash /bashbuild/build-bash-static.sh
+RUN cd /bashbuild/bash-static/releases && ./bash*-static --version && mv bash-*-static /bashbuild/bash && file /bashbuild/bash
 
 # option 2:
-FROM ghcr.io/nvidia/k8s-dra-driver-gpu:v25.12.0-dev-839e966a AS bash
+# FROM registry.k8s.io/nvidia/nvidia-dra-driver-gpu:v25.12.0-dev-839e966a AS bash
 
 # Pull the nvidia-cdi-hook binary out of the relevant toolkit container
 # (arch: TARGETPLATFORM, set via --platform).
@@ -133,16 +133,16 @@ LABEL release="N/A"
 LABEL summary="NVIDIA DRA Driver for GPUs"
 LABEL description="NVIDIA DRA Driver for GPUs"
 LABEL org.opencontainers.image.description="NVIDIA DRA Driver for GPUs"
-LABEL org.opencontainers.image.source="https://github.com/NVIDIA/k8s-dra-driver-gpu"
+LABEL org.opencontainers.image.source="https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu"
 
 # Add top-level license (AL2) file into the container image
 COPY LICENSE /
 
 # option 1: fresh bash build
-# COPY --from=build   /bashbuild/bash                           /bin/bash
+COPY --from=build   /bashbuild/bash                           /bin/bash
 
 # option 2: bash from previous image
-COPY --from=bash    /bin/bash                                 /bin/bash
+# COPY --from=bash    /bin/bash                                 /bin/bash
 
 COPY --from=toolkit /artifacts/rpm/usr/bin/nvidia-cdi-hook    /usr/bin/nvidia-cdi-hook
 COPY --from=build   /artifacts/compute-domain-controller      /usr/bin/compute-domain-controller

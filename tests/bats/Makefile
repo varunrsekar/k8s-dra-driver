@@ -1,27 +1,26 @@
-#  SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-#  SPDX-License-Identifier: Apache-2.0
+# Copyright The Kubernetes Authors
 #
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-#      http://www.apache.org/licenses/LICENSE-2.0
+#    https://www.apache.org/licenses/LICENSE-2.0
 #
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 include $(CURDIR)/versions.mk
 include $(CURDIR)/common.mk
 
 # The to-be-tested Helm chart. Ignored when setting TEST_CHART_LOCAL.
-TEST_CHART_REPO ?= "oci://ghcr.io/nvidia/k8s-dra-driver-gpu"
-TEST_CHART_VERSION ?= "$(VERSION_GHCR_CHART)"
+TEST_CHART_REPO ?= "oci://gcr.io/k8s-staging-nvidia/charts/nvidia-dra-driver-gpu"
+TEST_CHART_VERSION ?= "$(VERSION_STAGING_CHART)"
 
 # The baseline Helm chart to test upgrades from and downgrades to.
-TEST_CHART_LASTSTABLE_REPO ?= "oci://ghcr.io/nvidia/k8s-dra-driver-gpu"
+TEST_CHART_LASTSTABLE_REPO ?= "oci://gcr.io/k8s-staging-nvidia/charts/nvidia-dra-driver-gpu"
 TEST_CHART_LASTSTABLE_VERSION ?= "25.12.0-0882da87-chart"
 
 # If not "false": the to-be-tested Helm chart is installed from the local
@@ -44,7 +43,7 @@ TEST_NVIDIA_DRIVER_ROOT ?= "/run/nvidia/driver"
 
 # TODO: calculate precise, expected container image spec,
 # and test for that in test suite, for example:
-# `nvcr.io/nvidia/k8s-dra-driver-gpu:v25.8.0-dev`
+# `registry.k8s.io/nvidia/nvidia-dra-driver-gpu:v25.8.0-dev`
 TEST_EXPECTED_IMAGE_SPEC_SUBSTRING ?= $(VERSION)
 
 ifneq ($(TEST_CHART_LOCAL),"false")
@@ -137,8 +136,8 @@ endef
 default: tests
 
 # Use flock to serialize local image builds in GHA CI. See
-# https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/908 and
-# https://github.com/NVIDIA/k8s-dra-driver-gpu/issues/941.
+# https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/908 and
+# https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/941.
 .PHONY: runner-image
 runner-image:
 	@( \
