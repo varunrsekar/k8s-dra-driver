@@ -41,6 +41,10 @@ case "${ARCH}" in
     STRIP=aarch64-linux-gnu-strip
     CC=aarch64-linux-gnu-gcc
     ;;
+  x86_64)
+    STRIP=x86_64-linux-gnu-strip
+    CC=x86_64-linux-gnu-gcc
+    ;;
 esac
 
 echo "detected arch: ${ARCH}"
