@@ -654,12 +654,6 @@ func (s *DeviceState) prepareDevices(ctx context.Context, claim *resourceapi.Res
 		if device == nil {
 			return nil, fmt.Errorf("allocatable not found for device %q", result.Device)
 		}
-		// only proceed with config mapping if device is healthy.
-		if featuregates.Enabled(featuregates.NVMLDeviceHealthCheck) {
-			if !device.IsHealthy() {
-				return nil, fmt.Errorf("device %q is not healthy", result.Device)
-			}
-		}
 		for _, c := range slices.Backward(configs) {
 			if slices.Contains(c.Requests, result.Request) {
 				if _, ok := c.Config.(*configapi.GpuConfig); ok && device.Type() != GpuDeviceType {
@@ -1090,31 +1084,6 @@ func GetOpaqueDeviceConfigs(
 	return resultConfigs, nil
 }
 
-// TODO: this needs a code comment.
-func (s *DeviceState) UpdateDeviceHealthStatus(d *AllocatableDevice, hs HealthStatus) {
-	s.Lock()
-	defer s.Unlock()
-
-	switch d.Type() {
-	case GpuDeviceType:
-		d.Gpu.health = hs
-	case MigDynamicDeviceType:
-		// Here we do not have access to a concrete MIG device. The
-		// 'allocatable' MIG device is an abstract representation to a specific
-		// MIG device.
-		klog.Warningf("UpdateDeviceHealthStatus() called for abstract, dynamic MIG device %s: %s", d.MigDynamic.CanonicalName(), hs)
-	case MigStaticDeviceType:
-		// Does it make sense to update the health for a MIG device? Do we
-		// receive health events that are specific to individual MIG devices? If
-		// yes: does this allow for making conclusions about the parent device?
-		d.MigStatic.health = hs
-	default:
-		klog.V(6).Infof("Cannot update health status for unknown device type: %s", d.Type())
-		return
-	}
-	klog.V(4).Infof("Updated device: %s health status to %s", d.UUID(), hs)
-}
-
 // requestedNonAdminDevices returns the set of device names requested by the claim,
 // excluding admin-access allocations.
 func (s *DeviceState) requestedNonAdminDevices(claim *resourceapi.ResourceClaim) map[string]struct{} {
@@ -1231,4 +1200,12 @@ func syncPreparedDevicesGaugeFromCheckpoint(nodeName string, cp *Checkpoint) {
 			drametrics.SetPreparedDevicesCounts(nodeName, DriverName, dt, count)
 		}
 	}
+}
+
+// AddDeviceTaint adds or updates a DRA device taint on the given device under
+// the DeviceState lock. Returns true if the taint set was actually modified.
+func (s *DeviceState) AddDeviceTaint(d *AllocatableDevice, taint resourceapi.DeviceTaint) bool {
+	s.Lock()
+	defer s.Unlock()
+	return d.AddOrUpdateTaint(taint)
 }

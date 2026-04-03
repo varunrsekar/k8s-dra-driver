@@ -47,7 +47,7 @@ const DriverPrepUprepFlockFileName = "pu.lock"
 type deviceHealthMonitor interface {
 	Start(context.Context) error
 	Stop()
-	Unhealthy() <-chan *AllocatableDevice
+	Unhealthy() <-chan *DeviceHealthEvent
 }
 
 type driver struct {
@@ -462,45 +462,30 @@ func (d *driver) deviceHealthEvents(ctx context.Context, nodeName string) {
 		case <-ctx.Done():
 			klog.V(6).Info("Stop processing device health notifications")
 			return
-		case device, ok := <-d.deviceHealthMonitor.Unhealthy():
+		case event, ok := <-d.deviceHealthMonitor.Unhealthy():
 			if !ok {
 				// NVML based deviceHealthMonitor is expected to close only during driver Shutdown.
 				klog.V(6).Info("Health monitor channel closed")
 				return
 			}
-			uuid := device.UUID()
+			uuid := event.Device.UUID()
+			klog.Warningf("Received %s health event for device %s", event.EventType, uuid)
 
-			klog.Warningf("Received unhealthy notification for device: %s", uuid)
-
-			if !device.IsHealthy() {
-				klog.V(6).Infof("Device: %s is aleady marked unhealthy. Skip republishing ResourceSlice", uuid)
+			taint := healthEventToTaint(event)
+			if !d.state.AddDeviceTaint(event.Device, taint) {
 				continue
 			}
-
-			// Mark device as unhealthy.
-			d.state.UpdateDeviceHealthStatus(device, Unhealthy)
-
-			// Republish resource slice with only healthy devices
-			// There is no remediation loop right now meaning if the unhealthy device is fixed,
-			// driver needs to be restarted to publish the ResourceSlice with all devices
 			var resourceSlice resourceslice.Slice
 			for _, devices := range d.state.perGPUAllocatable.allocatablesMap {
 				for _, dev := range devices {
-					uuid := dev.UUID()
-					if dev.IsHealthy() {
-						klog.V(6).Infof("Device: %s is healthy, added to ResoureSlice", uuid)
-						resourceSlice.Devices = append(resourceSlice.Devices, dev.GetDevice())
-					} else {
-						klog.Warningf("Device: %s is unhealthy, will be removed from ResoureSlice", uuid)
-					}
-				}
-			}
+					d := dev.GetDevice()
 
-			klog.V(4).Info("Rebulishing resourceslice with healthy devices")
-			resources := resourceslice.DriverResources{
-				Pools: map[string]resourceslice.Pool{
-					nodeName: {Slices: []resourceslice.Slice{resourceSlice}},
-				},
+					taints := dev.Taints()
+					if len(taints) > 0 {
+						d.Taints = taints
+					}
+					resourceSlice.Devices = append(resourceSlice.Devices, d)
+				}
 			}
 
 			// NOTE: We only log an error on publish failure and do not retry.
@@ -514,10 +499,16 @@ func (d *driver) deviceHealthEvents(ctx context.Context, nodeName string) {
 			// This is a temporary compromise while device taints/tolerations (KEP-5055)
 			// are available as a Beta feature. An interim improvement could be adding
 			// a retry/backoff or switch to patch updates instead of full republish.
+			klog.V(4).Infof("Republishing ResourceSlice: device %s tainted with %s=%q (effect=%s)",
+				uuid, taint.Key, taint.Value, taint.Effect)
+
+			resources := resourceslice.DriverResources{
+				Pools: map[string]resourceslice.Pool{
+					nodeName: {Slices: []resourceslice.Slice{resourceSlice}},
+				},
+			}
 			if err := d.pluginhelper.PublishResources(ctx, resources); err != nil {
-				klog.Errorf("Failed to publish resources after device health status update: %v", err)
-			} else {
-				klog.V(4).Info("Successfully republished resources without unhealthy device")
+				klog.Errorf("Failed to publish resources after taint update for device %s: %v", uuid, err)
 			}
 		}
 	}

@@ -570,7 +570,6 @@ func (l deviceLib) getGpuInfo(index int, device nvdev.Device) (*GpuInfo, error) 
 		pciBusIDAttr:          pciBusIDAttr,
 		pcieRootAttr:          pcieRootAttr,
 		migProfiles:           migProfiles,
-		health:                Healthy,
 		addressingMode:        addressingMode,
 	}
 
@@ -749,7 +748,8 @@ func (l deviceLib) getMigDevices(gpuInfo *GpuInfo) (map[string]*MigDeviceInfo, e
 			gIInfo:         &giInfo,
 			ciProfileInfo:  ciProfileInfo,
 			cIInfo:         &ciInfo,
-			health:         Healthy,
+			pcieBusID:      gpuInfo.pcieBusID,
+			pcieRootAttr:   gpuInfo.pcieRootAttr,
 		}
 		return nil
 	})
