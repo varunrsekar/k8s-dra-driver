@@ -28,7 +28,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/kubernetes-sigs/nvidia-dra-driver-gpu
+        - sigs.k8s.io/nvidia-dra-driver-gpu
   exclusions:
     generated: lax
     paths:
