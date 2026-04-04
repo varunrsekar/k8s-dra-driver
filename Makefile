@@ -246,4 +246,4 @@ bats-gpu:
 .PHONY: image-build-and-copy-to-nodes
 image-build-and-copy-to-nodes:
 	make -f deployments/container/Makefile build
-	bash hack/copy-image-to-k8s-nodes.sh registry.k8s.io/nvidia/nvidia-dra-driver-gpu:$(VERSION)
+	bash hack/copy-image-to-k8s-nodes.sh $(REGISTRY)/$(DRIVER_NAME):$(VERSION)

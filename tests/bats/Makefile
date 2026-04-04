@@ -43,7 +43,7 @@ TEST_NVIDIA_DRIVER_ROOT ?= "/run/nvidia/driver"
 
 # TODO: calculate precise, expected container image spec,
 # and test for that in test suite, for example:
-# `registry.k8s.io/nvidia/nvidia-dra-driver-gpu:v25.8.0-dev`
+# `registry.k8s.io/nv-dra-driver-gpu/nvidia-dra-driver-gpu:v25.8.0-dev`
 TEST_EXPECTED_IMAGE_SPEC_SUBSTRING ?= $(VERSION)
 
 ifneq ($(TEST_CHART_LOCAL),"false")

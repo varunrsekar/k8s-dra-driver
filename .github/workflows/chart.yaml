@@ -44,7 +44,7 @@ jobs:
           sed -i "s/${VERSION:1}/${VERSION_W_COMMIT:1}-chart/g" deployments/helm/nvidia-dra-driver-gpu/Chart.yaml
           sed -i "s/tag: \"\"/tag: \"${VERSION_W_COMMIT}\"/g" deployments/helm/nvidia-dra-driver-gpu/values.yaml
           # Staging image registry for CI-built images.
-          sed -i 's|registry.k8s.io/nvidia|gcr.io/k8s-staging-nvidia|g' deployments/helm/nvidia-dra-driver-gpu/values.yaml
+          sed -i 's|registry.k8s.io/nv-dra-driver-gpu|us-central1-docker.pkg.dev/k8s-staging-images/nv-dra-driver-gpu|g' deployments/helm/nvidia-dra-driver-gpu/values.yaml
           git diff || echo "ignore git diff exit code"
           helm package deployments/helm/nvidia-dra-driver-gpu
       - name: Upload chart package
