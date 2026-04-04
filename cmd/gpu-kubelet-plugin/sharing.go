@@ -54,7 +54,23 @@ const (
 	MpsControlFilesDirName       = "mps"
 	MpsControlDaemonTemplatePath = "/templates/mps-control-daemon.tmpl.yaml"
 	MpsControlDaemonNameFmt      = "mps-control-daemon-%v" // Fill with ClaimUID
+	MpsDefaultShmMountPath       = "/dev/shm"
+
+	// driverRootMountDir is the directory where the driver root is mounted inside the kubelet plugin container.
+	driverRootMountDir = "/driver-root"
 )
+
+// fileChecker checks whether a file exists at the given path.
+type fileChecker interface {
+	Stat(path string) error
+}
+
+type osFileChecker struct{}
+
+func (osFileChecker) Stat(path string) error {
+	_, err := os.Stat(path)
+	return err
+}
 
 type TimeSlicingManager struct {
 	nvdevlib *deviceLib
@@ -95,6 +111,18 @@ type MpsControlDaemonTemplateData struct {
 	MpsLogDirectory                 string
 	MpsImageName                    string
 	FeatureGates                    map[string]bool
+	MpsShmMountPath                 string
+}
+
+// setMpsShmMountPath returns the container path at which the MPS shm should be mounted in the MPS control daemon pod.
+// If <driverRootMountDir>/dev/shm exists, the MPS daemon runs inside a chroot and shm must be mounted there.
+// Otherwise (e.g. GKE COS) the daemon runs directly in the container namespace and expects /dev/shm.
+func setMpsShmMountPath(checker fileChecker) string {
+	chrootShmPath := filepath.Join(driverRootMountDir, "dev", "shm")
+	if checker.Stat(chrootShmPath) == nil {
+		return chrootShmPath
+	}
+	return MpsDefaultShmMountPath
 }
 
 func NewTimeSlicingManager(deviceLib *deviceLib) *TimeSlicingManager {
@@ -210,6 +238,7 @@ func (m *MpsControlDaemon) Start(ctx context.Context, config *configapi.MpsConfi
 		MpsLogDirectory:                 m.logDir,
 		MpsImageName:                    m.manager.config.flags.imageName,
 		FeatureGates:                    featuregates.ToMap(),
+		MpsShmMountPath:                 setMpsShmMountPath(osFileChecker{}),
 	}
 
 	if config != nil && config.DefaultActiveThreadPercentage != nil {
