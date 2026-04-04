@@ -50,7 +50,7 @@ resourceApiVersion: ""
 
 imagePullSecrets: []
 image:
-  repository: registry.k8s.io/nvidia/nvidia-dra-driver-gpu
+  repository: registry.k8s.io/nv-dra-driver-gpu/nvidia-dra-driver-gpu
   pullPolicy: IfNotPresent
   # Note: an empty string is translated to the `appVersion` string from
   # the Helm chart YAML (effectively implementing the default value to be

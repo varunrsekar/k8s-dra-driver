@@ -36,18 +36,18 @@ After the release tag is pushed, the images must be built, pushed to staging, an
 - The Prow job configuration is in [test-infra](https://github.com/kubernetes/test-infra/blob/master/config/jobs/image-pushing/k8s-staging-nvidia-dra-driver-gpu.yaml) if troubleshooting is needed.
 - Verify the images exist in the staging repository:
   ```sh
-  skopeo list-tags docker://us-central1-docker.pkg.dev/k8s-staging-images/nvidia-dra-driver-gpu/nvidia-dra-driver-gpu | grep vX.Y.Z
+  skopeo list-tags docker://us-central1-docker.pkg.dev/k8s-staging-images/nv-dra-driver-gpu/nvidia-dra-driver-gpu | grep vX.Y.Z
   ```
 
 ### B. Create PR for Promotion
 
 - Identify the image digests:
   ```sh
-  skopeo inspect docker://us-central1-docker.pkg.dev/k8s-staging-images/nvidia-dra-driver-gpu/nvidia-dra-driver-gpu:vX.Y.Z --format '{{.Digest}}'
+  skopeo inspect docker://us-central1-docker.pkg.dev/k8s-staging-images/nv-dra-driver-gpu/nvidia-dra-driver-gpu:vX.Y.Z --format '{{.Digest}}'
   ```
 - Fork [kubernetes/k8s.io](https://github.com/kubernetes/k8s.io).
 - Update
-  `registry.k8s.io/images/k8s-staging-nvidia-dra-driver-gpu/images.yaml`
+  `registry.k8s.io/images/k8s-staging-nv-dra-driver-gpu/images.yaml`
   with the new digests and tags ([sample PR](https://github.com/kubernetes/k8s.io/pull/9176)).
 - Submit the PR to `kubernetes/k8s.io`. Once it is approved and merged
   automation will schedule the promotion.
@@ -60,7 +60,7 @@ Before publishing the release, verify the images are available at k8s-registry:
 
 - Ensure the images are available at `registry.k8s.io`:
   ```sh
-  skopeo list-tags docker://registry.k8s.io/nvidia-dra-driver-gpu/nvidia-dra-driver-gpu | grep vX.Y.Z
+  skopeo list-tags docker://registry.k8s.io/nv-dra-driver-gpu/nvidia-dra-driver-gpu | grep vX.Y.Z
   ```
 
 ### B. Test Release Artifacts
@@ -73,7 +73,7 @@ Before publishing the release, verify the images are available at k8s-registry:
 - Generate the release manifests:
   ```sh
   rm -rf ./dist
-  REGISTRY=registry.k8s.io TAG=vX.Y.Z make manifests
+  REGISTRY=registry.k8s.io/nv-dra-driver-gpu TAG=vX.Y.Z make manifests
   ls ./dist   # to confirm the generated artifacts
   ```
 - Run a local E2E test in Kind (see references in `README.md`) using the generated manifests from the `dist/` directory to ensure they pull the correct images and function as expected.

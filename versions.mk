@@ -15,9 +15,10 @@
 DRIVER_NAME := nvidia-dra-driver-gpu
 MODULE := sigs.k8s.io/$(DRIVER_NAME)
 
-REGISTRY ?= registry.k8s.io/nvidia
+REGISTRY ?= registry.k8s.io/nv-dra-driver-gpu
 # Staging registry before kubernetes/k8s.io promotion (Prow / test-infra jobs).
-STAGING_REGISTRY ?= gcr.io/k8s-staging-nvidia
+# See cloudbuild.yaml and https://github.com/kubernetes/k8s.io (k8s-staging-nv-dra-driver-gpu).
+STAGING_REGISTRY ?= us-central1-docker.pkg.dev/k8s-staging-images/nv-dra-driver-gpu
 
 VERSION  ?= v26.4.0-dev
 

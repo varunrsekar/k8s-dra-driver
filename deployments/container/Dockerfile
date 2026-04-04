@@ -104,7 +104,7 @@ RUN bash /bashbuild/build-bash-static.sh
 RUN cd /bashbuild/bash-static/releases && ./bash*-static --version && mv bash-*-static /bashbuild/bash && file /bashbuild/bash
 
 # option 2:
-# FROM registry.k8s.io/nvidia/nvidia-dra-driver-gpu:v25.12.0-dev-839e966a AS bash
+# FROM registry.k8s.io/nv-dra-driver-gpu/nvidia-dra-driver-gpu:v25.12.0-dev-839e966a AS bash
 
 # Pull the nvidia-cdi-hook binary out of the relevant toolkit container
 # (arch: TARGETPLATFORM, set via --platform).
