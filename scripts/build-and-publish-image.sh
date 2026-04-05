@@ -45,9 +45,7 @@ export DOCKER_CLI_EXPERIMENTAL=enabled
 # Required for "docker buildx build --push".
 gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
-docker buildx create --name nv-dra-driver-gpu-builder || true
-docker buildx use nv-dra-driver-gpu-builder
-docker buildx inspect --bootstrap
+bash "${REPO_ROOT}/hack/init-buildx.sh"
 
 make -f deployments/container/Makefile build \
 	BUILD_MULTI_ARCH_IMAGES=true \
