@@ -38,9 +38,11 @@ const (
 	TaintKeyUnmonitored = DriverName + "/unmonitored"
 )
 
-// TODO: remove later, as its not in vendored api
+// TODO(issue #1001):Remove this hardcoded constant and switch to the upstream
+// resourceapi.DeviceTaintEffectNone once the k8s.io/api dependency is bumped
+// to a version that includes it (KEP-5055 beta).
 // DeviceTaintEffectNone is an informational effect that does not affect
-// scheduling or eviction. Available in k8s 1.36+ (KEP-5055 beta).
+// scheduling or eviction.
 const DeviceTaintEffectNone resourceapi.DeviceTaintEffect = "None"
 
 // DeviceHealthEventType classifies the category of health event detected by
@@ -67,19 +69,22 @@ type DeviceHealthEvent struct {
 // healthEventToTaint maps a DeviceHealthEvent to the corresponding DRA
 // DeviceTaint using the Option A taint key schema: one key per health
 // dimension under the gpu.nvidia.com domain.
-// TODO: revisit this to double check on the desired effects
-func healthEventToTaint(event *DeviceHealthEvent) resourceapi.DeviceTaint {
+func healthEventToTaint(event *DeviceHealthEvent, monitor deviceHealthMonitor) resourceapi.DeviceTaint {
 	switch event.EventType {
 	case HealthEventXID:
+		effect := resourceapi.DeviceTaintEffectNoSchedule
+		if monitor != nil && monitor.IsEventNonFatal(event) {
+			effect = DeviceTaintEffectNone
+		}
 		return resourceapi.DeviceTaint{
 			Key:    TaintKeyXID,
 			Value:  strconv.FormatUint(event.EventData, 10),
-			Effect: DeviceTaintEffectNone,
+			Effect: effect,
 		}
 	case HealthEventGPULost:
 		return resourceapi.DeviceTaint{
 			Key:    TaintKeyGPULost,
-			Effect: resourceapi.DeviceTaintEffectNoExecute,
+			Effect: resourceapi.DeviceTaintEffectNoSchedule,
 		}
 	case HealthEventUnmonitored:
 		return resourceapi.DeviceTaint{
@@ -171,14 +176,14 @@ func (m *nvmlDeviceHealthMonitor) registerEventsForDevices() {
 		gpu, ret := m.nvmllib.DeviceGetHandleByUUID(parentUUID)
 		if ret != nvml.SUCCESS {
 			klog.Warningf("Unable to get device handle from UUID[%s]: %v; marking devices as unmonitored", parentUUID, ret)
-			m.sendHealthEventsForDevices(giMap, HealthEventUnmonitored)
+			m.sendHealthEventForDevices(giMap, HealthEventUnmonitored)
 			continue
 		}
 
 		supportedEvents, ret := gpu.GetSupportedEventTypes()
 		if ret != nvml.SUCCESS {
 			klog.Warningf("unable to determine the supported events for %s: %v; marking devices as unmonitored", parentUUID, ret)
-			m.sendHealthEventsForDevices(giMap, HealthEventUnmonitored)
+			m.sendHealthEventForDevices(giMap, HealthEventUnmonitored)
 			continue
 		}
 
@@ -188,7 +193,7 @@ func (m *nvmlDeviceHealthMonitor) registerEventsForDevices() {
 		}
 		if ret != nvml.SUCCESS {
 			klog.Warningf("unable to register events for %s: %v; marking devices as unmonitored", parentUUID, ret)
-			m.sendHealthEventsForDevices(giMap, HealthEventUnmonitored)
+			m.sendHealthEventForDevices(giMap, HealthEventUnmonitored)
 		}
 	}
 }
@@ -227,7 +232,7 @@ func (m *nvmlDeviceHealthMonitor) run(ctx context.Context) {
 			if ret != nvml.SUCCESS {
 				if ret == nvml.ERROR_GPU_IS_LOST {
 					klog.Warningf("GPU is lost error: %v; Tainting all devices with %s", ret, TaintKeyGPULost)
-					m.sendHealthEventsForAllDevices(HealthEventGPULost)
+					m.sendHealthEventForAllDevices(HealthEventGPULost)
 					continue
 				}
 				klog.V(6).Infof("Error waiting for NVML event: %v. Retrying...", ret)
@@ -244,11 +249,6 @@ func (m *nvmlDeviceHealthMonitor) run(ctx context.Context) {
 				continue
 			}
 
-			if m.skippedXids[xid] {
-				klog.V(6).Infof("Skipping XID event: Data=%d, Type=%d, GI=%d, CI=%d", xid, eType, gi, ci)
-				continue
-			}
-
 			klog.V(4).Infof("Processing event XID=%d event", xid)
 			// this seems an extreme action.
 			// should we just log the error and proceed anyway.
@@ -256,7 +256,7 @@ func (m *nvmlDeviceHealthMonitor) run(ctx context.Context) {
 			eventUUID, ret := event.Device.GetUUID()
 			if ret != nvml.SUCCESS {
 				klog.Warningf("Failed to determine uuid for event %v: %v; Tainting all devices with %s", event, ret, TaintKeyGPULost)
-				m.sendHealthEventsForAllDevices(HealthEventGPULost)
+				m.sendHealthEventForAllDevices(HealthEventGPULost)
 				continue
 			}
 			affectedDevice := m.deviceByPlacement.get(eventUUID, gi, ci)
@@ -279,16 +279,16 @@ func (m *nvmlDeviceHealthMonitor) Unhealthy() <-chan *DeviceHealthEvent {
 	return m.unhealthy
 }
 
-func (m *nvmlDeviceHealthMonitor) sendHealthEventsForAllDevices(eventType DeviceHealthEventType) {
+func (m *nvmlDeviceHealthMonitor) sendHealthEventForAllDevices(eventType DeviceHealthEventType) {
 	for _, giMap := range m.deviceByPlacement {
-		m.sendHealthEventsForDevices(giMap, eventType)
+		m.sendHealthEventForDevices(giMap, eventType)
 	}
 }
 
-// sendHealthEventsForDevices sends a DeviceHealthEvent for every device under
+// sendHealthEventForDevices sends a DeviceHealthEvent for every device under
 // the given parent-level map. Uses non-blocking sends to protect the monitor
 // goroutine from deadlocks when the channel is full.
-func (m *nvmlDeviceHealthMonitor) sendHealthEventsForDevices(giMap map[uint32]map[uint32]*AllocatableDevice, eventType DeviceHealthEventType) {
+func (m *nvmlDeviceHealthMonitor) sendHealthEventForDevices(giMap map[uint32]map[uint32]*AllocatableDevice, eventType DeviceHealthEventType) {
 	for _, ciMap := range giMap {
 		for _, dev := range ciMap {
 			event := &DeviceHealthEvent{
@@ -371,8 +371,8 @@ func (p devicePlacementMap) get(uuid string, gi, ci uint32) *AllocatableDevice {
 }
 
 // getAdditionalXids returns a list of additional Xids to skip from the specified string.
-// The input is treaded as a comma-separated string and all valid uint64 values are considered as Xid values.
-// Invalid values nare ignored.
+// The input is treated as a comma-separated string and all valid uint64 values are considered as Xid values.
+// Invalid values are ignored.
 // TODO: add list of EXPLICIT XIDs from [https://github.com/NVIDIA/k8s-device-plugin/pull/1443].
 func getAdditionalXids(input string) []uint64 {
 	if input == "" {
@@ -397,7 +397,6 @@ func getAdditionalXids(input string) []uint64 {
 	return additionalXids
 }
 
-// TODO: this can be simplified now with "EffectNone"
 func xidsToSkip(additionalXids string) map[uint64]bool {
 	// Add the list of hardcoded disabled (ignored) XIDs:
 	// http://docs.nvidia.com/deploy/xid-errors/index.html#topic_4
@@ -420,4 +419,14 @@ func xidsToSkip(additionalXids string) map[uint64]bool {
 		skippedXids[additionalXid] = true
 	}
 	return skippedXids
+}
+
+// IsEventNonFatal evaluates whether a hardware event is considered an application-level
+// warning (None) rather than a critical hardware failure (NoSchedule).
+// Currently, it only checks for XID events.
+func (m *nvmlDeviceHealthMonitor) IsEventNonFatal(event *DeviceHealthEvent) bool {
+	if event.EventType == HealthEventXID {
+		return m.skippedXids[event.EventData]
+	}
+	return false
 }

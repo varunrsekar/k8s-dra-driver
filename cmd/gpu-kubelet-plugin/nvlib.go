@@ -748,8 +748,6 @@ func (l deviceLib) getMigDevices(gpuInfo *GpuInfo) (map[string]*MigDeviceInfo, e
 			gIInfo:         &giInfo,
 			ciProfileInfo:  ciProfileInfo,
 			cIInfo:         &ciInfo,
-			pcieBusID:      gpuInfo.pcieBusID,
-			pcieRootAttr:   gpuInfo.pcieRootAttr,
 		}
 		return nil
 	})

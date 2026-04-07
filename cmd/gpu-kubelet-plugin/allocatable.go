@@ -314,44 +314,42 @@ func (d *PerGPUAllocatableDevices) RemoveSiblingDevices(device *AllocatableDevic
 	}
 }
 
+// Taints returns a copy of the device's taints to prevent data races
+// when being read concurrently by the ResourceSlice builder.
 func (d *AllocatableDevice) Taints() []resourceapi.DeviceTaint {
-	return d.taints
+	return slices.Clone(d.taints)
 }
 
 // AddOrUpdateTaint adds a new taint or updates an existing one with the same
-// key. Within the same key, the effect can only escalate
-// (None < NoSchedule < NoExecute), and the value is always updated to the
-// latest. Returns true if the taint set was modified.
+// key. The value and effect are always updated to the latest event received.
+// Meaning, if a device receives multiple events for the same taint dimension
+// (e.g., XID 48 followed by XID 63), the value is overwritten and only the most recent event data is retained.
+// Returns true if the taint set was modified.
 func (d *AllocatableDevice) AddOrUpdateTaint(taint resourceapi.DeviceTaint) bool {
 	for i, existing := range d.taints {
-		if existing.Key != taint.Key {
-			continue
+		if existing.Key == taint.Key {
+			changed := false
+
+			// Overwrite Value if it changed
+			if existing.Value != taint.Value {
+				d.taints[i].Value = taint.Value
+				changed = true
+			}
+
+			if existing.Effect != taint.Effect {
+				d.taints[i].Effect = taint.Effect
+				changed = true
+			}
+
+			if changed {
+				d.taints[i].TimeAdded = nil // reset timestamp for the API server
+			}
+
+			return changed
 		}
-		changed := false
-		if taintEffectSeverity(taint.Effect) > taintEffectSeverity(existing.Effect) {
-			d.taints[i].Effect = taint.Effect
-			d.taints[i].TimeAdded = nil // reset so the API server sets a fresh timestamp
-			changed = true
-		}
-		if d.taints[i].Value != taint.Value {
-			d.taints[i].Value = taint.Value
-			changed = true
-		}
-		return changed
 	}
+
+	// Key doesn't exist yet, append the new taint
 	d.taints = append(d.taints, taint)
 	return true
-}
-
-func taintEffectSeverity(effect resourceapi.DeviceTaintEffect) int {
-	switch effect {
-	case DeviceTaintEffectNone:
-		return 0
-	case resourceapi.DeviceTaintEffectNoSchedule:
-		return 1
-	case resourceapi.DeviceTaintEffectNoExecute:
-		return 2
-	default:
-		return -1
-	}
 }

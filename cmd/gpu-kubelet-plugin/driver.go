@@ -48,6 +48,8 @@ type deviceHealthMonitor interface {
 	Start(context.Context) error
 	Stop()
 	Unhealthy() <-chan *DeviceHealthEvent
+	// Allows the driver to query the HealthMonitor's health policy
+	IsEventNonFatal(event *DeviceHealthEvent) bool
 }
 
 type driver struct {
@@ -471,7 +473,7 @@ func (d *driver) deviceHealthEvents(ctx context.Context, nodeName string) {
 			uuid := event.Device.UUID()
 			klog.Warningf("Received %s health event for device %s", event.EventType, uuid)
 
-			taint := healthEventToTaint(event)
+			taint := healthEventToTaint(event, d.deviceHealthMonitor)
 			if !d.state.AddDeviceTaint(event.Device, taint) {
 				continue
 			}
@@ -507,6 +509,11 @@ func (d *driver) deviceHealthEvents(ctx context.Context, nodeName string) {
 					nodeName: {Slices: []resourceslice.Slice{resourceSlice}},
 				},
 			}
+
+			// TODO: Instead of acting on per event basis, add event aggregation on the receiving side before `publishResources`.
+			// Evaluate two batching strategies:
+			// 1. Channel drain: Non-blocking pull of all pending events (Pro: zero latency; Con: susceptible to NVML lag).
+			// 2. Timer debounce: e.g., 50ms window (Pro: standard K8s API protection; Con: slight delay).
 			if err := d.pluginhelper.PublishResources(ctx, resources); err != nil {
 				klog.Errorf("Failed to publish resources after taint update for device %s: %v", uuid, err)
 			}
