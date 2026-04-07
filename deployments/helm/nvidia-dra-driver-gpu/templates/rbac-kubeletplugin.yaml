@@ -57,7 +57,7 @@ rules:
 - apiGroups: ["resource.nvidia.com"]
   resources: ["computedomaincliques"]
   verbs: ["get"]
-{{- if (and $.Values.resources.gpus.enabled $.Values.featureGates.MPSSupport) }}
+{{- if (and $.Values.resources.gpus.enabled (and $.Values.featureGates (and (hasKey $.Values.featureGates "MPSSupport") $.Values.featureGates.MPSSupport))) }}
 - apiGroups: ["apps"]
   resources: ["deployments"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
