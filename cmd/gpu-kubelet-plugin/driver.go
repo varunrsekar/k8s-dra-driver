@@ -36,6 +36,7 @@ import (
 
 	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
 	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/flock"
+	drametrics "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/metrics"
 )
 
 // DriverPrepUprepFlockPath is the path to a lock file used to make sure
@@ -332,19 +333,23 @@ func (d *driver) HandleError(ctx context.Context, err error, msg string) {
 }
 
 func (d *driver) nodePrepareResource(ctx context.Context, claim *resourceapi.ResourceClaim) kubeletplugin.PrepareResult {
+	t0 := time.Now()
 	// Instead of a global prepare/unprepare (PU) lock, we could rely on
 	// fine-grained checkpoint locking, which was proven to work correctly in
 	// case of DynamicMIG mode. However, out of caution, retain this global PU
 	// lock for now in all modes (re-evaluate the performance impact at a later
 	// time).
-	t0 := time.Now()
+
 	release, err := d.pulock.Acquire(ctx, flock.WithTimeout(10*time.Second))
 	if err != nil {
+		drametrics.IncNodePrepareError(DriverName, "lock_acquire")
 		return kubeletplugin.PrepareResult{
 			Err: fmt.Errorf("error acquiring prep/unprep lock: %w", err),
 		}
 	}
 	defer release()
+	doneInFlight := drametrics.TrackInFlight(DriverName, "prepare")
+	defer doneInFlight()
 	klog.V(6).Infof("t_prep_lock_acq %.3f s", time.Since(t0).Seconds())
 
 	cs := ResourceClaimToString(claim)
@@ -353,6 +358,7 @@ func (d *driver) nodePrepareResource(ctx context.Context, claim *resourceapi.Res
 	klog.V(6).Infof("t_prep %.3f s (claim %s)", time.Since(tprep0).Seconds(), cs)
 
 	if err != nil {
+		drametrics.IncNodePrepareError(DriverName, "prepare_devices")
 		return kubeletplugin.PrepareResult{
 			Err: fmt.Errorf("error preparing devices for claim %s: %w", cs, err),
 		}
@@ -361,6 +367,7 @@ func (d *driver) nodePrepareResource(ctx context.Context, claim *resourceapi.Res
 	if featuregates.Enabled(featuregates.PassthroughSupport) {
 		// Re-advertise updated resourceslice after preparing devices.
 		if err = d.publishResources(ctx, d.state.config); err != nil {
+			drametrics.IncNodePrepareError(DriverName, "publish_resources")
 			return kubeletplugin.PrepareResult{
 				Err: fmt.Errorf("error preparing devices for claim %v: %w", claim.UID, err),
 			}
@@ -368,16 +375,21 @@ func (d *driver) nodePrepareResource(ctx context.Context, claim *resourceapi.Res
 	}
 
 	klog.Infof("Returning newly prepared devices for claim '%s': %v", cs, devs)
+	drametrics.ObserveRequest(DriverName, "prepare", time.Since(t0))
 	return kubeletplugin.PrepareResult{Devices: devs}
 }
 
 func (d *driver) nodeUnprepareResource(ctx context.Context, claimRef kubeletplugin.NamespacedObject) error {
 	t0 := time.Now()
+
 	release, err := d.pulock.Acquire(ctx, flock.WithTimeout(10*time.Second))
 	if err != nil {
+		drametrics.IncNodeUnprepareError(DriverName, "lock_acquire")
 		return fmt.Errorf("error acquiring prep/unprep lock: %w", err)
 	}
 	defer release()
+	doneInFlight := drametrics.TrackInFlight(DriverName, "unprepare")
+	defer doneInFlight()
 	klog.V(6).Infof("t_unprep_lock_acq %.3f s", time.Since(t0).Seconds())
 
 	cs := claimRef.String()
@@ -386,16 +398,19 @@ func (d *driver) nodeUnprepareResource(ctx context.Context, claimRef kubeletplug
 	klog.V(6).Infof("t_unprep %.3f s (claim %s)", time.Since(tunprep0).Seconds(), cs)
 
 	if err != nil {
+		drametrics.IncNodeUnprepareError(DriverName, "unprepare_devices")
 		return fmt.Errorf("error unpreparing devices for claim %v: %w", claimRef.String(), err)
 	}
 
 	if featuregates.Enabled(featuregates.PassthroughSupport) {
 		// Re-advertise updated resourceslice after unpreparing devices.
 		if err = d.publishResources(ctx, d.state.config); err != nil {
+			drametrics.IncNodeUnprepareError(DriverName, "publish_resources")
 			return fmt.Errorf("error publishing resources: %w", err)
 		}
 	}
 
+	drametrics.ObserveRequest(DriverName, "unprepare", time.Since(t0))
 	return nil
 }
 

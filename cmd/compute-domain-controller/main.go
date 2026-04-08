@@ -28,15 +28,12 @@ import (
 	"syscall"
 
 	"github.com/google/uuid"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/component-base/logs"
-	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog/v2"
 
 	_ "k8s.io/component-base/metrics/prometheus/restclient" // for client metric registration
@@ -47,6 +44,7 @@ import (
 	"sigs.k8s.io/nvidia-dra-driver-gpu/internal/info"
 	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
 	pkgflags "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/flags"
+	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/metrics"
 )
 
 const (
@@ -371,24 +369,9 @@ func runWithLeaderElection(ctx context.Context, config *Config, controller *Cont
 
 func SetupHTTPEndpoint(config *Config) error {
 	if config.flags.metricsPath != "" {
-		// To collect metrics data from the metric handler itself, we
-		// let it register itself and then collect from that registry.
-		reg := prometheus.NewRegistry()
-		gatherers := prometheus.Gatherers{
-			// Include Go runtime and process metrics:
-			// https://github.com/kubernetes/kubernetes/blob/9780d88cb6a4b5b067256ecb4abf56892093ee87/staging/src/k8s.io/component-base/metrics/legacyregistry/registry.go#L46-L49
-			legacyregistry.DefaultGatherer,
-		}
-		gatherers = append(gatherers, reg)
-
 		actualPath := path.Join("/", config.flags.metricsPath)
 		klog.InfoS("Starting metrics", "path", actualPath)
-		// This is similar to k8s.io/component-base/metrics HandlerWithReset
-		// except that we gather from multiple sources.
-		config.mux.Handle(actualPath,
-			promhttp.InstrumentMetricHandler(
-				reg,
-				promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{})))
+		config.mux.Handle(path.Join("/", config.flags.metricsPath), metrics.NewLegacyPrometheusHandler())
 	}
 
 	if config.flags.profilePath != "" {

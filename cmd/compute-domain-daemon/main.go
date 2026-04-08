@@ -61,6 +61,8 @@ type Flags struct {
 	podName                string
 	podNamespace           string
 	maxNodesPerIMEXDomain  int
+	httpEndpoint           string
+	metricsPath            string
 	klogVerbosity          int
 }
 
@@ -244,6 +246,8 @@ func run(ctx context.Context, cancel context.CancelFunc, flags *Flags) error {
 	}
 
 	config := &ControllerConfig{
+		httpEndpoint:           flags.httpEndpoint,
+		metricsPath:            flags.metricsPath,
 		clientsets:             clientsets,
 		cliqueID:               flags.cliqueID,
 		computeDomainUUID:      flags.computeDomainUUID,

@@ -33,6 +33,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/flock"
+	drametrics "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/metrics"
 	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/workqueue"
 )
 
@@ -241,14 +242,19 @@ func (d *driver) HandleError(ctx context.Context, err error, msg string) {
 // also reflect an error. Set the boolean to `true` for any result wrapping a
 // non-retryable error.
 func (d *driver) nodePrepareResource(ctx context.Context, claim *resourceapi.ResourceClaim) (bool, kubeletplugin.PrepareResult) {
+	t0 := time.Now()
+
 	release, err := d.pulock.Acquire(ctx, flock.WithTimeout(10*time.Second))
 	if err != nil {
+		drametrics.IncNodePrepareError(DriverName, "lock_acquire")
 		res := kubeletplugin.PrepareResult{
 			Err: fmt.Errorf("error acquiring prep/unprep lock: %w", err),
 		}
 		return false, res
 	}
 	defer release()
+	doneInFlight := drametrics.TrackInFlight(DriverName, "prepare")
+	defer doneInFlight()
 
 	if claim.Status.Allocation == nil {
 		res := kubeletplugin.PrepareResult{
@@ -259,6 +265,7 @@ func (d *driver) nodePrepareResource(ctx context.Context, claim *resourceapi.Res
 
 	devs, err := d.state.Prepare(ctx, claim)
 	if err != nil {
+		drametrics.IncNodePrepareError(DriverName, "prepare_devices")
 		res := kubeletplugin.PrepareResult{
 			Err: fmt.Errorf("error preparing devices for claim '%s': %w", ResourceClaimToString(claim), err),
 		}
@@ -270,6 +277,7 @@ func (d *driver) nodePrepareResource(ctx context.Context, claim *resourceapi.Res
 	}
 
 	klog.V(1).Infof("Prepared devices for claim '%s': %v", ResourceClaimToString(claim), devs)
+	drametrics.ObserveRequest(DriverName, "prepare", time.Since(t0))
 
 	return true, kubeletplugin.PrepareResult{Devices: devs}
 }
@@ -277,17 +285,24 @@ func (d *driver) nodePrepareResource(ctx context.Context, claim *resourceapi.Res
 // Return 2-tuple: the first value is a boolean indicating to the retry logic
 // whether the work is 'done'.
 func (d *driver) nodeUnprepareResource(ctx context.Context, claimRef kubeletplugin.NamespacedObject) (bool, error) {
+	tstart := time.Now()
+
 	release, err := d.pulock.Acquire(ctx, flock.WithTimeout(10*time.Second))
 	if err != nil {
+		drametrics.IncNodeUnprepareError(DriverName, "lock_acquire")
 		return false, fmt.Errorf("error acquiring prep/unprep lock: %w", err)
 	}
 	defer release()
+	doneInFlight := drametrics.TrackInFlight(DriverName, "unprepare")
+	defer doneInFlight()
 
 	if err := d.state.Unprepare(ctx, claimRef); err != nil {
+		drametrics.IncNodeUnprepareError(DriverName, "unprepare_devices")
 		return isPermanentError(err), fmt.Errorf("error unpreparing devices for claim '%v': %w", claimRef.String(), err)
 	}
 
 	klog.V(1).Infof("Unprepared devices for claim '%v'", claimRef.String())
+	drametrics.ObserveRequest(DriverName, "unprepare", time.Since(tstart))
 	return true, nil
 }
 

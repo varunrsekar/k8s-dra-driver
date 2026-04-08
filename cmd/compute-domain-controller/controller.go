@@ -56,6 +56,13 @@ type ManagerConfig struct {
 	// logVerbosityCDDaemon controls the log verbosity for dynamically launched
 	// ComputeDomain daemons.
 	logVerbosityCDDaemon int
+
+	// httpEndpoint is the TCP network address where the HTTP server for diagnostics
+	// (including pprof and metrics) will listen
+	httpEndpoint string
+
+	// metricsPath is the HTTP path for Prometheus metrics
+	metricsPath string
 }
 
 // Controller manages the lifecycle of the DRA driver and its components.
@@ -84,6 +91,8 @@ func (c *Controller) Run(ctx context.Context) error {
 		clientsets:            c.config.clientsets,
 		workQueue:             workQueue,
 		logVerbosityCDDaemon:  c.config.flags.logVerbosityCDDaemon,
+		httpEndpoint:          c.config.flags.httpEndpoint,
+		metricsPath:           c.config.flags.metricsPath,
 	}
 
 	// TODO: log full, nested cliFlags structure.

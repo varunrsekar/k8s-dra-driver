@@ -124,6 +124,13 @@ spec:
           timeoutSeconds: 10
         {{- end }}
         env:
+        {{- if .Values.kubeletPlugin.metrics.enabled }}
+        # HTTP_ENDPOINT and METRICS_PATH are used to configure the metrics HTTP server.
+        - name: HTTP_ENDPOINT
+          value: "{{ .Values.kubeletPlugin.metrics.computeDomainHttpEndpoint }}"
+        - name: METRICS_PATH
+          value: "{{ .Values.kubeletPlugin.metrics.metricsPath }}"
+        {{- end }}
         # LOG_VERBOSITY is the source of truth for this program's klog
         # configuration. Currently injected via CLI argument (see above) because
         # klog's verbosity for now cannot be sanely set from an environment
@@ -225,6 +232,13 @@ spec:
           timeoutSeconds: 10
         {{- end }}
         env:
+        {{- if .Values.kubeletPlugin.metrics.enabled }}
+        # HTTP_ENDPOINT and METRICS_PATH are used to configure the metrics HTTP server.
+        - name: HTTP_ENDPOINT
+          value: "{{ .Values.kubeletPlugin.metrics.gpuHttpEndpoint }}"
+        - name: METRICS_PATH
+          value: "{{ .Values.kubeletPlugin.metrics.metricsPath }}"
+        {{- end }}
         # LOG_VERBOSITY is the source of truth for this program's klog
         # configuration. Currently injected via CLI argument (see above) because
         # klog's verbosity for now cannot be sanely set from an environment
