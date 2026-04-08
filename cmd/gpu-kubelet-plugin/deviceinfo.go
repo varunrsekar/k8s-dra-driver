@@ -49,7 +49,8 @@ type GpuInfo struct {
 	cudaComputeCapability string
 	driverVersion         string
 	cudaDriverVersion     string
-	pcieBusID             string
+	pciBusID              string
+	pciBusIDAttr          *deviceattribute.DeviceAttribute
 	pcieRootAttr          *deviceattribute.DeviceAttribute
 	migProfiles           []*MigProfileInfo
 	addressingMode        *string
@@ -87,8 +88,6 @@ type MigDeviceInfo struct {
 	parent        *GpuInfo
 	giProfileInfo *nvml.GpuInstanceProfileInfo
 	ciProfileInfo *nvml.ComputeInstanceProfileInfo
-	pcieBusID     string
-	pcieRootAttr  *deviceattribute.DeviceAttribute
 	health        HealthStatus
 }
 
@@ -99,7 +98,8 @@ type VfioDeviceInfo struct {
 	index                  int
 	parent                 *GpuInfo
 	productName            string
-	pcieBusID              string
+	PciBusID               string `json:"pciBusID"`
+	pciBusIDAttr           *deviceattribute.DeviceAttribute
 	pcieRootAttr           *deviceattribute.DeviceAttribute
 	numaNode               int
 	iommuGroup             int
@@ -157,8 +157,6 @@ func (d *GpuInfo) AddDetailAfterWalkingMigProfiles(maxcap PartCapacityMap, memSl
 }
 
 func (d *GpuInfo) Attributes() map[resourceapi.QualifiedName]resourceapi.DeviceAttribute {
-	// TODO: Consume GetPCIBusIDAttribute from https://github.com/kubernetes/kubernetes/blob/4c5746c0bc529439f78af458f8131b5def4dbe5d/staging/src/k8s.io/dynamic-resource-allocation/deviceattribute/attribute.go#L39
-	pciBusIDAttrName := resourceapi.QualifiedName(deviceattribute.StandardDeviceAttributePrefix + "pciBusID")
 	attrs := map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
 		"type": {
 			StringValue: ptr.To(GpuDeviceType),
@@ -184,13 +182,17 @@ func (d *GpuInfo) Attributes() map[resourceapi.QualifiedName]resourceapi.DeviceA
 		"cudaDriverVersion": {
 			VersionValue: ptr.To(semver.MustParse(d.cudaDriverVersion).String()),
 		},
-		pciBusIDAttrName: {
-			StringValue: &d.pcieBusID,
-		},
 	}
 
+	if d.pciBusIDAttr != nil {
+		attrs[d.pciBusIDAttr.Name] = d.pciBusIDAttr.Value
+	}
 	if d.pcieRootAttr != nil {
 		attrs[d.pcieRootAttr.Name] = d.pcieRootAttr.Value
+	}
+
+	if d.pciBusIDAttr != nil {
+		attrs[d.pciBusIDAttr.Name] = d.pciBusIDAttr.Value
 	}
 
 	if d.addressingMode != nil {
@@ -241,8 +243,6 @@ func (d *MigDeviceInfo) GetDevice() resourceapi.Device {
 }
 
 func (d *VfioDeviceInfo) GetDevice() resourceapi.Device {
-	// TODO: Consume GetPCIBusIDAttribute from https://github.com/kubernetes/kubernetes/blob/4c5746c0bc529439f78af458f8131b5def4dbe5d/staging/src/k8s.io/dynamic-resource-allocation/deviceattribute/attribute.go#L39
-	pciBusIDAttrName := resourceapi.QualifiedName(deviceattribute.StandardDeviceAttributePrefix + "pciBusID")
 	device := resourceapi.Device{
 		Name: d.CanonicalName(),
 		Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
@@ -261,9 +261,6 @@ func (d *VfioDeviceInfo) GetDevice() resourceapi.Device {
 			"numa": {
 				IntValue: ptr.To(int64(d.numaNode)),
 			},
-			pciBusIDAttrName: {
-				StringValue: &d.pcieBusID,
-			},
 			"productName": {
 				StringValue: &d.productName,
 			},
@@ -274,8 +271,14 @@ func (d *VfioDeviceInfo) GetDevice() resourceapi.Device {
 			},
 		},
 	}
+
+	if d.pciBusIDAttr != nil {
+		device.Attributes[d.pciBusIDAttr.Name] = d.pciBusIDAttr.Value
+	}
+
 	if d.pcieRootAttr != nil {
 		device.Attributes[d.pcieRootAttr.Name] = d.pcieRootAttr.Value
 	}
+
 	return device
 }

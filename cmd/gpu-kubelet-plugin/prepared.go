@@ -80,11 +80,11 @@ func (d PreparedDevice) Type() string {
 func (d *PreparedDevice) CanonicalName() string {
 	switch d.Type() {
 	case GpuDeviceType:
-		return d.Gpu.Info.CanonicalName()
+		return d.Gpu.Device.DeviceName
 	case PreparedMigDeviceType:
 		return d.Mig.Device.DeviceName
 	case VfioDeviceType:
-		return d.Vfio.Info.CanonicalName()
+		return d.Vfio.Device.DeviceName
 	}
 	panic("unexpected type for AllocatableDevice")
 }
@@ -154,12 +154,7 @@ func (g *PreparedDeviceGroup) GetDevices() []kubeletplugin.Device {
 func (g *PreparedDeviceGroup) GetDeviceNames() []DeviceName {
 	var names []DeviceName
 	for _, device := range g.Devices {
-		switch device.Type() {
-		case GpuDeviceType:
-			names = append(names, device.Gpu.Info.CanonicalName())
-		case PreparedMigDeviceType:
-			names = append(names, device.Mig.Device.DeviceName)
-		}
+		names = append(names, device.CanonicalName())
 	}
 	return names
 }

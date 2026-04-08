@@ -21,8 +21,8 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/urfave/cli/v2"
-	"k8s.io/apimachinery/pkg/util/dump"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/dump"
 
 	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
 )

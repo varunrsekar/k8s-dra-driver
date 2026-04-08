@@ -44,7 +44,7 @@ type nvmlDeviceHealthMonitor struct {
 	wg                sync.WaitGroup
 }
 
-func newNvmlDeviceHealthMonitor(config *Config, allocatable AllocatableDevices, nvdevlib *deviceLib) (*nvmlDeviceHealthMonitor, error) {
+func newNvmlDeviceHealthMonitor(config *Config, perGPUAllocatable *PerGPUAllocatableDevices, nvdevlib *deviceLib) (*nvmlDeviceHealthMonitor, error) {
 	if nvdevlib.nvmllib == nil {
 		return nil, fmt.Errorf("nvml library is nil")
 	}
@@ -55,10 +55,14 @@ func newNvmlDeviceHealthMonitor(config *Config, allocatable AllocatableDevices, 
 		_ = nvdevlib.nvmllib.Shutdown()
 	}()
 
+	if perGPUAllocatable == nil {
+		return nil, fmt.Errorf("perGPUAllocatable is nil")
+	}
+	all := perGPUAllocatable.GetAllDevices()
 	m := &nvmlDeviceHealthMonitor{
 		nvmllib:           nvdevlib.nvmllib,
-		unhealthy:         make(chan *AllocatableDevice, len(allocatable)),
-		deviceByPlacement: getDevicePlacementMap(allocatable),
+		unhealthy:         make(chan *AllocatableDevice, len(all)),
+		deviceByPlacement: getDevicePlacementMap(all),
 		skippedXids:       xidsToSkip(config.flags.additionalXidsToIgnore),
 	}
 	return m, nil

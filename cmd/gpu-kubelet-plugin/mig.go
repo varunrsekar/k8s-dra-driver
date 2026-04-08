@@ -26,7 +26,6 @@ import (
 	nvdev "github.com/NVIDIA/go-nvlib/pkg/nvlib/device"
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	resourceapi "k8s.io/api/resource/v1"
-	"k8s.io/dynamic-resource-allocation/deviceattribute"
 	"k8s.io/utils/ptr"
 )
 
@@ -36,7 +35,8 @@ import (
 // representation is abstract. It does not carry MIG device identity (UUID), and
 // does not express whether that device currently exists.
 type MigSpecTuple struct {
-	ParentMinor GPUMinor
+	ParentMinor    GPUMinor
+	ParentPCIBusID PCIBusID
 	// What is commonly called "MIG profile ID" typically refers to the GPU
 	// Instance Profile ID. The GI profile ID is also what's emitted by
 	// `nvidia-smi mig -lgip` for each profile -- it directly corresponds to a
@@ -72,7 +72,8 @@ type MigLiveTuple struct {
 	MigUUID     string   `json:"migUUID"`
 
 	// Not orthogonal to `ParentMinor`, but convenient for consumers.
-	ParentUUID string `json:"parentUUID"`
+	ParentUUID     string   `json:"parentUUID"`
+	ParentPCIBusID PCIBusID `json:"parentPCIBusID"`
 }
 
 // MigSpec is similar to `MigSpecTuple` as it also fundamentally encodes the
@@ -90,6 +91,7 @@ type MigSpec struct {
 func (m *MigSpec) Tuple() *MigSpecTuple {
 	return &MigSpecTuple{
 		ParentMinor:    m.Parent.minor,
+		ParentPCIBusID: m.Parent.pciBusID,
 		ProfileID:      int(m.GIProfileInfo.Id),
 		PlacementStart: int(m.Placement.Start),
 	}
@@ -133,8 +135,6 @@ func CommonCapacitiesMig(p *nvml.GpuInstanceProfileInfo) map[resourceapi.Qualifi
 // CommonAttributesMig returns device attributes for MIG devices that are
 // in common among the 'static MIG' and 'dynamic MIG' cases.
 func CommonAttributesMig(parent *GpuInfo, profileName string) map[resourceapi.QualifiedName]resourceapi.DeviceAttribute {
-	// TODO: Consume GetPCIBusIDAttribute from https://github.com/kubernetes/kubernetes/blob/4c5746c0bc529439f78af458f8131b5def4dbe5d/staging/src/k8s.io/dynamic-resource-allocation/deviceattribute/attribute.go#L39
-	pciBusIDAttrName := resourceapi.QualifiedName(deviceattribute.StandardDeviceAttributePrefix + "pciBusID")
 	attrs := map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
 		"type": {
 			StringValue: ptr.To("mig"),
@@ -163,15 +163,16 @@ func CommonAttributesMig(parent *GpuInfo, profileName string) map[resourceapi.Qu
 		"cudaDriverVersion": {
 			VersionValue: ptr.To(semver.MustParse(parent.cudaDriverVersion).String()),
 		},
-		pciBusIDAttrName: {
-			StringValue: &parent.pcieBusID,
-		},
 	}
 
 	if parent.addressingMode != nil {
 		attrs["addressingMode"] = resourceapi.DeviceAttribute{
 			StringValue: parent.addressingMode,
 		}
+	}
+
+	if parent.pciBusIDAttr != nil {
+		attrs[parent.pciBusIDAttr.Name] = parent.pciBusIDAttr.Value
 	}
 
 	if parent.pcieRootAttr != nil {

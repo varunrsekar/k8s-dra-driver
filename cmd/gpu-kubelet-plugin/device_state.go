@@ -56,13 +56,12 @@ type DeviceState struct {
 	mpsManager               *MpsManager
 	vfioPciManager           *VfioPciManager
 	checkpointCleanupManager *CheckpointCleanupManager
-	allocatable              AllocatableDevices
 	config                   *Config
 
-	// Same set of allocatable devices as stored in `allocatable` (above), but
-	// grouped by physical GPU. This is useful for grouped announcement (e.g.,
-	// when announcing one ResourceSlice per physical GPU).
-	perGPUAllocatable PerGPUMinorAllocatableDevices
+	// Allocatable devices grouped by physical GPU.
+	// This is useful for grouped announcement
+	// (e.g., when announcing one ResourceSlice per physical GPU).
+	perGPUAllocatable *PerGPUAllocatableDevices
 
 	nvdevlib          *deviceLib
 	checkpointManager checkpointmanager.CheckpointManager
@@ -81,7 +80,7 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 		return nil, fmt.Errorf("failed to create device library: %w", err)
 	}
 
-	allocatable, perGPUAllocatable, err := nvdevlib.enumerateAllPossibleDevices()
+	perGPUAllocatable, err := nvdevlib.enumerateAllPossibleDevices()
 	if err != nil {
 		return nil, fmt.Errorf("error enumerating all possible devices: %w", err)
 	}
@@ -111,11 +110,14 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 	}
 
 	var fullGPUuuids []string
-	for _, dev := range allocatable {
-		if dev.Gpu != nil {
-			fullGPUuuids = append(fullGPUuuids, dev.Gpu.UUID)
+	for _, devices := range perGPUAllocatable.allocatablesMap {
+		for _, dev := range devices {
+			if dev.Gpu != nil {
+				fullGPUuuids = append(fullGPUuuids, dev.Gpu.UUID)
+			}
 		}
 	}
+
 	klog.V(2).Infof("Warming up CDI device spec cache for GPUs %v", fullGPUuuids)
 	cdi.WarmupDevSpecCache(fullGPUuuids)
 
@@ -129,12 +131,11 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 		mpsManager = NewMpsManager(config, nvdevlib, hostDriverRoot, MpsControlDaemonTemplatePath)
 	}
 
-	// Validate passthrough support if feature gate is enabled.
 	var vfioPciManager *VfioPciManager
 	if featuregates.Enabled(featuregates.PassthroughSupport) {
-		vfioPciManager = NewVfioPciManager(string(containerDriverRoot), string(hostDriverRoot), nvdevlib, true /* nvidiaEnabled */)
-		if err := vfioPciManager.ValidatePassthroughSupport(); err != nil {
-			klog.Fatalf("Failed to validate passthrough support: %v", err)
+		vfioPciManager, err = NewVfioPciManager(string(containerDriverRoot), string(hostDriverRoot), nvdevlib, true /* nvidiaEnabled */)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create vfio pci manager: %v", err)
 		}
 	}
 
@@ -150,7 +151,6 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 		tsManager:         tsManager,
 		mpsManager:        mpsManager,
 		vfioPciManager:    vfioPciManager,
-		allocatable:       allocatable,
 		perGPUAllocatable: perGPUAllocatable,
 		config:            config,
 		nvdevlib:          nvdevlib,
@@ -249,15 +249,17 @@ func (s *DeviceState) Prepare(ctx context.Context, claim *resourceapi.ResourceCl
 		return nil, fmt.Errorf("prepare devices failed: %w", err)
 	}
 
+	// TODO: Remove this once partitionable device support is introduced for vfio devices.
 	if featuregates.Enabled(featuregates.PassthroughSupport) {
 		for _, device := range preparedDevices.GetDevices() {
-			allocatableDevice, ok := s.allocatable[device.DeviceName]
-			if !ok {
+			allocatableDevice := s.perGPUAllocatable.GetAllocatableDevice(device.DeviceName)
+			if allocatableDevice == nil {
 				klog.Warningf("allocatable not found for device: %v", device.DeviceName)
 				continue
 			}
-			// Why do we do that -- what does that mean?
-			s.allocatable.RemoveSiblingDevices(allocatableDevice)
+			// Remove all other device types on the parent GPU of the prepared device.
+			// When vfio type is prepared, gpu type should not be advertised and vice versa.
+			s.perGPUAllocatable.RemoveSiblingDevices(allocatableDevice)
 		}
 	}
 
@@ -406,13 +408,16 @@ func (s *DeviceState) Unprepare(ctx context.Context, claimRef kubeletplugin.Name
 		return fmt.Errorf("unsupported ClaimCheckpointState: %v", pc.CheckpointState)
 	}
 
+	// TODO: Remove this once partitionable device support is introduced for vfio devices.
 	if featuregates.Enabled(featuregates.PassthroughSupport) {
 		for _, device := range pc.PreparedDevices.GetDevices() {
-			allocatableDevice, ok := s.allocatable[device.DeviceName]
-			if !ok {
+			allocatableDevice := s.perGPUAllocatable.GetAllocatableDevice(device.DeviceName)
+			if allocatableDevice == nil {
 				klog.Warningf("allocatable not found for device: %v", device.DeviceName)
 				continue
 			}
+			// Rediscover all sibling devices on the parent GPU of the unprepared device.
+			// When vfio type is unprepared, gpu type should be advertised and vice versa.
 			err := s.discoverSiblingAllocatables(allocatableDevice)
 			if err != nil {
 				return fmt.Errorf("error discovering sibling allocatables: %w", err)
@@ -634,28 +639,28 @@ func (s *DeviceState) prepareDevices(ctx context.Context, claim *resourceapi.Res
 		if result.Driver != DriverName {
 			continue
 		}
-		device, exists := s.allocatable[result.Device]
-		if !exists {
-			return nil, fmt.Errorf("requested device is not allocatable: %v", result.Device)
+		device := s.perGPUAllocatable.GetAllocatableDevice(result.Device)
+		if device == nil {
+			return nil, fmt.Errorf("allocatable not found for device %q", result.Device)
 		}
 		// only proceed with config mapping if device is healthy.
 		if featuregates.Enabled(featuregates.NVMLDeviceHealthCheck) {
 			if !device.IsHealthy() {
-				return nil, fmt.Errorf("requested device is not healthy: %v", result.Device)
+				return nil, fmt.Errorf("device %q is not healthy", result.Device)
 			}
 		}
 		for _, c := range slices.Backward(configs) {
 			if slices.Contains(c.Requests, result.Request) {
 				if _, ok := c.Config.(*configapi.GpuConfig); ok && device.Type() != GpuDeviceType {
-					return nil, fmt.Errorf("cannot apply GpuConfig to device type %s (request: %v)", device.Type(), result.Request)
+					return nil, fmt.Errorf("cannot apply GpuConfig to device %q of type %q (request: %v)", result.Device, device.Type(), result.Request)
 				}
 
 				if _, ok := c.Config.(*configapi.MigDeviceConfig); ok && !device.IsStaticOrDynMigDevice() {
-					return nil, fmt.Errorf("cannot apply MigDeviceConfig to device type %s (request: %v)", device.Type(), result.Request)
+					return nil, fmt.Errorf("cannot apply MigDeviceConfig to device %q of type %q (request: %v)", result.Device, device.Type(), result.Request)
 				}
 
 				if _, ok := c.Config.(*configapi.VfioDeviceConfig); ok && device.Type() != VfioDeviceType {
-					return nil, fmt.Errorf("cannot apply VfioDeviceConfig to device type %s (request: %v)", device.Type(), result.Request)
+					return nil, fmt.Errorf("cannot apply VfioDeviceConfig to device %q of type %q (request: %v)", result.Device, device.Type(), result.Request)
 				}
 				configResultsMap[c.Config] = append(configResultsMap[c.Config], &result)
 				break
@@ -726,10 +731,14 @@ func (s *DeviceState) prepareDevices(ctx context.Context, claim *resourceapi.Res
 
 		for _, result := range results {
 			cdiDevices := []string{}
+			allocatableDevice := s.perGPUAllocatable.GetAllocatableDevice(result.Device)
+			if allocatableDevice == nil {
+				return nil, fmt.Errorf("allocatable not found for device %q", result.Device)
+			}
 			// The claim-specific CDI spec (of kind `k8s.gpu.nvidia.com/claim`)
 			// has not yet been generated. But we already know the name of a
 			// ClaimDevice entry that it will enumerate (by convention).
-			if d := s.cdi.GetClaimDeviceName(string(claim.UID), s.allocatable[result.Device], preparedDeviceGroupConfigState[c].containerEdits); d != "" {
+			if d := s.cdi.GetClaimDeviceName(string(claim.UID), allocatableDevice, preparedDeviceGroupConfigState[c].containerEdits); d != "" {
 				cdiDevices = append(cdiDevices, d)
 			}
 
@@ -740,22 +749,21 @@ func (s *DeviceState) prepareDevices(ctx context.Context, claim *resourceapi.Res
 				CDIDeviceIDs: cdiDevices,
 			}
 
-			adev := s.allocatable[result.Device]
 			var preparedDevice PreparedDevice
 
-			switch adev.Type() {
+			switch allocatableDevice.Type() {
 			case GpuDeviceType:
 				preparedDevice.Gpu = &PreparedGpu{
-					Info:   adev.Gpu,
+					Info:   allocatableDevice.Gpu,
 					Device: device,
 				}
 			case MigStaticDeviceType:
 				preparedDevice.Mig = &PreparedMigDevice{
-					Concrete: adev.MigStatic.LiveTuple(),
+					Concrete: allocatableDevice.MigStatic.LiveTuple(),
 					Device:   device,
 				}
 			case MigDynamicDeviceType:
-				migspec := adev.MigDynamic
+				migspec := allocatableDevice.MigDynamic
 				// Note: immediately after createMigDevice() returns, we could
 				// persist data to disk that may be useful for cleaning up a
 				// partial prepare more reliably (such as the MIG device UUID).
@@ -771,7 +779,7 @@ func (s *DeviceState) prepareDevices(ctx context.Context, claim *resourceapi.Res
 				}
 			case VfioDeviceType:
 				preparedDevice.Vfio = &PreparedVfioDevice{
-					Info:   s.allocatable[result.Device].Vfio,
+					Info:   allocatableDevice.Vfio,
 					Device: device,
 				}
 			}
@@ -798,7 +806,7 @@ func (s *DeviceState) unprepareDevices(ctx context.Context, claimUID string, dev
 		if featuregates.Enabled(featuregates.PassthroughSupport) {
 			err := s.unprepareVfioDevices(ctx, group.Devices.VfioDevices())
 			if err != nil {
-				return err
+				return fmt.Errorf("error unpreparing VFIO devices: %w", err)
 			}
 		}
 
@@ -849,59 +857,55 @@ func (s *DeviceState) unprepareDevices(ctx context.Context, claimUID string, dev
 	return nil
 }
 
-func (s *DeviceState) getAllocatableVfioDevice(uuid string) (*AllocatableDevice, error) {
-	for _, allocatable := range s.allocatable {
-		if allocatable.Type() != VfioDeviceType {
-			continue
-		}
-		if allocatable.Vfio.UUID == uuid {
-			return allocatable, nil
-		}
-	}
-	return nil, fmt.Errorf("allocatable device not found for vfio device: %v", uuid)
-}
-
 func (s *DeviceState) unprepareVfioDevices(ctx context.Context, devices PreparedDeviceList) error {
 	for _, device := range devices {
-		vfioAllocatable, err := s.getAllocatableVfioDevice(device.Vfio.Info.UUID)
-		if err != nil {
-			return fmt.Errorf("error getting allocatable device for vfio device: %w", err)
+		vfioAllocatable := s.perGPUAllocatable.GetAllocatableDevice(device.Vfio.Device.DeviceName)
+		if vfioAllocatable == nil {
+			return fmt.Errorf("allocatable not found for vfio device %q", device.Vfio.Device.DeviceName)
 		}
 		if err := s.vfioPciManager.Unconfigure(ctx, vfioAllocatable.Vfio); err != nil {
-			return fmt.Errorf("error unconfiguring vfio device: %w", err)
+			return fmt.Errorf("error unconfiguring vfio device %q: %w", device.Vfio.Device.DeviceName, err)
 		}
 	}
 	return nil
 }
 
-// TODO: this needs a code comment -- what's the primary purpose, and how should
-// this relate to MIG devices?
+// Discover all sibling devices on the parent GPU of the given device.
+//
+// When a GPU is prepared in passthrough mode as a vfio device, the GPU may no longer be used on the nvidia driver,
+// so MIGs and GPU devices are no longer available on the node. When the GPU is unprepared and put back on the nvidia driver,
+// we need to rediscover the GPU as certain nvidia driver-specific attributes (such as device minors) may have changed.
+// This function needs to be called to rediscover these attributes, if any.
+// TODO: Support MIGs as part of the PartitionableDevices integration with the PassthroughSupport feature gate.
 func (s *DeviceState) discoverSiblingAllocatables(device *AllocatableDevice) error {
 	switch device.Type() {
 	case GpuDeviceType:
 		if !device.Gpu.vfioEnabled {
 			return nil
 		}
-		vfio, err := s.nvdevlib.discoverVfioDevice(device.Gpu)
+		vfioAllocatable, err := s.nvdevlib.discoverVfioDevice(device.Gpu)
 		if err != nil {
 			return fmt.Errorf("error discovering vfio device: %w", err)
 		}
-		s.allocatable[vfio.CanonicalName()] = vfio
+		err = s.perGPUAllocatable.AddAllocatableDevice(vfioAllocatable)
+		if err != nil {
+			return fmt.Errorf("error adding allocatable device: %w", err)
+		}
 	case VfioDeviceType:
-		gpu, migs, err := s.nvdevlib.discoverGPUByPCIBusID(device.Vfio.pcieBusID)
+		gpu, _, err := s.nvdevlib.discoverGPUByPCIBusID(device.Vfio.PciBusID)
 		if err != nil {
 			return fmt.Errorf("error discovering gpu by pci bus id: %w", err)
 		}
-		s.allocatable[gpu.CanonicalName()] = gpu
-		device.Vfio.parent = gpu.Gpu
-		for _, mig := range migs {
-			s.allocatable[mig.CanonicalName()] = mig
+		err = s.perGPUAllocatable.AddAllocatableDevice(gpu)
+		if err != nil {
+			return fmt.Errorf("error adding allocatable device: %w", err)
 		}
+		device.Vfio.parent = gpu.Gpu
 	case MigStaticDeviceType:
-		// TODO: Implement once dynamic MIG is supported.
+		// TODO: Implement once partitionable device is supported with PassthroughSupport feature gate.
 		return nil
 	case MigDynamicDeviceType:
-		// TODO: Implement once dynamic MIG is supported.
+		// TODO: Implement once partitionable device is supported with PassthroughSupport feature gate.
 		return nil
 	}
 	return nil
@@ -933,7 +937,11 @@ func (s *DeviceState) applySharingConfig(ctx context.Context, config configapi.S
 	// Get the list of allocatable devices this config is being applied over.
 	requestedDevices := make(AllocatableDevices)
 	for _, r := range results {
-		requestedDevices[r.Device] = s.allocatable[r.Device]
+		device := s.perGPUAllocatable.GetAllocatableDevice(r.Device)
+		if device == nil {
+			return nil, fmt.Errorf("allocatable not found for device %q", r.Device)
+		}
+		requestedDevices[r.Device] = device
 	}
 
 	// Declare a device group state object to populate.
@@ -988,17 +996,17 @@ func (s *DeviceState) applySharingConfig(ctx context.Context, config configapi.S
 }
 
 func (s *DeviceState) applyVfioDeviceConfig(ctx context.Context, config *configapi.VfioDeviceConfig, claim *resourceapi.ResourceClaim, results []*resourceapi.DeviceRequestAllocationResult) (*DeviceConfigState, error) {
-	if !featuregates.Enabled(featuregates.PassthroughSupport) {
-		return nil, nil
-	}
 	var configState DeviceConfigState
 
 	// Configure the vfio-pci devices.
 	for _, r := range results {
-		info := s.allocatable[r.Device]
-		err := s.vfioPciManager.Configure(ctx, info.Vfio)
+		device := s.perGPUAllocatable.GetAllocatableDevice(r.Device)
+		if device == nil {
+			return nil, fmt.Errorf("allocatable not found for vfio device %q", r.Device)
+		}
+		err := s.vfioPciManager.Configure(ctx, device.Vfio)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error configuring vfio device %q: %w", r.Device, err)
 		}
 	}
 

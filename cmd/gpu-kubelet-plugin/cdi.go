@@ -107,21 +107,6 @@ func NewCDIHandler(opts ...cdiOption) (*CDIHandler, error) {
 	return h, nil
 }
 
-func (cdi *CDIHandler) writeSpec(spec spec.Interface, specName string) error {
-	// Transform the spec to make it aware that it is running inside a container.
-	err := transformroot.New(
-		transformroot.WithRoot(cdi.driverRoot),
-		transformroot.WithTargetRoot(cdi.targetDriverRoot),
-		transformroot.WithRelativeTo("host"),
-	).Transform(spec.Raw())
-	if err != nil {
-		return fmt.Errorf("failed to transform driver root in CDI spec: %w", err)
-	}
-
-	klog.V(7).Infof("Write CDI spec: %s", specName)
-	return spec.Save(filepath.Join(cdi.cdiRoot, specName+".yaml"))
-}
-
 func (cdi *CDIHandler) GetCommonEditsCached() (*cdiapi.ContainerEdits, error) {
 	key := "commonEdits"
 	if v, ok := cdi.specCache.Get(key); ok {
@@ -355,4 +340,20 @@ func (cdi *CDIHandler) GetDevNodesForMigDevice(mlt *MigLiveTuple) ([]*cdispec.De
 
 	devnodes := []*cdispec.DeviceNode{giCapsInfo.CDICharDevNode(), ciCapsInfo.CDICharDevNode()}
 	return devnodes, nil
+}
+
+// Write CDI spec to the filesystem.
+func (cdi *CDIHandler) writeSpec(spec spec.Interface, specName string) error {
+	// Transform the spec to make it aware that it is running inside a container.
+	err := transformroot.New(
+		transformroot.WithRoot(cdi.driverRoot),
+		transformroot.WithTargetRoot(cdi.targetDriverRoot),
+		transformroot.WithRelativeTo("host"),
+	).Transform(spec.Raw())
+	if err != nil {
+		return fmt.Errorf("failed to transform driver root in CDI spec: %w", err)
+	}
+
+	klog.V(7).Infof("Write CDI spec: %s", specName)
+	return spec.Save(filepath.Join(cdi.cdiRoot, specName+".yaml"))
 }
