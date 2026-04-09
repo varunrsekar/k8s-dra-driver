@@ -57,5 +57,16 @@ sed -i 's|https://ftp\.gnu\.org/gnu|https://mirrors.kernel.org/gnu/|g' ./build.s
 sed -i 's/-sLO/-sSfLO --retry 300 --connect-timeout 20 --retry-delay 5 --retry-all-errors /g' ./build.sh
 sed -i "s/strip/${STRIP}/g" ./build.sh
 sed -i 's/make -s \&\& make -s tests/make -j4/g' ./build.sh
+
+# Cross-compilation fix: when the target arch differs from the build host,
+# tell bash's configure about the cross-compilation target (--host/--build),
+# and set REALGCC so that the musl-gcc wrapper invokes the cross-compiler
+# instead of the native gcc.
+NATIVE_ARCH="$(uname -m)"
+if [ "${ARCH}" != "${NATIVE_ARCH}" ]; then
+  echo "cross-compiling: build=${NATIVE_ARCH}, target=${ARCH}"
+  sed -i "s|--without-bash-malloc|--without-bash-malloc --host=${ARCH}-linux-gnu --build=${NATIVE_ARCH}-linux-gnu|" ./build.sh
+fi
+
 bash version-52.sh
-STRIP="${STRIP}" CC="${CC}" ./build.sh linux "${ARCH}"
+REALGCC="${CC}" STRIP="${STRIP}" CC="${CC}" ./build.sh linux "${ARCH}"
