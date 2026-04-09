@@ -470,13 +470,19 @@ func (d *driver) deviceHealthEvents(ctx context.Context, nodeName string) {
 				klog.V(6).Info("Health monitor channel closed")
 				return
 			}
-			uuid := event.Device.UUID()
-			klog.Warningf("Received %s health event for device %s", event.EventType, uuid)
 
 			taint := healthEventToTaint(event, d.deviceHealthMonitor)
-			if !d.state.AddDeviceTaint(event.Device, taint) {
+			modified := false
+			for _, dev := range event.Devices {
+				klog.Warningf("Received %s health event for device %s", event.EventType, dev.UUID())
+				if d.state.AddDeviceTaint(dev, taint) {
+					modified = true
+				}
+			}
+			if !modified {
 				continue
 			}
+
 			var resourceSlice resourceslice.Slice
 			for _, devices := range d.state.perGPUAllocatable.allocatablesMap {
 				for _, dev := range devices {
@@ -501,8 +507,8 @@ func (d *driver) deviceHealthEvents(ctx context.Context, nodeName string) {
 			// This is a temporary compromise while device taints/tolerations (KEP-5055)
 			// are available as a Beta feature. An interim improvement could be adding
 			// a retry/backoff or switch to patch updates instead of full republish.
-			klog.V(4).Infof("Republishing ResourceSlice: device %s tainted with %s=%q (effect=%s)",
-				uuid, taint.Key, taint.Value, taint.Effect)
+			klog.V(4).Infof("Republishing ResourceSlice: %d device(s) tainted with %s=%q (effect=%s)",
+				len(event.Devices), taint.Key, taint.Value, taint.Effect)
 
 			resources := resourceslice.DriverResources{
 				Pools: map[string]resourceslice.Pool{
@@ -510,12 +516,16 @@ func (d *driver) deviceHealthEvents(ctx context.Context, nodeName string) {
 				},
 			}
 
-			// TODO: Instead of acting on per event basis, add event aggregation on the receiving side before `publishResources`.
-			// Evaluate two batching strategies:
-			// 1. Channel drain: Non-blocking pull of all pending events (Pro: zero latency; Con: susceptible to NVML lag).
+			// NOTE: GPU_LOST and unmonitored events are already batched at the
+			// sender (all affected devices arrive in a single DeviceHealthEvent).
+			// XID events are still per-device and may cause repeated publishes.
+			// TODO: Add receiver-side event aggregation before PublishResources.
+			// Evaluate two strategies:
+			// 1. Channel drain: non-blocking pull of all pending events (Pro: zero latency; Con: susceptible to NVML lag).
 			// 2. Timer debounce: e.g., 50ms window (Pro: standard K8s API protection; Con: slight delay).
+			// This also needs to be handle properly in the recovery path.
 			if err := d.pluginhelper.PublishResources(ctx, resources); err != nil {
-				klog.Errorf("Failed to publish resources after taint update for device %s: %v", uuid, err)
+				klog.Errorf("Failed to publish resources after taint update: %v", err)
 			}
 		}
 	}

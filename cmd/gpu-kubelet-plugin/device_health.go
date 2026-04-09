@@ -58,8 +58,11 @@ const (
 // DeviceHealthEvent carries a typed health notification from the NVML health
 // monitor to the driver's event handler, enabling the driver to set the
 // appropriate DRA device taint per the Option A schema (KEP-5055).
+// Devices is a batch: for GPU_LOST and unmonitored events where all affected devices
+// are aggregated into a single event so the consumer applies one ResourceSlice
+// update instead of N.
 type DeviceHealthEvent struct {
-	Device    *AllocatableDevice
+	Devices   []*AllocatableDevice
 	EventType DeviceHealthEventType
 	// inspired by NVML Event type and only meaningful for xid errors.
 	// may have to create a custom type based on future device-api
@@ -267,7 +270,7 @@ func (m *nvmlDeviceHealthMonitor) run(ctx context.Context) {
 
 			klog.V(4).Infof("Sending XID=%d health event for device %s", xid, affectedDevice.UUID())
 			m.unhealthy <- &DeviceHealthEvent{
-				Device:    affectedDevice,
+				Devices:   []*AllocatableDevice{affectedDevice},
 				EventType: HealthEventXID,
 				EventData: xid,
 			}
@@ -279,29 +282,50 @@ func (m *nvmlDeviceHealthMonitor) Unhealthy() <-chan *DeviceHealthEvent {
 	return m.unhealthy
 }
 
+// sendHealthEventForAllDevices aggregates every device across all GPUs into a
+// single batched DeviceHealthEvent so the consumer makes one ResourceSlice
+// update.
 func (m *nvmlDeviceHealthMonitor) sendHealthEventForAllDevices(eventType DeviceHealthEventType) {
+	var devices []*AllocatableDevice
 	for _, giMap := range m.deviceByPlacement {
-		m.sendHealthEventForDevices(giMap, eventType)
+		devices = append(devices, collectDevices(giMap)...)
 	}
+	m.sendBatchedHealthEvent(devices, eventType)
 }
 
-// sendHealthEventForDevices sends a DeviceHealthEvent for every device under
-// the given parent-level map. Uses non-blocking sends to protect the monitor
-// goroutine from deadlocks when the channel is full.
+// sendHealthEventForDevices aggregates all devices under a single parent GPU
+// into one batched DeviceHealthEvent.
 func (m *nvmlDeviceHealthMonitor) sendHealthEventForDevices(giMap map[uint32]map[uint32]*AllocatableDevice, eventType DeviceHealthEventType) {
+	m.sendBatchedHealthEvent(collectDevices(giMap), eventType)
+}
+
+// collectDevices flattens a GI→CI device map into a slice.
+func collectDevices(giMap map[uint32]map[uint32]*AllocatableDevice) []*AllocatableDevice {
+	var devices []*AllocatableDevice
 	for _, ciMap := range giMap {
 		for _, dev := range ciMap {
-			event := &DeviceHealthEvent{
-				Device:    dev,
-				EventType: eventType,
-			}
-			select {
-			case m.unhealthy <- event:
-				klog.V(6).Infof("Sent %s health event for device %s", eventType, dev.UUID())
-			default:
-				klog.Errorf("Health event channel full; dropping %s event for device %s", eventType, dev.UUID())
-			}
+			devices = append(devices, dev)
 		}
+	}
+	return devices
+}
+
+// sendBatchedHealthEvent sends a single DeviceHealthEvent containing all
+// affected devices. Uses a non-blocking send to protect the monitor goroutine
+// from deadlocks when the channel is full.
+func (m *nvmlDeviceHealthMonitor) sendBatchedHealthEvent(devices []*AllocatableDevice, eventType DeviceHealthEventType) {
+	if len(devices) == 0 {
+		return
+	}
+	event := &DeviceHealthEvent{
+		Devices:   devices,
+		EventType: eventType,
+	}
+	select {
+	case m.unhealthy <- event:
+		klog.V(6).Infof("Sent batched %s health event for %d device(s)", eventType, len(devices))
+	default:
+		klog.Errorf("Health event channel full; dropping batched %s event for %d device(s)", eventType, len(devices))
 	}
 }
 
@@ -335,7 +359,7 @@ func getDevicePlacementMap(allocatable AllocatableDevices) devicePlacementMap {
 				continue
 			}
 			giID = d.MigStatic.gIInfo.Id
-			ciID = d.MigStatic.gIInfo.Id
+			ciID = d.MigStatic.cIInfo.Id
 
 		default:
 			// This may be a problem; and should be logged
