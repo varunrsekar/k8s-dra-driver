@@ -24,6 +24,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/dump"
 
+	"sigs.k8s.io/dra-driver-nvidia-gpu/internal/info"
 	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/featuregates"
 )
 
@@ -40,7 +41,8 @@ func pflagToCLI(flag *pflag.Flag, category string) cli.Flag {
 
 func LogStartupConfig(parsedFlags any, loggingConfig *LoggingConfig) {
 	// Always log component startup config (level 0).
-	klog.Infof("\nFeature gates: %#v\nFlags: %s",
+	klog.Infof("Commit: %s\n\nFeature gates: %#v\nFlags: %s",
+		info.GetGitCommit(),
 		// Flat boolean map -- no pretty-printing needed.
 		featuregates.ToMap(),
 		// Based on go-spew's Sdump(), with indentation. Type information is

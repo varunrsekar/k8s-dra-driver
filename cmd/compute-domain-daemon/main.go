@@ -180,13 +180,17 @@ func newApp() *cli.App {
 			// later runtime inspection (it's otherwise not accessible anymore
 			// because we do not expose the raw `cliFlags`.
 			flags.klogVerbosity = int(loggingConfig.Config.Verbosity)
-			pkgflags.LogStartupConfig(flags, loggingConfig)
 			return err
 		},
 		Commands: []*cli.Command{
 			{
 				Name:  "run",
 				Usage: "Run the compute domain daemon",
+				Before: func(c *cli.Context) error {
+					// `check` (e.g. startupProbe) does not use this hook — avoid noisy logs on every probe.
+					pkgflags.LogStartupConfig(flags, loggingConfig)
+					return nil
+				},
 				Action: func(c *cli.Context) error {
 					return wrapper(c.Context, run)
 				},
