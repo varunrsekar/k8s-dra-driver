@@ -55,6 +55,10 @@ const (
 	// CrashOnNVLinkFabricErrors causes the kubelet plugin to crash instead of
 	// falling back to non-fabric mode when NVLink fabric errors are detected.
 	CrashOnNVLinkFabricErrors featuregate.Feature = "CrashOnNVLinkFabricErrors"
+
+	// DeviceMetadata allows the kubelet plugin to generate device metadata files
+	// in the workloads for prepared devices.
+	DeviceMetadata featuregate.Feature = "DeviceMetadata"
 )
 
 // defaultFeatureGates contains the default settings for all project-specific feature gates.
@@ -114,6 +118,13 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.VersionedSpecs{
 			Default:    true,
 			PreRelease: featuregate.Beta,
 			Version:    version.MajorMinor(25, 12),
+		},
+	},
+	DeviceMetadata: {
+		{
+			Default:    false,
+			PreRelease: featuregate.Alpha,
+			Version:    version.MajorMinor(26, 4),
 		},
 	},
 }
@@ -187,6 +198,10 @@ func ValidateFeatureGates() error {
 
 	if Enabled(PassthroughSupport) && Enabled(NVMLDeviceHealthCheck) {
 		return fmt.Errorf("feature gate %s is currently mutually exclusive with %s", PassthroughSupport, NVMLDeviceHealthCheck)
+	}
+
+	if Enabled(DeviceMetadata) && !Enabled(PassthroughSupport) {
+		return fmt.Errorf("feature gate %s requires %s to also be enabled", DeviceMetadata, PassthroughSupport)
 	}
 
 	return nil
