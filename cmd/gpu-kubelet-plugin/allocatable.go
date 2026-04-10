@@ -50,6 +50,11 @@ type AllocatableDevice struct {
 	MigDynamic *MigSpec
 	MigStatic  *MigDeviceInfo
 	Vfio       *VfioDeviceInfo
+
+	// taints holds DRA device taints set by the health monitor. Published
+	// as part of the device's ResourceSlice entry so the scheduler and
+	// kubelet honour them per KEP-5055.
+	taints []resourceapi.DeviceTaint
 }
 
 func (d AllocatableDevice) Type() string {
@@ -141,22 +146,6 @@ func (d *AllocatableDevice) GetGPUPCIBusID() string {
 		return d.MigDynamic.Parent.pciBusID
 	case VfioDeviceType:
 		return d.Vfio.PciBusID
-	}
-	panic("unexpected type for AllocatableDevice")
-}
-
-func (d *AllocatableDevice) IsHealthy() bool {
-	switch d.Type() {
-	case GpuDeviceType:
-		return d.Gpu.health == Healthy
-	case MigStaticDeviceType:
-		// TODO: review -- what about the parent?
-		return d.MigStatic.health == Healthy
-	case MigDynamicDeviceType:
-		// TODOMIG: For now, pretend health -- this device maybe hasn't
-		// manifested yet. Or has it? We could adopt the health status of the
-		// parent, but that's also not meaningful I think.
-		return true
 	}
 	panic("unexpected type for AllocatableDevice")
 }
@@ -323,4 +312,37 @@ func (d *PerGPUAllocatableDevices) RemoveSiblingDevices(device *AllocatableDevic
 			continue
 		}
 	}
+}
+
+// Taints returns a copy of the device's taints to prevent data races
+// when being read concurrently by the ResourceSlice builder.
+func (d *AllocatableDevice) Taints() []resourceapi.DeviceTaint {
+	return slices.Clone(d.taints)
+}
+
+// AddOrUpdateTaint adds a new taint or updates an existing one with the same
+// key. The value and effect are always updated to the latest event received.
+// Meaning, if a device receives multiple events for the same taint dimension
+// (e.g., XID 48 followed by XID 63), the value is overwritten and only the most recent event data is retained.
+// Returns true if the taint set was modified.
+func (d *AllocatableDevice) AddOrUpdateTaint(taint *resourceapi.DeviceTaint) bool {
+	for i, existing := range d.taints {
+		if existing.Key == taint.Key {
+
+			// 1. If nothing actually changed, exit early to avoid API calls
+			if existing.Value == taint.Value && existing.Effect == taint.Effect {
+				return false
+			}
+
+			// 2. Otherwise, update the fields and the timestamp
+			d.taints[i].Value = taint.Value
+			d.taints[i].Effect = taint.Effect
+			d.taints[i].TimeAdded = nil // reset timestamp for the API server
+			return true
+		}
+	}
+
+	// 3. Key doesn't exist yet, append the dereferenced struct
+	d.taints = append(d.taints, *taint)
+	return true
 }
