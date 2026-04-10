@@ -78,8 +78,6 @@ type MigDeviceInfo struct {
 	parent        *GpuInfo
 	giProfileInfo *nvml.GpuInstanceProfileInfo
 	ciProfileInfo *nvml.ComputeInstanceProfileInfo
-	pcieBusID     string
-	pcieRootAttr  *deviceattribute.DeviceAttribute
 }
 
 type VfioDeviceInfo struct {

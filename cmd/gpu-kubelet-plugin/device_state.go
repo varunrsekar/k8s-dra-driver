@@ -1204,7 +1204,7 @@ func syncPreparedDevicesGaugeFromCheckpoint(nodeName string, cp *Checkpoint) {
 
 // AddDeviceTaint adds or updates a DRA device taint on the given device under
 // the DeviceState lock. Returns true if the taint set was actually modified.
-func (s *DeviceState) AddDeviceTaint(d *AllocatableDevice, taint resourceapi.DeviceTaint) bool {
+func (s *DeviceState) AddDeviceTaint(d *AllocatableDevice, taint *resourceapi.DeviceTaint) bool {
 	s.Lock()
 	defer s.Unlock()
 	return d.AddOrUpdateTaint(taint)

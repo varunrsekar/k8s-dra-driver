@@ -471,7 +471,7 @@ func (d *driver) deviceHealthEvents(ctx context.Context, nodeName string) {
 				return
 			}
 
-			taint := healthEventToTaint(event, d.deviceHealthMonitor)
+			taint := healthEventToTaint(d.deviceHealthMonitor, event)
 			modified := false
 			for _, dev := range event.Devices {
 				klog.Warningf("Received %s health event for device %s", event.EventType, dev.UUID())

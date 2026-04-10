@@ -325,31 +325,24 @@ func (d *AllocatableDevice) Taints() []resourceapi.DeviceTaint {
 // Meaning, if a device receives multiple events for the same taint dimension
 // (e.g., XID 48 followed by XID 63), the value is overwritten and only the most recent event data is retained.
 // Returns true if the taint set was modified.
-func (d *AllocatableDevice) AddOrUpdateTaint(taint resourceapi.DeviceTaint) bool {
+func (d *AllocatableDevice) AddOrUpdateTaint(taint *resourceapi.DeviceTaint) bool {
 	for i, existing := range d.taints {
 		if existing.Key == taint.Key {
-			changed := false
 
-			// Overwrite Value if it changed
-			if existing.Value != taint.Value {
-				d.taints[i].Value = taint.Value
-				changed = true
+			// 1. If nothing actually changed, exit early to avoid API calls
+			if existing.Value == taint.Value && existing.Effect == taint.Effect {
+				return false
 			}
 
-			if existing.Effect != taint.Effect {
-				d.taints[i].Effect = taint.Effect
-				changed = true
-			}
-
-			if changed {
-				d.taints[i].TimeAdded = nil // reset timestamp for the API server
-			}
-
-			return changed
+			// 2. Otherwise, update the fields and the timestamp
+			d.taints[i].Value = taint.Value
+			d.taints[i].Effect = taint.Effect
+			d.taints[i].TimeAdded = nil // reset timestamp for the API server
+			return true
 		}
 	}
 
-	// Key doesn't exist yet, append the new taint
-	d.taints = append(d.taints, taint)
+	// 3. Key doesn't exist yet, append the dereferenced struct
+	d.taints = append(d.taints, *taint)
 	return true
 }

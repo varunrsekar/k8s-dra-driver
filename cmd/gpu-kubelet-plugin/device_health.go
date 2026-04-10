@@ -72,31 +72,31 @@ type DeviceHealthEvent struct {
 // healthEventToTaint maps a DeviceHealthEvent to the corresponding DRA
 // DeviceTaint using the Option A taint key schema: one key per health
 // dimension under the gpu.nvidia.com domain.
-func healthEventToTaint(event *DeviceHealthEvent, monitor deviceHealthMonitor) resourceapi.DeviceTaint {
+func healthEventToTaint(monitor deviceHealthMonitor, event *DeviceHealthEvent) *resourceapi.DeviceTaint {
 	switch event.EventType {
 	case HealthEventXID:
 		effect := resourceapi.DeviceTaintEffectNoSchedule
 		if monitor != nil && monitor.IsEventNonFatal(event) {
 			effect = DeviceTaintEffectNone
 		}
-		return resourceapi.DeviceTaint{
+		return &resourceapi.DeviceTaint{
 			Key:    TaintKeyXID,
 			Value:  strconv.FormatUint(event.EventData, 10),
 			Effect: effect,
 		}
 	case HealthEventGPULost:
-		return resourceapi.DeviceTaint{
+		return &resourceapi.DeviceTaint{
 			Key:    TaintKeyGPULost,
 			Effect: resourceapi.DeviceTaintEffectNoSchedule,
 		}
 	case HealthEventUnmonitored:
-		return resourceapi.DeviceTaint{
+		return &resourceapi.DeviceTaint{
 			Key:    TaintKeyUnmonitored,
 			Effect: DeviceTaintEffectNone,
 		}
 	default:
 		klog.Errorf("Unknown health event type %q, defaulting to unmonitored taint", event.EventType)
-		return resourceapi.DeviceTaint{
+		return &resourceapi.DeviceTaint{
 			Key:    TaintKeyUnmonitored,
 			Effect: DeviceTaintEffectNone,
 		}
@@ -193,8 +193,8 @@ func (m *nvmlDeviceHealthMonitor) registerEventsForDevices() {
 		ret = gpu.RegisterEvents(eventMask&supportedEvents, m.eventSet)
 		if ret == nvml.ERROR_NOT_SUPPORTED {
 			klog.Warningf("Device %v is too old to support healthchecking.", parentUUID)
-		}
-		if ret != nvml.SUCCESS {
+			m.sendHealthEventForDevices(giMap, HealthEventUnmonitored)
+		} else if ret != nvml.SUCCESS {
 			klog.Warningf("unable to register events for %s: %v; marking devices as unmonitored", parentUUID, ret)
 			m.sendHealthEventForDevices(giMap, HealthEventUnmonitored)
 		}
@@ -288,7 +288,7 @@ func (m *nvmlDeviceHealthMonitor) Unhealthy() <-chan *DeviceHealthEvent {
 func (m *nvmlDeviceHealthMonitor) sendHealthEventForAllDevices(eventType DeviceHealthEventType) {
 	var devices []*AllocatableDevice
 	for _, giMap := range m.deviceByPlacement {
-		devices = append(devices, collectDevices(giMap)...)
+		devices = append(devices, flattenMIGDeviceMap(giMap)...)
 	}
 	m.sendBatchedHealthEvent(devices, eventType)
 }
@@ -296,11 +296,11 @@ func (m *nvmlDeviceHealthMonitor) sendHealthEventForAllDevices(eventType DeviceH
 // sendHealthEventForDevices aggregates all devices under a single parent GPU
 // into one batched DeviceHealthEvent.
 func (m *nvmlDeviceHealthMonitor) sendHealthEventForDevices(giMap map[uint32]map[uint32]*AllocatableDevice, eventType DeviceHealthEventType) {
-	m.sendBatchedHealthEvent(collectDevices(giMap), eventType)
+	m.sendBatchedHealthEvent(flattenMIGDeviceMap(giMap), eventType)
 }
 
-// collectDevices flattens a GI→CI device map into a slice.
-func collectDevices(giMap map[uint32]map[uint32]*AllocatableDevice) []*AllocatableDevice {
+// flattenMIGDeviceMap flattens a GI→CI device map into a slice.
+func flattenMIGDeviceMap(giMap map[uint32]map[uint32]*AllocatableDevice) []*AllocatableDevice {
 	var devices []*AllocatableDevice
 	for _, ciMap := range giMap {
 		for _, dev := range ciMap {
