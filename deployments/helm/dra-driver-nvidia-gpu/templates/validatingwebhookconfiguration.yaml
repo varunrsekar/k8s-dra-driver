@@ -2,12 +2,12 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: {{ include "nvidia-dra-driver-gpu.name" . }}-webhook-config
+  name: {{ include "dra-driver-nvidia-gpu.name" . }}-webhook-config
   labels:
-    {{- include "nvidia-dra-driver-gpu.labels" . | nindent 4 }}
+    {{- include "dra-driver-nvidia-gpu.labels" . | nindent 4 }}
   {{- if eq .Values.webhook.tls.mode "cert-manager" }}
   annotations:
-    cert-manager.io/inject-ca-from: "{{ include "nvidia-dra-driver-gpu.namespace" . }}/{{ include "nvidia-dra-driver-gpu.name" . }}-webhook-cert"
+    cert-manager.io/inject-ca-from: "{{ include "dra-driver-nvidia-gpu.namespace" . }}/{{ include "dra-driver-nvidia-gpu.name" . }}-webhook-cert"
   {{- end }}
 webhooks:
   - name: "gpu.nvidia.com"
@@ -19,8 +19,8 @@ webhooks:
       scope:       "Namespaced"
     clientConfig:
       service:
-        namespace: {{ include "nvidia-dra-driver-gpu.namespace" . }}
-        name: {{ include "nvidia-dra-driver-gpu.name" . }}-webhook
+        namespace: {{ include "dra-driver-nvidia-gpu.namespace" . }}
+        name: {{ include "dra-driver-nvidia-gpu.name" . }}-webhook
         port: {{ .Values.webhook.servicePort }}
         path: /validate-resource-claim-parameters
       {{- if and (eq .Values.webhook.tls.mode "secret") .Values.webhook.tls.secret.caBundle }}

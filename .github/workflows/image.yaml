@@ -39,7 +39,7 @@ jobs:
       # For now, we want to test multi-arch builds in GitHub Actions as well, but without pushing to the registry.
       - name: Multi-arch build
         env:
-          IMAGE_NAME: registry.k8s.io/nv-dra-driver-gpu/nvidia-dra-driver-gpu
+          IMAGE_NAME: registry.k8s.io/dra-driver-nvidia/dra-driver-nvidia-gpu
           BUILD_MULTI_ARCH_IMAGES: "true"
           BUILD_MULTI_ARCH_GH: "true"
           CI: "true"

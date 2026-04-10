@@ -22,8 +22,8 @@ import (
 	"net/http"
 
 	rest "k8s.io/client-go/rest"
-	v1beta1 "sigs.k8s.io/nvidia-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
-	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/clientset/versioned/scheme"
+	v1beta1 "sigs.k8s.io/dra-driver-nvidia-gpu/api/nvidia.com/resource/v1beta1"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/nvidia.com/clientset/versioned/scheme"
 )
 
 type ResourceV1beta1Interface interface {

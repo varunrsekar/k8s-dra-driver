@@ -87,10 +87,10 @@ golangci-lint:
 lint-internal: golangci-lint
 
 helm-lint:
-	helm lint deployments/helm/nvidia-dra-driver-gpu
+	helm lint deployments/helm/dra-driver-nvidia-gpu
 
 helm-package:
-	helm package deployments/helm/nvidia-dra-driver-gpu
+	helm package deployments/helm/dra-driver-nvidia-gpu
 
 vendor:
 	go mod tidy

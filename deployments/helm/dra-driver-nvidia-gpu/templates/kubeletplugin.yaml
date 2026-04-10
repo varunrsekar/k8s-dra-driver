@@ -17,14 +17,14 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: {{ include "nvidia-dra-driver-gpu.name" . }}-kubelet-plugin
-  namespace: {{ include "nvidia-dra-driver-gpu.namespace" . }}
+  name: {{ include "dra-driver-nvidia-gpu.name" . }}-kubelet-plugin
+  namespace: {{ include "dra-driver-nvidia-gpu.namespace" . }}
   labels:
-    {{- include "nvidia-dra-driver-gpu.labels" . | nindent 4 }}
+    {{- include "dra-driver-nvidia-gpu.labels" . | nindent 4 }}
 spec:
   selector:
     matchLabels:
-      {{- include "nvidia-dra-driver-gpu.selectorLabels" (dict "context" . "componentName" "kubelet-plugin") | nindent 6 }}
+      {{- include "dra-driver-nvidia-gpu.selectorLabels" (dict "context" . "componentName" "kubelet-plugin") | nindent 6 }}
   {{- with .Values.kubeletPlugin.updateStrategy }}
   updateStrategy:
     {{- toYaml . | nindent 4 }}
@@ -36,8 +36,8 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "nvidia-dra-driver-gpu.templateLabels" . | nindent 8 }}
-        {{- include "nvidia-dra-driver-gpu.selectorLabels" (dict "context" . "componentName" "kubelet-plugin") | nindent 8 }}
+        {{- include "dra-driver-nvidia-gpu.templateLabels" . | nindent 8 }}
+        {{- include "dra-driver-nvidia-gpu.selectorLabels" (dict "context" . "componentName" "kubelet-plugin") | nindent 8 }}
     spec:
       {{- if .Values.kubeletPlugin.priorityClassName }}
       priorityClassName: {{ .Values.kubeletPlugin.priorityClassName }}
@@ -46,12 +46,12 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "nvidia-dra-driver-gpu.serviceAccountName" . }}-kubeletplugin
+      serviceAccountName: {{ include "dra-driver-nvidia-gpu.serviceAccountName" . }}-kubeletplugin
       securityContext:
         {{- toYaml .Values.kubeletPlugin.podSecurityContext | nindent 8 }}
       initContainers:
       - name: init-container
-        image: {{ include "nvidia-dra-driver-gpu.fullimage" . }}
+        image: {{ include "dra-driver-nvidia-gpu.fullimage" . }}
         securityContext:
           privileged: true
         command: [bash, /usr/bin/kubelet-plugin-prestart.sh]
@@ -85,7 +85,7 @@ spec:
       - name: compute-domains
         securityContext:
           {{- toYaml .Values.kubeletPlugin.containers.computeDomains.securityContext | nindent 10 }}
-        image: {{ include "nvidia-dra-driver-gpu.fullimage" . }}
+        image: {{ include "dra-driver-nvidia-gpu.fullimage" . }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         command: ["bash", "-c"]
         args:
@@ -193,7 +193,7 @@ spec:
           {{- if .Values.kubeletPlugin.containers.gpus.securityContext }}
           {{- toYaml .Values.kubeletPlugin.containers.gpus.securityContext | nindent 10 }}
           {{- end }}
-        image: {{ include "nvidia-dra-driver-gpu.fullimage" . }}
+        image: {{ include "dra-driver-nvidia-gpu.fullimage" . }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         command: ["bash", "-c"]
         args:
@@ -264,7 +264,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: IMAGE_NAME
-          value: {{ include "nvidia-dra-driver-gpu.fullimage" . }}
+          value: {{ include "dra-driver-nvidia-gpu.fullimage" . }}
         {{- if .Values.nvidiaCDIHookPath }}
         - name: NVIDIA_CDI_HOOK_PATH
           value: "{{ .Values.nvidiaCDIHookPath }}"

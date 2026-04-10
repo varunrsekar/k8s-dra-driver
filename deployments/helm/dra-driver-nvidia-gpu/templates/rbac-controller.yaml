@@ -3,7 +3,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "nvidia-dra-driver-gpu.name" . }}-clusterrole-controller
+  name: {{ include "dra-driver-nvidia-gpu.name" . }}-clusterrole-controller
 rules:
 - apiGroups: ["resource.nvidia.com"]
   resources: ["computedomains"]
@@ -27,10 +27,10 @@ rules:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ include "nvidia-dra-driver-gpu.serviceAccountName" $ }}-controller
-  namespace: {{ include "nvidia-dra-driver-gpu.namespace" . }}
+  name: {{ include "dra-driver-nvidia-gpu.serviceAccountName" $ }}-controller
+  namespace: {{ include "dra-driver-nvidia-gpu.namespace" . }}
   labels:
-    {{- include "nvidia-dra-driver-gpu.labels" $ | nindent 4 }}
+    {{- include "dra-driver-nvidia-gpu.labels" $ | nindent 4 }}
   {{- with $.Values.serviceAccount.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -39,22 +39,22 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "nvidia-dra-driver-gpu.name" $ }}-clusterrole-binding-controller-{{ include "nvidia-dra-driver-gpu.namespace" . }}
+  name: {{ include "dra-driver-nvidia-gpu.name" $ }}-clusterrole-binding-controller-{{ include "dra-driver-nvidia-gpu.namespace" . }}
 subjects:
   - kind: ServiceAccount
-    name: {{ include "nvidia-dra-driver-gpu.serviceAccountName" $ }}-controller
-    namespace: {{ include "nvidia-dra-driver-gpu.namespace" . }}
+    name: {{ include "dra-driver-nvidia-gpu.serviceAccountName" $ }}-controller
+    namespace: {{ include "dra-driver-nvidia-gpu.namespace" . }}
 roleRef:
   kind: ClusterRole
-  name: {{ include "nvidia-dra-driver-gpu.name" $ }}-clusterrole-controller
+  name: {{ include "dra-driver-nvidia-gpu.name" $ }}-clusterrole-controller
   apiGroup: rbac.authorization.k8s.io
 
-{{- range $namespace := splitList "," (include "nvidia-dra-driver-gpu.namespaces" .) }}
+{{- range $namespace := splitList "," (include "dra-driver-nvidia-gpu.namespaces" .) }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: {{ include "nvidia-dra-driver-gpu.name" $ }}-role-controller
+  name: {{ include "dra-driver-nvidia-gpu.name" $ }}-role-controller
   namespace: {{ $namespace }}
 rules:
 - apiGroups: ["apps"]
@@ -67,15 +67,15 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: {{ include "nvidia-dra-driver-gpu.name" $ }}-role-binding-controller
+  name: {{ include "dra-driver-nvidia-gpu.name" $ }}-role-binding-controller
   namespace: {{ $namespace }}
 subjects:
   - kind: ServiceAccount
-    name: {{ include "nvidia-dra-driver-gpu.serviceAccountName" $ }}-controller
-    namespace: {{ include "nvidia-dra-driver-gpu.namespace" $ }}
+    name: {{ include "dra-driver-nvidia-gpu.serviceAccountName" $ }}-controller
+    namespace: {{ include "dra-driver-nvidia-gpu.namespace" $ }}
 roleRef:
   kind: Role
-  name: {{ include "nvidia-dra-driver-gpu.name" $ }}-role-controller
+  name: {{ include "dra-driver-nvidia-gpu.name" $ }}-role-controller
   apiGroup: rbac.authorization.k8s.io
 {{- end }}
 {{- end }}

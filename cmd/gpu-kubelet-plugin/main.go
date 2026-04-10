@@ -31,11 +31,11 @@ import (
 	"k8s.io/dynamic-resource-allocation/kubeletplugin"
 	"k8s.io/klog/v2"
 
-	"sigs.k8s.io/nvidia-dra-driver-gpu/internal/common"
-	"sigs.k8s.io/nvidia-dra-driver-gpu/internal/info"
-	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
-	pkgflags "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/flags"
-	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/metrics"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/internal/common"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/internal/info"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/featuregates"
+	pkgflags "sigs.k8s.io/dra-driver-nvidia-gpu/pkg/flags"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/metrics"
 )
 
 const (

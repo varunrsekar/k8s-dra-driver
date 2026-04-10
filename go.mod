@@ -1,4 +1,4 @@
-module sigs.k8s.io/nvidia-dra-driver-gpu
+module sigs.k8s.io/dra-driver-nvidia-gpu
 
 go 1.26.0
 

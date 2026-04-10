@@ -27,7 +27,7 @@ bats::on_failure() {
 
 
 @test "basics: confirm no kubelet plugin pods running" {
-  run kubectl get pods -A -l nvidia-dra-driver-gpu-component=kubelet-plugin
+  run kubectl get pods -A -l dra-driver-nvidia-gpu-component=kubelet-plugin
   [ "$status" -eq 0 ]
   refute_output --partial 'Running'
 }
@@ -45,13 +45,13 @@ bats::on_failure() {
 
 @test "basics: helm list: validate output" {
   # Sanity check: one chart installed.
-  helm list -n nvidia-dra-driver-gpu -o json | jq 'length == 1'
+  helm list -n dra-driver-nvidia-gpu -o json | jq 'length == 1'
 
   # Confirm consistency between the various version-related parameters. Note
   # that the --version arg provided to `helm install/upgrade` does not directly
   # set app_version; it is just a version constraint. `app_version` tested here
   # is AFAIU defined solely by the chart's appVersion YAML spec.
-  helm list -n nvidia-dra-driver-gpu -o json | jq '.[].app_version' | grep "${TEST_CHART_VERSION}"
+  helm list -n dra-driver-nvidia-gpu -o json | jq '.[].app_version' | grep "${TEST_CHART_VERSION}"
 }
 
 
@@ -62,17 +62,17 @@ bats::on_failure() {
 
 @test "basics: wait for plugin & controller pods READY" {
   kubectl wait --for=condition=READY pods -A \
-    -l nvidia-dra-driver-gpu-component=kubelet-plugin --timeout=10s
+    -l dra-driver-nvidia-gpu-component=kubelet-plugin --timeout=10s
   kubectl wait --for=condition=READY pods -A \
-    -l nvidia-dra-driver-gpu-component=controller --timeout=10s
+    -l dra-driver-nvidia-gpu-component=controller --timeout=10s
 }
 
 
 @test "basics: validate CD controller container image spec" {
   local ACTUAL_IMAGE_SPEC
   ACTUAL_IMAGE_SPEC=$(kubectl get pod \
-    -n nvidia-dra-driver-gpu \
-    -l nvidia-dra-driver-gpu-component=controller \
+    -n dra-driver-nvidia-gpu \
+    -l dra-driver-nvidia-gpu-component=controller \
     -o json | \
       jq -r '.items[].spec.containers[] | select(.name=="compute-domain") | .image')
 
@@ -88,11 +88,11 @@ bats::on_failure() {
 @test "basics: SIGUSR2 handler: GPU plugin, CD plugin" {
   local PNAME="$(get_one_kubelet_plugin_pod_name)"
   # Assume that GPU plugin has PID 1.
-  kubectl exec -n nvidia-dra-driver-gpu "${PNAME}" -c gpus -- kill -s SIGUSR2 1
-  run kubectl exec -n nvidia-dra-driver-gpu "${PNAME}" -c gpus -- cat /tmp/goroutine-stacks.dump
+  kubectl exec -n dra-driver-nvidia-gpu "${PNAME}" -c gpus -- kill -s SIGUSR2 1
+  run kubectl exec -n dra-driver-nvidia-gpu "${PNAME}" -c gpus -- cat /tmp/goroutine-stacks.dump
   assert_output --partial 'main.RunPlugin'
 
-  kubectl exec -n nvidia-dra-driver-gpu "${PNAME}" -c compute-domains -- kill -s SIGUSR2 1
-  run kubectl exec -n nvidia-dra-driver-gpu "${PNAME}" -c compute-domains -- cat /tmp/goroutine-stacks.dump
+  kubectl exec -n dra-driver-nvidia-gpu "${PNAME}" -c compute-domains -- kill -s SIGUSR2 1
+  run kubectl exec -n dra-driver-nvidia-gpu "${PNAME}" -c compute-domains -- cat /tmp/goroutine-stacks.dump
   assert_output --partial 'main.RunPlugin'
 }

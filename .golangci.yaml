@@ -28,7 +28,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - sigs.k8s.io/nvidia-dra-driver-gpu
+        - sigs.k8s.io/dra-driver-nvidia-gpu
   exclusions:
     generated: lax
     paths:

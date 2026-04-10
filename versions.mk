@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-DRIVER_NAME := nvidia-dra-driver-gpu
-MODULE := sigs.k8s.io/$(DRIVER_NAME)
+DRIVER_NAME := dra-driver-nvidia-gpu
+MODULE := sigs.k8s.io/dra-driver-nvidia-gpu
 
-REGISTRY ?= registry.k8s.io/nv-dra-driver-gpu
+REGISTRY ?= registry.k8s.io/dra-driver-nvidia
 # Staging registry before kubernetes/k8s.io promotion (Prow / test-infra jobs).
 # See cloudbuild.yaml and https://github.com/kubernetes/k8s.io (k8s-staging-nv-dra-driver-gpu).
-STAGING_REGISTRY ?= us-central1-docker.pkg.dev/k8s-staging-images/nv-dra-driver-gpu
+STAGING_REGISTRY ?= us-central1-docker.pkg.dev/k8s-staging-images/dra-driver-nvidia
 
 VERSION  ?= v26.4.0-dev
 

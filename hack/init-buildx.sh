@@ -20,7 +20,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-BUILDER_NAME="${BUILDER_NAME:-nvidia-dra-driver-gpu-builder}"
+BUILDER_NAME="${BUILDER_NAME:-dra-driver-nvidia-gpu-builder}"
 
 # We can skip setup if the current builder already has multi-arch
 # AND if it isn't the docker driver, which doesn't work

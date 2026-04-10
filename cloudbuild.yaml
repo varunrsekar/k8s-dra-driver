@@ -1,7 +1,7 @@
 # See https://cloud.google.com/cloud-build/docs/build-config
 #
 # Invoked by Kubernetes Prow (image-builder) on merges/tags; see
-# config/jobs/image-pushing/k8s-staging-nvidia-dra-driver-gpu.yaml in kubernetes/test-infra.
+# config/jobs/image-pushing/k8s-staging-dra-driver-nvidia-gpu.yaml in kubernetes/test-infra.
 # Image tags follow versions.mk VERSION_W_COMMIT (not image-builder _GIT_TAG).
 
 timeout: 7200s
@@ -11,7 +11,7 @@ steps:
   - name: gcr.io/k8s-staging-test-infra/gcb-docker-gcloud:v20260127-c1affcc8de
     entrypoint: ./scripts/build-and-publish-image.sh
     env:
-      - IMG_PREFIX=us-central1-docker.pkg.dev/k8s-staging-images/nv-dra-driver-gpu
+      - IMG_PREFIX=us-central1-docker.pkg.dev/k8s-staging-images/dra-driver-nvidia
       - GIT_COMMIT=${_PULL_BASE_SHA}
 substitutions:
   _GIT_TAG: 'v0-placeholder'

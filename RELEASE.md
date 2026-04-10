@@ -1,6 +1,6 @@
 # Release Process
 
-This document outlines the process for creating a new official release for the NVIDIA DRA Driver for GPUs. The repository uses an automated release pipeline to handle branching and tagging.
+This document outlines the process for creating a new official release for the DRA Driver for NVIDIA GPUs. The repository uses an automated release pipeline to handle branching and tagging.
 
 ## 1. Propose the Release
 
@@ -32,18 +32,18 @@ After the release tag is pushed, the images must be built, pushed to staging, an
 
 ### A. Verify Staging Images
 
-- Monitor the image push job status on [Testgrid (sig-node-image-pushes)](https://testgrid.k8s.io/sig-node-image-pushes#post-nvidia-dra-driver-gpu-push-images).
-- The Prow job configuration is in [test-infra](https://github.com/kubernetes/test-infra/blob/master/config/jobs/image-pushing/k8s-staging-nvidia-dra-driver-gpu.yaml) if troubleshooting is needed.
+- Monitor the image push job status on [Testgrid (sig-node-image-pushes)](https://testgrid.k8s.io/sig-node-image-pushes#post-dra-driver-nvidia-gpu-push-images).
+- The Prow job configuration is in [test-infra](https://github.com/kubernetes/test-infra/blob/master/config/jobs/image-pushing/k8s-staging-dra-driver-nvidia-gpu.yaml) if troubleshooting is needed.
 - Verify the images exist in the staging repository:
   ```sh
-  skopeo list-tags docker://us-central1-docker.pkg.dev/k8s-staging-images/nv-dra-driver-gpu/nvidia-dra-driver-gpu | grep vX.Y.Z
+  skopeo list-tags docker://us-central1-docker.pkg.dev/k8s-staging-images/dra-driver-nvidia/dra-driver-nvidia-gpu | grep vX.Y.Z
   ```
 
 ### B. Create PR for Promotion
 
 - Identify the image digests:
   ```sh
-  skopeo inspect docker://us-central1-docker.pkg.dev/k8s-staging-images/nv-dra-driver-gpu/nvidia-dra-driver-gpu:vX.Y.Z --format '{{.Digest}}'
+  skopeo inspect docker://us-central1-docker.pkg.dev/k8s-staging-images/dra-driver-nvidia/dra-driver-nvidia-gpu:vX.Y.Z --format '{{.Digest}}'
   ```
 - Fork [kubernetes/k8s.io](https://github.com/kubernetes/k8s.io).
 - Update
@@ -60,7 +60,7 @@ Before publishing the release, verify the images are available at k8s-registry:
 
 - Ensure the images are available at `registry.k8s.io`:
   ```sh
-  skopeo list-tags docker://registry.k8s.io/nv-dra-driver-gpu/nvidia-dra-driver-gpu | grep vX.Y.Z
+  skopeo list-tags docker://registry.k8s.io/dra-driver-nvidia/dra-driver-nvidia-gpu | grep vX.Y.Z
   ```
 
 ### B. Test Release Artifacts
@@ -73,14 +73,14 @@ Before publishing the release, verify the images are available at k8s-registry:
 - Generate the release manifests:
   ```sh
   rm -rf ./dist
-  REGISTRY=registry.k8s.io/nv-dra-driver-gpu TAG=vX.Y.Z make manifests
+  REGISTRY=registry.k8s.io/dra-driver-nvidia TAG=vX.Y.Z make manifests
   ls ./dist   # to confirm the generated artifacts
   ```
 - Run a local E2E test in Kind (see references in `README.md`) using the generated manifests from the `dist/` directory to ensure they pull the correct images and function as expected.
 
 ### C. Create the GitHub Release
 
-- Go to the [Releases page](https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/releases) on GitHub.
+- Go to the [Releases page](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/releases) on GitHub.
 - Find the new tag and click "Edit tag" (or "Draft a new release" and select the tag).
 - Paste the final changelog into the release description.
 - Upload the generated manifests (`dist/install.yaml`) as release artifacts.
@@ -89,4 +89,4 @@ Before publishing the release, verify the images are available at k8s-registry:
 ## 5. Post-Release Tasks
 
 - Close the release tracking issue.
-- Announce the release on the `sig-node` mailing list. The subject should be: `[ANNOUNCE] NVIDIA DRA Driver for GPUs vX.Y.Z is released`.
+- Announce the release on the `sig-node` mailing list. The subject should be: `[ANNOUNCE] DRA Driver for NVIDIA GPUs vX.Y.Z is released`.

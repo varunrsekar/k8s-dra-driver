@@ -9,20 +9,20 @@ setup_file () {
   # partial cleanup or partial test might leave an exotic resource slice state
   # behind. Delete slices, and to do that reliably: delete DRA driver before, if
   # it exists.
-  helm uninstall -n nvidia-dra-driver-gpu nvidia-dra-driver-gpu-batssuite --wait || true
+  helm uninstall -n dra-driver-nvidia-gpu dra-driver-nvidia-gpu-batssuite --wait || true
   kubectl delete resourceslices.resource.k8s.io --all
 
   local _iargs=("--set" "logVerbosity=6" "--set" "featureGates.DynamicMIG=true")
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
   run kubectl logs \
-    -l nvidia-dra-driver-gpu-component=kubelet-plugin \
-    -n nvidia-dra-driver-gpu \
+    -l dra-driver-nvidia-gpu-component=kubelet-plugin \
+    -n dra-driver-nvidia-gpu \
     -c gpus \
     --prefix --tail=-1
   assert_output --partial "About to announce device gpu-0-mig-1g"
 
   # Wait until resource slices are announced. See
-  # https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/902 -- Maybe we should
+  # https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/issues/902 -- Maybe we should
   # fail the liveness probe until the first resource slice update is known to
   # have been performed? That may be too invasive. In any case, the resource
   # slice update controller running in the DRA plugin helper might enable us to

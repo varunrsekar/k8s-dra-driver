@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Default values for nvidia-dra-driver-gpu.
+# Default values for dra-driver-nvidia-gpu.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
@@ -50,7 +50,7 @@ resourceApiVersion: ""
 
 imagePullSecrets: []
 image:
-  repository: registry.k8s.io/nv-dra-driver-gpu/nvidia-dra-driver-gpu
+  repository: registry.k8s.io/dra-driver-nvidia/dra-driver-nvidia-gpu
   pullPolicy: IfNotPresent
   # Note: an empty string is translated to the `appVersion` string from
   # the Helm chart YAML (effectively implementing the default value to be
@@ -89,7 +89,7 @@ featureGates: {}
 # verbosity. Regardless of this setting, messages of type Error, Warning, and
 # Info(level 0) are always logged. Can also be set for individual components via
 # environment variable (that takes precedence), see
-# https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/wiki/Troubleshooting#controlling-log-verbosity
+# https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/wiki/Troubleshooting#controlling-log-verbosity
 #
 # An (incomplete) representation of which types of messages to expect with
 # increasing verbosity level:
@@ -226,7 +226,7 @@ controller:
         podAffinityTerm:
           labelSelector:
             matchLabels:
-              nvidia-dra-driver-gpu-component: controller
+              dra-driver-nvidia-gpu-component: controller
           topologyKey: kubernetes.io/hostname
   # Network policy settings
   networkPolicy:

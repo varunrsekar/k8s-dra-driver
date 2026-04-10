@@ -41,14 +41,14 @@ jobs:
           export VERSION_W_COMMIT="$(make print-VERSION)-$(echo $GITHUB_SHA | cut -c1-8)"
           # Drop leading 'v'.
           echo "replace ${VERSION:1} with ${VERSION_W_COMMIT:1}"
-          sed -i "s/${VERSION:1}/${VERSION_W_COMMIT:1}-chart/g" deployments/helm/nvidia-dra-driver-gpu/Chart.yaml
-          sed -i "s/tag: \"\"/tag: \"${VERSION_W_COMMIT}\"/g" deployments/helm/nvidia-dra-driver-gpu/values.yaml
+          sed -i "s/${VERSION:1}/${VERSION_W_COMMIT:1}-chart/g" deployments/helm/dra-driver-nvidia-gpu/Chart.yaml
+          sed -i "s/tag: \"\"/tag: \"${VERSION_W_COMMIT}\"/g" deployments/helm/dra-driver-nvidia-gpu/values.yaml
           # Staging image registry for CI-built images.
-          sed -i 's|registry.k8s.io/nv-dra-driver-gpu|us-central1-docker.pkg.dev/k8s-staging-images/nv-dra-driver-gpu|g' deployments/helm/nvidia-dra-driver-gpu/values.yaml
+          sed -i 's|registry.k8s.io/dra-driver-nvidia|us-central1-docker.pkg.dev/k8s-staging-images/dra-driver-nvidia|g' deployments/helm/dra-driver-nvidia-gpu/values.yaml
           git diff || echo "ignore git diff exit code"
-          helm package deployments/helm/nvidia-dra-driver-gpu
+          helm package deployments/helm/dra-driver-nvidia-gpu
       - name: Upload chart package
         uses: actions/upload-artifact@v7
         with:
           name: helm-chart
-          path: nvidia-dra-driver-gpu-*.tgz
+          path: dra-driver-nvidia-gpu-*.tgz

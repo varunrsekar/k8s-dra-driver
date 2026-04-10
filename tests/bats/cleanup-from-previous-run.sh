@@ -17,7 +17,7 @@
 set -o nounset
 set -o pipefail
 
-CRD_URL="https://raw.githubusercontent.com/kubernetes-sigs/nvidia-dra-driver-gpu/main/deployments/helm/nvidia-dra-driver-gpu/crds/resource.nvidia.com_computedomains.yaml"
+CRD_URL="https://raw.githubusercontent.com/kubernetes-sigs/dra-driver-nvidia-gpu/main/deployments/helm/dra-driver-nvidia-gpu/crds/resource.nvidia.com_computedomains.yaml"
 
 
 THIS_DIR_PATH=$(dirname "$(realpath $0)")
@@ -25,7 +25,7 @@ source "${THIS_DIR_PATH}/helpers.sh"
 
 # For debugging: state of the world
 kubectl get computedomains.resource.nvidia.com
-kubectl get pods -n nvidia-dra-driver-gpu
+kubectl get pods -n dra-driver-nvidia-gpu
 helm list -A
 
 
@@ -35,14 +35,14 @@ HELM_CACHE_HOME=$(mktemp -d -t helm-XXXXX)
 export HELM_CACHE_HOME
 
 # Facilitate direct (manual) invocation of this script.
-TEST_CLEANUP_CHART_REPO="${TEST_CHART_REPO:-oci://gcr.io/k8s-staging-nvidia/charts/nvidia-dra-driver-gpu}"
+TEST_CLEANUP_CHART_REPO="${TEST_CHART_REPO:-oci://gcr.io/k8s-staging-nvidia/charts/dra-driver-nvidia-gpu}"
 TEST_CLEANUP_CHART_VERSION="${TEST_CHART_VERSION:-26.4.0-dev-f9de1ef3-chart}"
 TEST_NVIDIA_DRIVER_ROOT="${TEST_NVIDIA_DRIVER_ROOT:-/run/nvidia/driver}"
 
 # If a previous run leaves e.g. the controller behind in CrashLoopBackOff then
 # the next installation with --wait won't succeed.
 set -x
-timeout -v 15 helm uninstall nvidia-dra-driver-gpu-batssuite -n nvidia-dra-driver-gpu
+timeout -v 15 helm uninstall dra-driver-nvidia-gpu-batssuite -n dra-driver-nvidia-gpu
 
 # When the CRD has been left behind deleted by a partially performed
 # test then the deletions below cannot succeed. Apply a CRD version that
@@ -85,10 +85,10 @@ kubectl delete resourceclaim -l env=batssuite
 kubectl delete pods privpod-rm-plugindirs 2> /dev/null
 
 # Uninstall chart (it was set up only to facilitate resource deletion).
-helm uninstall nvidia-dra-driver-gpu-batssuite --wait -n nvidia-dra-driver-gpu
+helm uninstall dra-driver-nvidia-gpu-batssuite --wait -n dra-driver-nvidia-gpu
 kubectl wait \
     --for=delete pods -A \
-    -l app.kubernetes.io/name=nvidia-dra-driver-gpu \
+    -l app.kubernetes.io/name=dra-driver-nvidia-gpu \
     --timeout=15s \
         || echo "wait-for-delete failed"
 

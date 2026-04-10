@@ -132,13 +132,13 @@ while true; do
     # (when they are Running). I have added this very late in the game because I
     # think we're missing CD daemon log around container shutdown; I want to be
     # extra sure.
-    kubectl get pods -n nvidia-dra-driver-gpu | grep "${CDUID}" | grep Running | awk '{print $1}' | while read pname; do
+    kubectl get pods -n dra-driver-nvidia-gpu | grep "${CDUID}" | grep Running | awk '{print $1}' | while read pname; do
         _logfname="${RUNID}_cddaemon_follow_${pname}.log"
         if [ -f "$_logfname" ]; then
             continue
         fi
         log "new CD daemon pod: $pname -- follow log, save to ${_logfname}"
-        kubectl logs -n nvidia-dra-driver-gpu "$pname" \
+        kubectl logs -n dra-driver-nvidia-gpu "$pname" \
             --tail=-1 --timestamps --prefix --all-containers --follow \
             > "${_logfname}" &
         # Note: if we lose track of the log followers spawned, we can and should
@@ -158,7 +158,7 @@ while true; do
 
 
     date -u +'%Y-%m-%dT%H:%M:%S.%3NZ ' >> "${RUNID}_pods_over_time"
-    kubectl get pods -n nvidia-dra-driver-gpu -o wide >> "${RUNID}_pods_over_time"
+    kubectl get pods -n dra-driver-nvidia-gpu -o wide >> "${RUNID}_pods_over_time"
     kubectl get pods -o wide >> "${RUNID}_pods_over_time"
 
     STATUS=$(kubectl get pod -l job-name="${JOB_NAME}" -o jsonpath="{.items[0].status.phase}" 2>/dev/null)
@@ -218,7 +218,7 @@ while true; do
             elif (( FAULT_TYPE == 2 )); then
                 log "inject fault type 2: force-delete all IMEX daemons"
                 set -x
-                kubectl delete pod -n nvidia-dra-driver-gpu -l resource.nvidia.com/computeDomain --grace-period=0 --force
+                kubectl delete pod -n dra-driver-nvidia-gpu -l resource.nvidia.com/computeDomain --grace-period=0 --force
                 set +x
             elif (( FAULT_TYPE == 3 )); then
                 log "inject fault type 3: regular-delete worker pod 1"

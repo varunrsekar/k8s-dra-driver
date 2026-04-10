@@ -39,7 +39,7 @@ IMAGE = $(IMAGE_NAME):$(IMAGE_TAG)
 # Multi-arch without registry push (e.g. GitHub Actions): BUILD_MULTI_ARCH_GH=true
 # writes an OCI layout tarball. Image push to staging/promotion is done by Prow.
 DIST_DIR ?= $(CURDIR)/dist
-OCI_OUTPUT ?= $(DIST_DIR)/nvidia-dra-driver-gpu.oci.tar
+OCI_OUTPUT ?= $(DIST_DIR)/dra-driver-nvidia-gpu.oci.tar
 
 # TODO: revisit compression=zstd,compression-level=15
 ifeq ($(BUILD_MULTI_ARCH_IMAGES),true)

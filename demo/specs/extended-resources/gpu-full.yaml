@@ -7,7 +7,7 @@
 # Prerequisites:
 #   - Kubernetes >= 1.35 with feature gate DRAExtendedResource=true
 #   - NVIDIA device plugin for Kubernetes is not installed or disabled
-#   - NVIDIA DRA Driver for GPUs installed via Helm
+#   - DRA Driver for NVIDIA GPUs installed via Helm
 #
 # Verify after apply:
 #   kubectl get resourceclaims -n extended-resource-gpu-full

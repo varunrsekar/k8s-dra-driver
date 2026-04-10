@@ -19,12 +19,12 @@ setup () {
   local _iargs=("--set" "logVerbosity=0")
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
 
-  run kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  run kubectl logs -l dra-driver-nvidia-gpu-component=controller -n dra-driver-nvidia-gpu --tail=-1
   assert_output --partial "Verbosity:"
   assert_output --partial '"MPSSupport":false'
   assert_output --partial 'additionalNamespaces:'
 
-  run kubectl logs -l nvidia-dra-driver-gpu-component=kubelet-plugin -n nvidia-dra-driver-gpu --tail=-1
+  run kubectl logs -l dra-driver-nvidia-gpu-component=kubelet-plugin -n dra-driver-nvidia-gpu --tail=-1
   assert_output --partial "Verbosity"
   assert_output --partial "nodeName"
   assert_output --partial "identified fabric clique"
@@ -45,15 +45,15 @@ setup () {
   echo "test level 0"
   local _iargs=("--set" "logVerbosity=0")
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
-  kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
-  run kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  kubectl logs -l dra-driver-nvidia-gpu-component=controller -n dra-driver-nvidia-gpu --tail=-1
+  run kubectl logs -l dra-driver-nvidia-gpu-component=controller -n dra-driver-nvidia-gpu --tail=-1
   assert_output --partial 'controller manager config'
   assert_output --partial 'maxNodesPerIMEXDomain'
 
   echo "test level 1"
   local _iargs=("--set" "logVerbosity=1")
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
-  run kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  run kubectl logs -l dra-driver-nvidia-gpu-component=controller -n dra-driver-nvidia-gpu --tail=-1
   refute_output --partial 'Processing added or updated ComputeDomain'
   refute_output --partial 'reflector.go'
   refute_output --partial 'Caches populated'
@@ -63,7 +63,7 @@ setup () {
   echo "test level 2"
   local _iargs=("--set" "logVerbosity=2")
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
-  run kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  run kubectl logs -l dra-driver-nvidia-gpu-component=controller -n dra-driver-nvidia-gpu --tail=-1
   assert_output --partial 'Processing added or updated ComputeDomain'
   assert_output --partial 'reflector.go'
   assert_output --partial 'Caches populated'
@@ -73,7 +73,7 @@ setup () {
   echo "test level 3"
   local _iargs=("--set" "logVerbosity=3")
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
-  run kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  run kubectl logs -l dra-driver-nvidia-gpu-component=controller -n dra-driver-nvidia-gpu --tail=-1
   assert_output --partial 'reflector.go'
   assert_output --partial 'Caches populated'
   assert_output --partial 'Listing and watching'
@@ -82,19 +82,19 @@ setup () {
   echo "test level 4"
   local _iargs=("--set" "logVerbosity=4")
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
-  run kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  run kubectl logs -l dra-driver-nvidia-gpu-component=controller -n dra-driver-nvidia-gpu --tail=-1
   refute_output --partial 'round_trippers.go'
 
   echo "test level 5"
   local _iargs=("--set" "logVerbosity=5")
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
-  run kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  run kubectl logs -l dra-driver-nvidia-gpu-component=controller -n dra-driver-nvidia-gpu --tail=-1
   refute_output --partial 'round_trippers.go'
 
   echo "test level 6"
   local _iargs=("--set" "logVerbosity=6")
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
-  run kubectl logs -l nvidia-dra-driver-gpu-component=controller -n nvidia-dra-driver-gpu --tail=-1
+  run kubectl logs -l dra-driver-nvidia-gpu-component=controller -n dra-driver-nvidia-gpu --tail=-1
   assert_output --partial 'Cleanup: perform for'
   assert_output --partial 'round_trippers.go'
   assert_output --partial '"Response" verb="GET"'
@@ -132,12 +132,12 @@ setup () {
   # new LOG_VERBOSITY_CD_DAEMON setting applies), and make sure controller
   # deployment is still READY before moving on (make sure 1/1 READY).
   CPOD_OLD="$(get_current_controller_pod_name)"
-  kubectl set env deployment nvidia-dra-driver-gpu-controller -n nvidia-dra-driver-gpu  LOG_VERBOSITY_CD_DAEMON=0
+  kubectl set env deployment dra-driver-nvidia-gpu-controller -n dra-driver-nvidia-gpu  LOG_VERBOSITY_CD_DAEMON=0
   echo "wait --for=delete: $CPOD_OLD"
-  kubectl wait --for=delete pods "$CPOD_OLD" -n nvidia-dra-driver-gpu --timeout=10s
+  kubectl wait --for=delete pods "$CPOD_OLD" -n dra-driver-nvidia-gpu --timeout=10s
   echo "returned: wait --for=delete"
   CPOD_NEW="$(get_current_controller_pod_name)"
-  kubectl wait --for=condition=READY pods "$CPOD_NEW" -n nvidia-dra-driver-gpu --timeout=10s
+  kubectl wait --for=condition=READY pods "$CPOD_NEW" -n dra-driver-nvidia-gpu --timeout=10s
   echo "new controller pod is in effect"
 
   # Spawn new workload
@@ -156,5 +156,5 @@ setup () {
   # `kubectl-set` and that may negatively impact the next `helm upgrade -i ...`.
   # Explicitly uninstall the Helm chart now, to not affect other tests with
   # that.
-  helm uninstall -n nvidia-dra-driver-gpu nvidia-dra-driver-gpu-batssuite
+  helm uninstall -n dra-driver-nvidia-gpu dra-driver-nvidia-gpu-batssuite
 }

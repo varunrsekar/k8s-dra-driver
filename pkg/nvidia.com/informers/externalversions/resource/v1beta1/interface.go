@@ -19,7 +19,7 @@ limitations under the License.
 package v1beta1
 
 import (
-	internalinterfaces "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/informers/externalversions/internalinterfaces"
+	internalinterfaces "sigs.k8s.io/dra-driver-nvidia-gpu/pkg/nvidia.com/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to all the informers in this group version.

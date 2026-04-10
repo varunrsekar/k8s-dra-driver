@@ -16,20 +16,20 @@ include $(CURDIR)/versions.mk
 include $(CURDIR)/common.mk
 
 # The to-be-tested Helm chart. Ignored when setting TEST_CHART_LOCAL.
-TEST_CHART_REPO ?= "oci://gcr.io/k8s-staging-nvidia/charts/nvidia-dra-driver-gpu"
+TEST_CHART_REPO ?= "oci://gcr.io/k8s-staging-nvidia/charts/dra-driver-nvidia-gpu"
 TEST_CHART_VERSION ?= "$(VERSION_STAGING_CHART)"
 
 # The baseline Helm chart to test upgrades from and downgrades to.
-TEST_CHART_LASTSTABLE_REPO ?= "oci://gcr.io/k8s-staging-nvidia/charts/nvidia-dra-driver-gpu"
+TEST_CHART_LASTSTABLE_REPO ?= "oci://gcr.io/k8s-staging-nvidia/charts/dra-driver-nvidia-gpu"
 TEST_CHART_LASTSTABLE_VERSION ?= "25.12.0-0882da87-chart"
 
 # If not "false": the to-be-tested Helm chart is installed from the local
-# filesystem (from `deployments/helm/nvidia-dra-driver-gpu`). Make sure
+# filesystem (from `deployments/helm/dra-driver-nvidia-gpu`). Make sure
 # (out-of-band) that the container images that the chart refers to are available
 # (placed directly on the involved nodes or pullable). This is a convenince
 # parameter for setting
 #
-#        TEST_CHART_REPO="deployments/helm/nvidia-dra-driver-gpu/"
+#        TEST_CHART_REPO="deployments/helm/dra-driver-nvidia-gpu/"
 #        TEST_CHART_VERSION="$(make print-VERSION)" (but w/o v prefix)
 #
 TEST_CHART_LOCAL ?= "false"
@@ -43,11 +43,11 @@ TEST_NVIDIA_DRIVER_ROOT ?= "/run/nvidia/driver"
 
 # TODO: calculate precise, expected container image spec,
 # and test for that in test suite, for example:
-# `registry.k8s.io/nv-dra-driver-gpu/nvidia-dra-driver-gpu:v25.8.0-dev`
+# `registry.k8s.io/dra-driver-nvidia/dra-driver-nvidia-gpu:v25.8.0-dev`
 TEST_EXPECTED_IMAGE_SPEC_SUBSTRING ?= $(VERSION)
 
 ifneq ($(TEST_CHART_LOCAL),"false")
-TEST_CHART_REPO = "deployments/helm/nvidia-dra-driver-gpu"
+TEST_CHART_REPO = "deployments/helm/dra-driver-nvidia-gpu"
 TEST_CHART_VERSION = $(VERSION:v%=%)
 endif
 
@@ -136,8 +136,8 @@ endef
 default: tests
 
 # Use flock to serialize local image builds in GHA CI. See
-# https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/908 and
-# https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/941.
+# https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/issues/908 and
+# https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/issues/941.
 .PHONY: runner-image
 runner-image:
 	@( \

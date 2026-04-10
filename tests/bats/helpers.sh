@@ -15,7 +15,7 @@
 
 # Use a name that upon cluster inspection reveals that this
 # Helm chart release was installed/managed by this test suite.
-export TEST_HELM_RELEASE_NAME="nvidia-dra-driver-gpu-batssuite"
+export TEST_HELM_RELEASE_NAME="dra-driver-nvidia-gpu-batssuite"
 
 
 # Extend PATH, for example for the `nvmm` utility.
@@ -38,8 +38,8 @@ export NOARGS=()
 # 2nd arg: helm chart version
 # 3rd arg: array with additional args (provide `NOARGS` if none)
 iupgrade_wait() {
-  # E.g. `nvidia/nvidia-dra-driver-gpu` or
-  # `oci://gcr.io/k8s-staging-nvidia/charts/nvidia-dra-driver-gpu`
+  # E.g. `nvidia/dra-driver-nvidia-gpu` or
+  # `oci://gcr.io/k8s-staging-nvidia/charts/dra-driver-nvidia-gpu`
   local REPO="$1"
 
   # E.g. `25.3.1` or `25.8.0-dev-f2eaddd6-chart`
@@ -55,12 +55,12 @@ iupgrade_wait() {
     --wait \
     --timeout=1m5s \
     --create-namespace \
-    --namespace nvidia-dra-driver-gpu \
+    --namespace dra-driver-nvidia-gpu \
     --set gpuResourcesEnabledOverride=true \
     --set nvidiaDriverRoot="${TEST_NVIDIA_DRIVER_ROOT}" "${ADDITIONAL_INSTALL_ARGS[@]}"
 
   # Valueable output to have in the logs in case things went pearshaped.
-  kubectl get pods -n nvidia-dra-driver-gpu
+  kubectl get pods -n dra-driver-nvidia-gpu
 
   # Some part of this waiting work is done by helm as of `--wait` with
   # `--timeout`. Note that the below in itself would not be sufficient: in case
@@ -77,14 +77,14 @@ iupgrade_wait() {
   # the shape
   # `kubectl get pods ... | xargs -I{} kubectl wait --for=condition=Ready pod/{} `
   sleep 1
-  kubectl wait --for=condition=READY pods -A -l nvidia-dra-driver-gpu-component=kubelet-plugin --timeout=15s
+  kubectl wait --for=condition=READY pods -A -l dra-driver-nvidia-gpu-component=kubelet-plugin --timeout=15s
 
   # Again, log current state.
-  kubectl get pods -n nvidia-dra-driver-gpu
+  kubectl get pods -n dra-driver-nvidia-gpu
 
   # That one should be obvious now, but make that guarantee explicit for
   # consuming tests.
-  kubectl wait --for=condition=READY pods -A -l nvidia-dra-driver-gpu-component=controller --timeout=10s
+  kubectl wait --for=condition=READY pods -A -l dra-driver-nvidia-gpu-component=controller --timeout=10s
   # maybe: check version on labels (to confirm that we set labels correctly)
   log "iupgrade_wait: done"
 }
@@ -98,7 +98,7 @@ log_objects() {
   echo "claims:"; kubectl get resourceclaims --ignore-not-found || true
   echo "CDs:   "; kubectl get computedomain --ignore-not-found || true
   echo "pods:  "; kubectl get pods -o wide --ignore-not-found || true
-  kubectl get pods -o wide -n nvidia-dra-driver-gpu || true
+  kubectl get pods -o wide -n dra-driver-nvidia-gpu || true
   log "LOG_OBJECTS END"
 }
 
@@ -168,7 +168,7 @@ get_all_cd_daemon_logs_for_cd_name() {
   CD_LABEL_KV="resource.nvidia.com/computeDomain=${CD_UID}"
   echo "CD daemon logs for CD: $CD_UID"
   kubectl logs \
-    -n nvidia-dra-driver-gpu \
+    -n dra-driver-nvidia-gpu \
     -l "${CD_LABEL_KV}" \
     --tail=-1 \
     --prefix \
@@ -245,7 +245,7 @@ get_device_attrs_from_any_gpu_slice() {
 
   log "wrote resource slice content to: ${spath}"
 
-  # Log contents, for https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/902
+  # Log contents, for https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/issues/902
   cat "${spath}" >&2
 
   # For the first device in that slice (of given type), extract the set of
@@ -276,8 +276,8 @@ show_kubelet_plugin_error_logs() {
   echo -e "\nKUBELET PLUGIN ERROR LOGS START"
   (
     kubectl logs \
-    -l nvidia-dra-driver-gpu-component=kubelet-plugin \
-    -n nvidia-dra-driver-gpu \
+    -l dra-driver-nvidia-gpu-component=kubelet-plugin \
+    -n dra-driver-nvidia-gpu \
     --all-containers \
     --prefix --tail=-1 | grep -E -e "^(E|W)[0-9]{4}" -e "error"
   ) || true
@@ -289,8 +289,8 @@ show_kubelet_plugin_log_tails() {
   echo -e "\nKUBELET PLUGIN LOG TAILS START"
   (
     kubectl logs \
-    -l nvidia-dra-driver-gpu-component=kubelet-plugin \
-    -n nvidia-dra-driver-gpu \
+    -l dra-driver-nvidia-gpu-component=kubelet-plugin \
+    -n dra-driver-nvidia-gpu \
     --all-containers \
     --prefix --tail=400
   ) || true
@@ -302,8 +302,8 @@ show_gpu_plugin_log_tails() {
   echo -e "\nKUBELET GPU PLUGIN LOGS TAILS(400) START"
   (
     kubectl logs \
-    -l nvidia-dra-driver-gpu-component=kubelet-plugin \
-    -n nvidia-dra-driver-gpu \
+    -l dra-driver-nvidia-gpu-component=kubelet-plugin \
+    -n dra-driver-nvidia-gpu \
     --container gpus \
     --prefix --tail=400
   ) || true
@@ -318,8 +318,8 @@ show_gpu_plugin_log_tails() {
 # template mutation).
 get_current_controller_pod_name() {
   kubectl get pod \
-    -l nvidia-dra-driver-gpu-component=controller \
-    -n nvidia-dra-driver-gpu \
+    -l dra-driver-nvidia-gpu-component=controller \
+    -n dra-driver-nvidia-gpu \
       | grep -iv "NAME" \
       | grep -iv 'completed' \
       | grep -iv 'terminating' \
@@ -329,8 +329,8 @@ get_current_controller_pod_name() {
 
 get_one_kubelet_plugin_pod_name() {
   kubectl get pod \
-    -l nvidia-dra-driver-gpu-component=kubelet-plugin \
-    -n nvidia-dra-driver-gpu \
+    -l dra-driver-nvidia-gpu-component=kubelet-plugin \
+    -n dra-driver-nvidia-gpu \
       | grep -iv "NAME" \
       | grep -i 'running' \
       | head -n1 \
@@ -412,17 +412,17 @@ kplog () {
   echo "identified node: $node"
 
   local pod
-  pod=$(kubectl get pod -n nvidia-dra-driver-gpu -l nvidia-dra-driver-gpu-component=kubelet-plugin \
+  pod=$(kubectl get pod -n dra-driver-nvidia-gpu -l dra-driver-nvidia-gpu-component=kubelet-plugin \
     --field-selector spec.nodeName="$node" \
     --no-headers -o custom-columns=":metadata.name")
 
   if [ -z "$pod" ]; then
-    echo " get pod -n nvidia-dra-driver-gpu -l nvidia-dra-driver-gpu-component=kubelet-plugin: no pod found on node $node"
+    echo " get pod -n dra-driver-nvidia-gpu -l dra-driver-nvidia-gpu-component=kubelet-plugin: no pod found on node $node"
     return 1
   fi
 
   echo "Executing on pod $pod (node: $node)..."
-  kubectl logs -n nvidia-dra-driver-gpu "$pod" -c "$cont" "$@"
+  kubectl logs -n dra-driver-nvidia-gpu "$pod" -c "$cont" "$@"
 }
 
 
