@@ -26,8 +26,8 @@ import (
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"
-	v1beta1 "sigs.k8s.io/nvidia-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
-	scheme "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/clientset/versioned/scheme"
+	v1beta1 "sigs.k8s.io/dra-driver-nvidia-gpu/api/nvidia.com/resource/v1beta1"
+	scheme "sigs.k8s.io/dra-driver-nvidia-gpu/pkg/nvidia.com/clientset/versioned/scheme"
 )
 
 // ComputeDomainCliquesGetter has a method to return a ComputeDomainCliqueInterface.

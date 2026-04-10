@@ -27,9 +27,9 @@ import (
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
-	versioned "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/clientset/versioned"
-	internalinterfaces "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/informers/externalversions/internalinterfaces"
-	resource "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/informers/externalversions/resource"
+	versioned "sigs.k8s.io/dra-driver-nvidia-gpu/pkg/nvidia.com/clientset/versioned"
+	internalinterfaces "sigs.k8s.io/dra-driver-nvidia-gpu/pkg/nvidia.com/informers/externalversions/internalinterfaces"
+	resource "sigs.k8s.io/dra-driver-nvidia-gpu/pkg/nvidia.com/informers/externalversions/resource"
 )
 
 // SharedInformerOption defines the functional option type for SharedInformerFactory.

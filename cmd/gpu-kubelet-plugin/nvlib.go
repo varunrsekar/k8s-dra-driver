@@ -34,7 +34,7 @@ import (
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"k8s.io/dynamic-resource-allocation/deviceattribute"
 
-	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/featuregates"
 )
 
 type GPUMinor = int

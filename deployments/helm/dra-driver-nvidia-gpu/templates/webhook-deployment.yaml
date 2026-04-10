@@ -16,15 +16,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "nvidia-dra-driver-gpu.name" . }}-webhook
-  namespace: {{ include "nvidia-dra-driver-gpu.namespace" . }}
+  name: {{ include "dra-driver-nvidia-gpu.name" . }}-webhook
+  namespace: {{ include "dra-driver-nvidia-gpu.namespace" . }}
   labels:
-    {{- include "nvidia-dra-driver-gpu.labels" . | nindent 4 }}
+    {{- include "dra-driver-nvidia-gpu.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.webhook.replicas }}
   selector:
     matchLabels:
-      {{- include "nvidia-dra-driver-gpu.selectorLabels" (dict "context" . "componentName" "webhook") | nindent 6 }}
+      {{- include "dra-driver-nvidia-gpu.selectorLabels" (dict "context" . "componentName" "webhook") | nindent 6 }}
   template:
     metadata:
       {{- with .Values.webhook.podAnnotations }}
@@ -32,8 +32,8 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "nvidia-dra-driver-gpu.templateLabels" . | nindent 8 }}
-        {{- include "nvidia-dra-driver-gpu.selectorLabels" (dict "context" . "componentName" "webhook") | nindent 8 }}
+        {{- include "dra-driver-nvidia-gpu.templateLabels" . | nindent 8 }}
+        {{- include "dra-driver-nvidia-gpu.selectorLabels" (dict "context" . "componentName" "webhook") | nindent 8 }}
     spec:
       {{- if .Values.webhook.priorityClassName }}
       priorityClassName: {{ .Values.webhook.priorityClassName }}
@@ -42,14 +42,14 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "nvidia-dra-driver-gpu.webhookServiceAccountName" . }}
+      serviceAccountName: {{ include "dra-driver-nvidia-gpu.webhookServiceAccountName" . }}
       securityContext:
         {{- toYaml .Values.webhook.podSecurityContext | nindent 8 }}
       containers:
       - name: webhook
         securityContext:
           {{- toYaml .Values.webhook.containers.webhook.securityContext | nindent 10 }}
-        image: {{ include "nvidia-dra-driver-gpu.fullimage" . }}
+        image: {{ include "dra-driver-nvidia-gpu.fullimage" . }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         command: ["webhook"]
         resources:
@@ -88,7 +88,7 @@ spec:
           {{- if eq .Values.webhook.tls.mode "secret" }}
           secretName: {{ .Values.webhook.tls.secret.name }}
           {{- else }}
-          secretName: {{ include "nvidia-dra-driver-gpu.name" . }}-webhook-cert
+          secretName: {{ include "dra-driver-nvidia-gpu.name" . }}-webhook-cert
           {{- end }}
       {{- with .Values.webhook.nodeSelector }}
       nodeSelector:

@@ -22,7 +22,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/urfave/cli/v2"
 
-	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/featuregates"
 )
 
 // FeatureGateConfig manages the unified feature gate registry containing both

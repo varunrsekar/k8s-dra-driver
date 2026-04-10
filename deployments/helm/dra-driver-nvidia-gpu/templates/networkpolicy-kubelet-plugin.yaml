@@ -1,15 +1,15 @@
-{{- if .Values.controller.networkPolicy.enabled -}}
+{{- if .Values.kubeletPlugin.networkPolicy.enabled -}}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "nvidia-dra-driver-gpu.name" . }}-controller
-  namespace: {{ include "nvidia-dra-driver-gpu.namespace" . }}
+  name: {{ include "dra-driver-nvidia-gpu.name" . }}-kubelet-plugin
+  namespace: {{ include "dra-driver-nvidia-gpu.namespace" . }}
   labels:
-    {{- include "nvidia-dra-driver-gpu.labels" . | nindent 4 }}
+    {{- include "dra-driver-nvidia-gpu.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      {{- include "nvidia-dra-driver-gpu.selectorLabels" (dict "context" . "componentName" "controller") | nindent 6 }}
+      {{- include "dra-driver-nvidia-gpu.selectorLabels" (dict "context" . "componentName" "kubelet-plugin") | nindent 6 }}
   policyTypes:
   - Egress
   egress:

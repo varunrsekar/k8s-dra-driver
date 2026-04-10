@@ -56,7 +56,7 @@ bats::on_failure() {
   CD_UID=$(kubectl describe computedomains.resource.nvidia.com imex-channel-injection | grep UID | awk '{print $2}')
   log "CD UID: ${CD_UID}"
   PNAME=$( \
-    kubectl get pods -n nvidia-dra-driver-gpu | \
+    kubectl get pods -n dra-driver-nvidia-gpu | \
     grep "${CD_UID}" | \
     awk '{print $1}'
   )
@@ -68,7 +68,7 @@ bats::on_failure() {
   assert_output --partial 'nodes'
 
   echo "attach background log follower to daemon pod: $PNAME"
-  kubectl logs -n nvidia-dra-driver-gpu --follow "$PNAME" > "$LOGPATH" 2>&1 &
+  kubectl logs -n dra-driver-nvidia-gpu --follow "$PNAME" > "$LOGPATH" 2>&1 &
   kubectl delete pods imex-channel-injection
 
   # Note: the log follower child process terminates when the pod terminates.
@@ -130,8 +130,8 @@ bats::on_failure() {
   # Confirm that precise root cause can also be inferred from
   # CD kubelet plugin logs.
   kubectl logs \
-    -l nvidia-dra-driver-gpu-component=kubelet-plugin \
-    -n nvidia-dra-driver-gpu \
+    -l dra-driver-nvidia-gpu-component=kubelet-plugin \
+    -n dra-driver-nvidia-gpu \
     --prefix --tail=-1 | \
       grep 'Permanent error' | \
       grep 'strict decoding error: unknown field "unexpectedField"'
@@ -163,8 +163,8 @@ bats::on_failure() {
     "${POD}"
   wait_for_pod_event "${POD}" FailedPrepareDynamicResources 10
   run kubectl logs \
-    -l nvidia-dra-driver-gpu-component=kubelet-plugin \
-    -n nvidia-dra-driver-gpu \
+    -l dra-driver-nvidia-gpu-component=kubelet-plugin \
+    -n dra-driver-nvidia-gpu \
     --prefix --tail=-1
   assert_output --partial 'strict decoding error: unknown field "unexpectedField"'
 
@@ -177,8 +177,8 @@ bats::on_failure() {
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
   sleep 1   # give the on-startup cleanup a chance to run.
   run kubectl logs \
-    -l nvidia-dra-driver-gpu-component=kubelet-plugin \
-    -n nvidia-dra-driver-gpu \
+    -l dra-driver-nvidia-gpu-component=kubelet-plugin \
+    -n dra-driver-nvidia-gpu \
     --prefix --tail=-1
   assert_output --partial "partially prepared claim not stale: default/batssuite-rc-bad-opaque-config"
 
@@ -186,7 +186,7 @@ bats::on_failure() {
   #
   # To that end, uninstall the driver and then remove both pod and RC from the API server.
   # Then, re-install DRA driver and confirm detection and removal of stale claim.
-  helm uninstall -n nvidia-dra-driver-gpu nvidia-dra-driver-gpu-batssuite --wait
+  helm uninstall -n dra-driver-nvidia-gpu dra-driver-nvidia-gpu-batssuite --wait
   kubectl delete "${POD}" --force
   kubectl delete resourceclaim batssuite-rc-bad-opaque-config
   local _iargs=("--set" "logVerbosity=6")
@@ -194,8 +194,8 @@ bats::on_failure() {
   sleep 1  # give the on-startup cleanup a chance to run.
 
   run kubectl logs \
-    -l nvidia-dra-driver-gpu-component=kubelet-plugin \
-    -n nvidia-dra-driver-gpu \
+    -l dra-driver-nvidia-gpu-component=kubelet-plugin \
+    -n dra-driver-nvidia-gpu \
     --prefix --tail=-1
   assert_output --partial "Deleted claim from checkpoint: default/batssuite-rc-bad-opaque-config"
   assert_output --partial "Checkpointed RC cleanup: unprepared stale claim: default/batssuite-rc-bad-opaque-config"
@@ -205,8 +205,8 @@ bats::on_failure() {
   # cleanup above was faster.
   sleep 4
   run kubectl logs \
-    -l nvidia-dra-driver-gpu-component=kubelet-plugin \
-    -n nvidia-dra-driver-gpu \
+    -l dra-driver-nvidia-gpu-component=kubelet-plugin \
+    -n dra-driver-nvidia-gpu \
     --prefix --tail=-1
   assert_output --partial "Unprepare noop: claim not found in checkpoint data"
 }

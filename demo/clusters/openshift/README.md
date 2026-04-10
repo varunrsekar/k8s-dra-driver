@@ -47,7 +47,7 @@ nvidiaDriverRoot: /run/nvidia/driver
 Example using `--set`:
 
 ```console
-$ helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
+$ helm install dra-driver-nvidia-gpu nvidia/dra-driver-nvidia-gpu \
     <...>
     --set nvidiaDriverRoot=/run/nvidia/driver
 ```

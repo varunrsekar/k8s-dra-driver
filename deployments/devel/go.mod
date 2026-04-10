@@ -1,4 +1,4 @@
-module sigs.k8s.io/nvidia-dra-driver-gpu/deployments/devel
+module sigs.k8s.io/dra-driver-nvidia-gpu/deployments/devel
 
 go 1.23.1
 

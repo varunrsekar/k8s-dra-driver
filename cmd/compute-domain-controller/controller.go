@@ -23,8 +23,8 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/flags"
-	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/workqueue"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/flags"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/workqueue"
 )
 
 // ManagerConfig defines the common configuration options shared across all managers.

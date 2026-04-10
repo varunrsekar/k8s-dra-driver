@@ -12,7 +12,7 @@ setup() {
   # Try to establish rather precise state right before entering test. Any
   # previous partial cleanup or partial test might leave an exotic resource
   # slice state behind. Delete those. Delete DRA driver before, if it exists.
-  helm uninstall -n nvidia-dra-driver-gpu nvidia-dra-driver-gpu-batssuite --wait || true
+  helm uninstall -n dra-driver-nvidia-gpu dra-driver-nvidia-gpu-batssuite --wait || true
   mig_ensure_teardown_on_all_nodes
   kubectl delete resourceslices.resource.k8s.io --all
 
@@ -28,10 +28,10 @@ teardown() {
   # file. It makes sense to do this before trying to tear down the MIG devices
   # created by a particular test. This may help addressing a rare scenario of
   # "in use by another client", see
-  # https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/907 (it's conceivable
+  # https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/issues/907 (it's conceivable
   # that the kubelet plugin's nvml-based interaction with the GPU conflicted
   # with the teardown).
-  helm uninstall -n nvidia-dra-driver-gpu nvidia-dra-driver-gpu-batssuite --wait || true
+  helm uninstall -n dra-driver-nvidia-gpu dra-driver-nvidia-gpu-batssuite --wait || true
   mig_ensure_teardown_on_all_nodes
 }
 
@@ -125,7 +125,7 @@ bats::on_failure() {
 
   # Be sure to delete that old resource slice: the next time we look at the GPU
   # resource slice on this node we must know it's a fresh one.
-  helm uninstall -n nvidia-dra-driver-gpu nvidia-dra-driver-gpu-batssuite --wait
+  helm uninstall -n dra-driver-nvidia-gpu dra-driver-nvidia-gpu-batssuite --wait
   kubectl delete resourceslices.resource.k8s.io "$rsname"
 
   mig_create_1g0_on_node "$node"
@@ -144,7 +144,7 @@ bats::on_failure() {
   echo "devices announced (after): ${dev_count_after}"
 
   # The following check detects the bug described in
-  # https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/719
+  # https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/issues/719
   if [ $dev_count_before != $dev_count_after ]; then
     echo "the number of announced devices must stay the same"
     return 1

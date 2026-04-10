@@ -1,5 +1,5 @@
 {{- if .Values.resources.gpus.enabled }}
-{{- $resourceApiVersion := (include "nvidia-dra-driver-gpu.resourceApiVersion" . | trim) }}
+{{- $resourceApiVersion := (include "dra-driver-nvidia-gpu.resourceApiVersion" . | trim) }}
 ---
 apiVersion: {{ $resourceApiVersion }}
 kind: DeviceClass

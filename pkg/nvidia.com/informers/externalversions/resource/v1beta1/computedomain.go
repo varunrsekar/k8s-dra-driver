@@ -26,10 +26,10 @@ import (
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
-	resourcev1beta1 "sigs.k8s.io/nvidia-dra-driver-gpu/api/nvidia.com/resource/v1beta1"
-	versioned "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/clientset/versioned"
-	internalinterfaces "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/informers/externalversions/internalinterfaces"
-	v1beta1 "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/nvidia.com/listers/resource/v1beta1"
+	resourcev1beta1 "sigs.k8s.io/dra-driver-nvidia-gpu/api/nvidia.com/resource/v1beta1"
+	versioned "sigs.k8s.io/dra-driver-nvidia-gpu/pkg/nvidia.com/clientset/versioned"
+	internalinterfaces "sigs.k8s.io/dra-driver-nvidia-gpu/pkg/nvidia.com/informers/externalversions/internalinterfaces"
+	v1beta1 "sigs.k8s.io/dra-driver-nvidia-gpu/pkg/nvidia.com/listers/resource/v1beta1"
 )
 
 // ComputeDomainInformer provides access to a shared informer and lister for

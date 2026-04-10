@@ -40,11 +40,11 @@ import (
 	_ "k8s.io/component-base/metrics/prometheus/version"    // for version metric registration
 	_ "k8s.io/component-base/metrics/prometheus/workqueue"  // register work queues in the default legacy registry
 
-	"sigs.k8s.io/nvidia-dra-driver-gpu/internal/common"
-	"sigs.k8s.io/nvidia-dra-driver-gpu/internal/info"
-	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
-	pkgflags "sigs.k8s.io/nvidia-dra-driver-gpu/pkg/flags"
-	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/metrics"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/internal/common"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/internal/info"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/featuregates"
+	pkgflags "sigs.k8s.io/dra-driver-nvidia-gpu/pkg/flags"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/metrics"
 )
 
 const (

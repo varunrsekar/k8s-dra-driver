@@ -19,7 +19,7 @@ package v1beta1
 import (
 	"fmt"
 
-	"sigs.k8s.io/nvidia-dra-driver-gpu/pkg/featuregates"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/featuregates"
 )
 
 const (

@@ -17,15 +17,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "nvidia-dra-driver-gpu.name" . }}-controller
-  namespace: {{ include "nvidia-dra-driver-gpu.namespace" . }}
+  name: {{ include "dra-driver-nvidia-gpu.name" . }}-controller
+  namespace: {{ include "dra-driver-nvidia-gpu.namespace" . }}
   labels:
-    {{- include "nvidia-dra-driver-gpu.labels" . | nindent 4 }}
+    {{- include "dra-driver-nvidia-gpu.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.controller.replicas }}
   selector:
     matchLabels:
-      {{- include "nvidia-dra-driver-gpu.selectorLabels" (dict "context" . "componentName" "controller") | nindent 6 }}
+      {{- include "dra-driver-nvidia-gpu.selectorLabels" (dict "context" . "componentName" "controller") | nindent 6 }}
   template:
     metadata:
       {{- with .Values.controller.podAnnotations }}
@@ -33,8 +33,8 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "nvidia-dra-driver-gpu.templateLabels" . | nindent 8 }}
-        {{- include "nvidia-dra-driver-gpu.selectorLabels" (dict "context" . "componentName" "controller") | nindent 8 }}
+        {{- include "dra-driver-nvidia-gpu.templateLabels" . | nindent 8 }}
+        {{- include "dra-driver-nvidia-gpu.selectorLabels" (dict "context" . "componentName" "controller") | nindent 8 }}
     spec:
       {{- if .Values.controller.priorityClassName }}
       priorityClassName: {{ .Values.controller.priorityClassName }}
@@ -43,14 +43,14 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "nvidia-dra-driver-gpu.serviceAccountName" . }}-controller
+      serviceAccountName: {{ include "dra-driver-nvidia-gpu.serviceAccountName" . }}-controller
       securityContext:
         {{- toYaml .Values.controller.podSecurityContext | nindent 8 }}
       containers:
       - name: compute-domain
         securityContext:
           {{- toYaml .Values.controller.containers.computeDomain.securityContext | nindent 10 }}
-        image: {{ include "nvidia-dra-driver-gpu.fullimage" . }}
+        image: {{ include "dra-driver-nvidia-gpu.fullimage" . }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         command: ["compute-domain-controller", "-v", "$(LOG_VERBOSITY)"]
         resources:
@@ -84,7 +84,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: IMAGE_NAME
-          value: {{ include "nvidia-dra-driver-gpu.fullimage" . }}
+          value: {{ include "dra-driver-nvidia-gpu.fullimage" . }}
         # Use runc: explicit "void"; otherwise we inherit "all".
         - name: NVIDIA_VISIBLE_DEVICES
           value: void
@@ -99,9 +99,9 @@ spec:
         - name: LEADER_ELECTION_ENABLED
           value: "{{ .Values.controller.leaderElection.enabled }}"
         - name: LEADER_ELECTION_LEASE_LOCK_NAME
-          value: "{{ include "nvidia-dra-driver-gpu.name" . }}-controller"
+          value: "{{ include "dra-driver-nvidia-gpu.name" . }}-controller"
         - name: LEADER_ELECTION_LEASE_LOCK_NAMESPACE
-          value: "{{ include "nvidia-dra-driver-gpu.namespace" . }}"
+          value: "{{ include "dra-driver-nvidia-gpu.namespace" . }}"
         - name: LEADER_ELECTION_LEASE_DURATION
           value: "{{ .Values.controller.leaderElection.leaseDuration }}"
         - name: LEADER_ELECTION_RENEW_DEADLINE

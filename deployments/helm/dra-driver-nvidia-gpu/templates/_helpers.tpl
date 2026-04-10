@@ -1,7 +1,7 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "nvidia-dra-driver-gpu.name" -}}
+{{- define "dra-driver-nvidia-gpu.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
@@ -10,7 +10,7 @@ Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 If release name contains chart name it will be used as a full name.
 */}}
-{{- define "nvidia-dra-driver-gpu.fullname" -}}
+{{- define "dra-driver-nvidia-gpu.fullname" -}}
 {{- if .Values.fullnameOverride -}}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
@@ -26,7 +26,7 @@ If release name contains chart name it will be used as a full name.
 {{/*
 Allow the release namespace to be overridden for multi-namespace deployments in combined charts
 */}}
-{{- define "nvidia-dra-driver-gpu.namespace" -}}
+{{- define "dra-driver-nvidia-gpu.namespace" -}}
   {{- if .Values.namespaceOverride -}}
     {{- .Values.namespaceOverride -}}
   {{- else -}}
@@ -37,7 +37,7 @@ Allow the release namespace to be overridden for multi-namespace deployments in 
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "nvidia-dra-driver-gpu.chart" -}}
+{{- define "dra-driver-nvidia-gpu.chart" -}}
 {{- $name := default .Chart.Name .Values.nameOverride -}}
 {{- printf "%s-%s" $name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
@@ -48,11 +48,11 @@ https://helm.sh/docs/chart_best_practices/labels/
 Apply this to all high-level objects (Deployment, DaemonSet, ...).
 Pod template labels are included here to deliver name+instance.
 */}}
-{{- define "nvidia-dra-driver-gpu.labels" -}}
-helm.sh/chart: {{ include "nvidia-dra-driver-gpu.chart" . }}
+{{- define "dra-driver-nvidia-gpu.labels" -}}
+helm.sh/chart: {{ include "dra-driver-nvidia-gpu.chart" . }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
-{{ include "nvidia-dra-driver-gpu.templateLabels" . }}
+{{ include "dra-driver-nvidia-gpu.templateLabels" . }}
 {{- end }}
 
 {{/*
@@ -61,8 +61,8 @@ the set of standard labels above, to not clutter individual pods too
 much). Note that these labels cannot be used to distinguish
 components within this Helm chart.
 */}}
-{{- define "nvidia-dra-driver-gpu.templateLabels" -}}
-app.kubernetes.io/name: {{ include "nvidia-dra-driver-gpu.name" . }}
+{{- define "dra-driver-nvidia-gpu.templateLabels" -}}
+app.kubernetes.io/name: {{ include "dra-driver-nvidia-gpu.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
@@ -75,7 +75,7 @@ unique key).
 
 TOOD: remove the override feature, or make the override work per-component.
 */}}
-{{- define "nvidia-dra-driver-gpu.selectorLabels" -}}
+{{- define "dra-driver-nvidia-gpu.selectorLabels" -}}
 {{- if and (hasKey . "componentName") (hasKey . "context") -}}
 {{- if .context.Values.selectorLabelsOverride -}}
 {{ toYaml .context.Values.selectorLabelsOverride }}
@@ -91,7 +91,7 @@ fail "selectorLabels: both arguments are required: context, componentName"
 {{/*
 Full image name with tag
 */}}
-{{- define "nvidia-dra-driver-gpu.fullimage" -}}
+{{- define "dra-driver-nvidia-gpu.fullimage" -}}
 {{- $tag := printf "v%s" .Chart.AppVersion }}
 {{- .Values.image.repository -}}:{{- .Values.image.tag | default $tag -}}
 {{- end }}
@@ -99,8 +99,8 @@ Full image name with tag
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "nvidia-dra-driver-gpu.serviceAccountName" -}}
-{{- $name := printf "%s-service-account" (include "nvidia-dra-driver-gpu.fullname" .) }}
+{{- define "dra-driver-nvidia-gpu.serviceAccountName" -}}
+{{- $name := printf "%s-service-account" (include "dra-driver-nvidia-gpu.fullname" .) }}
 {{- if .Values.serviceAccount.create }}
 {{- default $name .Values.serviceAccount.name }}
 {{- else }}
@@ -111,8 +111,8 @@ Create the name of the service account to use
 {{/*
 Create the name of the webhook service account to use
 */}}
-{{- define "nvidia-dra-driver-gpu.webhookServiceAccountName" -}}
-{{- $name := printf "%s-webhook-service-account" (include "nvidia-dra-driver-gpu.fullname" .) }}
+{{- define "dra-driver-nvidia-gpu.webhookServiceAccountName" -}}
+{{- $name := printf "%s-webhook-service-account" (include "dra-driver-nvidia-gpu.fullname" .) }}
 {{- if .Values.webhook.serviceAccount.create }}
 {{- default $name .Values.webhook.serviceAccount.name }}
 {{- else }}
@@ -123,7 +123,7 @@ Create the name of the webhook service account to use
 {{/*
 Check for the existence of an element in a list
 */}}
-{{- define "nvidia-dra-driver-gpu.listHas" -}}
+{{- define "dra-driver-nvidia-gpu.listHas" -}}
   {{- $listToCheck := index . 0 }}
   {{- $valueToCheck := index . 1 }}
 
@@ -139,13 +139,13 @@ Check for the existence of an element in a list
 {{/*
 Filter a list by a set of valid values
 */}}
-{{- define "nvidia-dra-driver-gpu.filterList" -}}
+{{- define "dra-driver-nvidia-gpu.filterList" -}}
   {{- $listToFilter := index . 0 }}
   {{- $validValues := index . 1 }}
 
   {{- $result := list -}}
   {{- range $validValues}}
-    {{- if include "nvidia-dra-driver-gpu.listHas" (list $listToFilter .) }}
+    {{- if include "dra-driver-nvidia-gpu.listHas" (list $listToFilter .) }}
       {{- $result = append $result . }}
     {{- end }}
   {{- end }}
@@ -157,8 +157,8 @@ Get all namespaces (driver namespace + additional namespaces from environment va
 After concatenation, duplicates from are removed with uniq to avoid release namespaces been
 listed in ADDITIONAL_NAMESPACES, or repeated entries in the comma-separated list.
 */}}
-{{- define "nvidia-dra-driver-gpu.namespaces" -}}
-  {{- $driverNs := include "nvidia-dra-driver-gpu.namespace" . | trim }}
+{{- define "dra-driver-nvidia-gpu.namespaces" -}}
+  {{- $driverNs := include "dra-driver-nvidia-gpu.namespace" . | trim }}
     {{- $namespaces := list $driverNs }}
     {{- if .Values.controller.containers.computeDomain.env }}
       {{- range .Values.controller.containers.computeDomain.env }}
@@ -184,7 +184,7 @@ Priority:
   1. If .Values.resourceApiVersion is set, use that.
   2. Otherwise, returns the highest available version or empty string if none found
 */}}
-{{- define "nvidia-dra-driver-gpu.resourceApiVersion" -}}
+{{- define "dra-driver-nvidia-gpu.resourceApiVersion" -}}
 {{- if .Values.resourceApiVersion }}
 {{- .Values.resourceApiVersion }}
 {{- else if .Capabilities.APIVersions.Has "resource.k8s.io/v1" -}}

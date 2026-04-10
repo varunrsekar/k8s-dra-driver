@@ -92,7 +92,7 @@ spec:
           failureThreshold: 1
           successThreshold: 1
       # Repel all node taints.
-      # See https://github.com/kubernetes-sigs/nvidia-dra-driver-gpu/issues/305
+      # See https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/issues/305
       tolerations:
         - operator: "Exists"
           effect: "NoSchedule"

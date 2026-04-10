@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug to help us improve the NVIDIA DRA Driver for GPUs
+description: Report a bug to help us improve the DRA Driver for NVIDIA GPUs
 title: "[Bug]: "
 labels: ["bug", "needs-triage"]
 body:
@@ -149,11 +149,11 @@ body:
       label: Debug Information Attached
       description: Check any diagnostic data you have gathered and attached.
       options:
-        - label: "`kubectl get pods -n nvidia-dra-driver-gpu -o wide`"
+        - label: "`kubectl get pods -n dra-driver-nvidia-gpu -o wide`"
         - label: "`kubectl get resourceclaims -n <namespace>`"
         - label: "`kubectl get resourceslices.resource.k8s.io`"
         - label: "`kubectl describe pod <pod>` or `kubectl events --for pod/<pod>`"
-        - label: "Kubelet plugin logs: `kubectl logs -n nvidia-dra-driver-gpu -l nvidia-dra-driver-gpu-component=kubelet-plugin --all-containers --prefix --tail=400`"
+        - label: "Kubelet plugin logs: `kubectl logs -n dra-driver-nvidia-gpu -l dra-driver-nvidia-gpu-component=kubelet-plugin --all-containers --prefix --tail=400`"
         - label: "`nvidia-smi` output from the host"
         - label: "Kubelet logs"
 
@@ -170,5 +170,5 @@ body:
         - label: "ComputeDomain status: `kubectl get computedomains.resource.nvidia.com -o yaml`"
         - label: "ComputeDomainClique status: `kubectl get computedomaincliques.resource.nvidia.com -o yaml`"
         - label: "IMEX daemon pods: `kubectl get pods -n <namespace> -l resource.nvidia.com/computeDomain`"
-        - label: "IMEX daemon logs: `kubectl logs -n nvidia-dra-driver-gpu -l resource.nvidia.com/computeDomain --all-containers --prefix --tail=-1`"
+        - label: "IMEX daemon logs: `kubectl logs -n dra-driver-nvidia-gpu -l resource.nvidia.com/computeDomain --all-containers --prefix --tail=-1`"
         - label: "IMEX domain status: `nvidia-imex-ctl -c /etc/nvidia-imex/config.cfg -N`"

@@ -26,7 +26,7 @@ validate_prerequisites() {
     # Fail fast in case there seems to be a DRA driver Helm chart installed at
     # this point (maybe one _not_ managed by this test suite).
     helm list -A
-    helm list -A | grep "nvidia-dra-driver-gpu" && { echo "error: helm list not clean"; return 1; }
+    helm list -A | grep "dra-driver-nvidia-gpu" && { echo "error: helm list not clean"; return 1; }
 
     # Show, for debugging.
     kubectl api-resources --api-group=resource.k8s.io
@@ -66,8 +66,8 @@ setup_suite () {
     export HELM_REPOSITORY_CONFIG=${HELM_CACHE_HOME}/repo.cfg
 
     # Prepare CRD upgrade URL.
-    export CRD_URL_PFX="https://raw.githubusercontent.com/kubernetes-sigs/nvidia-dra-driver-gpu/"
-    export CRD_URL_SFX="/deployments/helm/nvidia-dra-driver-gpu/crds/resource.nvidia.com_computedomains.yaml"
+    export CRD_URL_PFX="https://raw.githubusercontent.com/kubernetes-sigs/dra-driver-nvidia-gpu/"
+    export CRD_URL_SFX="/deployments/helm/dra-driver-nvidia-gpu/crds/resource.nvidia.com_computedomains.yaml"
     export CRD_UPGRADE_URL="${CRD_URL_PFX}${TEST_CRD_UPGRADE_TARGET_GIT_REF}${CRD_URL_SFX}"
 
     # Prepare for installing releases from NGC (that merely mutates local
