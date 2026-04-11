@@ -84,7 +84,16 @@ fi
 case "${LAMBDA_GPU_TYPE}" in
   *v100*|*a10) FILTER="${FILTER},!gpu-busgrind" ;;
 esac
-echo "Test filter: ${FILTER}"
+
+# Detect whether compute domains should be disabled.
+# Compute domains (IMEX channels) require NVSwitch fabric with fabric manager,
+# which is only available on GB200/GB300 NVL systems. On all other GPU types,
+# disable compute domains to avoid the compute-domains container crashing.
+DISABLE_CD=true
+case "${LAMBDA_GPU_TYPE}" in
+  *gb200*|*gb300*|*b200*) DISABLE_CD=false ;;
+esac
+echo "Test filter: ${FILTER}, compute domains disabled: ${DISABLE_CD}"
 
 # --- Pre-cleanup: MIG teardown on host ---
 # Run MIG cleanup directly on the host where nvidia-smi is available.
@@ -114,7 +123,7 @@ export KUBECONFIG=\$HOME/.kube/config
 export CI=true
 export TEST_NVIDIA_DRIVER_ROOT=/
 export TEST_CHART_LOCAL=true
-export DISABLE_COMPUTE_DOMAINS=true
+export DISABLE_COMPUTE_DOMAINS=${DISABLE_CD}
 export TEST_FILTER_TAGS='${FILTER}'
 export GIT_COMMIT_SHORT=${GIT_COMMIT_SHORT}
 # Use lambda nvmm stub (no GPU Operator). MIG cleanup is handled above on the host.
