@@ -20,21 +20,43 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/dump"
 
 	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/featuregates"
 )
 
+// cliValueWrapper wraps pflag.Value to implement the interfaces of cli.Value (flag.Value + flag.Getter).
+type cliValueWrapper struct {
+	flagVal pflag.Value
+}
+
+// Set implements the Set method from the flag.Value interface.
+func (w *cliValueWrapper) Set(s string) error { return w.flagVal.Set(s) }
+
+// String implements the String method from the flag.Value interface.
+func (w *cliValueWrapper) String() string { return w.flagVal.String() }
+
+// Get implements the Get method of the flag.Getter interface. It checks if the underlying flag value implements the
+// Getter interface. If yes, it explicitly casts the type to the Getter interface and invokes the Get method. Otherwise, it
+// defaults to the String method.
+func (w *cliValueWrapper) Get() interface{} {
+	if g, ok := w.flagVal.(interface{ Get() interface{} }); ok {
+		return g.Get()
+	}
+	return w.flagVal.String()
+}
+
 func pflagToCLI(flag *pflag.Flag, category string) cli.Flag {
+	var cliValue cli.Value = &cliValueWrapper{flagVal: flag.Value}
 	return &cli.GenericFlag{
 		Name:        flag.Name,
 		Category:    category,
 		Usage:       flag.Usage,
-		Value:       flag.Value,
-		Destination: flag.Value,
-		EnvVars:     []string{strings.ToUpper(strings.ReplaceAll(flag.Name, "-", "_"))},
+		Value:       cliValue,
+		Destination: &cliValue,
+		Sources:     cli.EnvVars(strings.ToUpper(strings.ReplaceAll(flag.Name, "-", "_"))),
 	}
 }
 

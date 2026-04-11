@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 	"k8s.io/component-base/featuregate"
 
 	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/featuregates"

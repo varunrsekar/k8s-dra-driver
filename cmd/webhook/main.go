@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,7 +25,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	resourceapi "k8s.io/api/resource/v1"
@@ -50,13 +51,13 @@ type Flags struct {
 }
 
 func main() {
-	if err := newApp().Run(os.Args); err != nil {
+	if err := newApp().Run(context.Background(), os.Args); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func newApp() *cli.App {
+func newApp() *cli.Command {
 	flags := &Flags{
 		loggingConfig:     flags.NewLoggingConfig(),
 		featureGateConfig: flags.NewFeatureGateConfig(),
@@ -84,19 +85,19 @@ func newApp() *cli.App {
 	cliFlags = append(cliFlags, flags.loggingConfig.Flags()...)
 	cliFlags = append(cliFlags, flags.featureGateConfig.Flags()...)
 
-	app := &cli.App{
+	app := &cli.Command{
 		Name:            "webhook",
 		Usage:           "webhook implements a validating admission webhook complementing a DRA driver plugin.",
 		ArgsUsage:       " ",
 		HideHelpCommand: true,
 		Flags:           cliFlags,
-		Before: func(c *cli.Context) error {
-			if c.Args().Len() > 0 {
-				return fmt.Errorf("arguments not supported: %v", c.Args().Slice())
+		Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+			if cmd.Args().Len() > 0 {
+				return ctx, fmt.Errorf("arguments not supported: %v", cmd.Args().Slice())
 			}
-			return flags.loggingConfig.Apply()
+			return ctx, flags.loggingConfig.Apply()
 		},
-		Action: func(c *cli.Context) error {
+		Action: func(_ context.Context, _ *cli.Command) error {
 			server := &http.Server{
 				Handler: newMux(),
 				Addr:    fmt.Sprintf(":%d", flags.port),
