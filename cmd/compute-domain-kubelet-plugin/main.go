@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	"k8s.io/component-base/logs"
 	"k8s.io/dynamic-resource-allocation/kubeletplugin"
@@ -71,13 +71,13 @@ func (c Config) DriverPluginPath() string {
 }
 
 func main() {
-	if err := newApp().Run(os.Args); err != nil {
+	if err := newApp().Run(context.Background(), os.Args); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func newApp() *cli.App {
+func newApp() *cli.Command {
 	loggingConfig := pkgflags.NewLoggingConfig()
 	featureGateConfig := pkgflags.NewFeatureGateConfig()
 	flags := &Flags{}
@@ -88,34 +88,34 @@ func newApp() *cli.App {
 			Usage:       "The name of the node to be worked on.",
 			Required:    true,
 			Destination: &flags.nodeName,
-			EnvVars:     []string{"NODE_NAME"},
+			Sources:     cli.EnvVars("NODE_NAME"),
 		},
 		&cli.StringFlag{
 			Name:        "namespace",
 			Usage:       "The namespace used for the custom resources.",
 			Value:       "default",
 			Destination: &flags.namespace,
-			EnvVars:     []string{"NAMESPACE"},
+			Sources:     cli.EnvVars("NAMESPACE"),
 		},
 		&cli.StringFlag{
 			Name:        "http-endpoint",
 			Usage:       "The TCP network `address` where the metrics HTTP server will listen (example: `:8080`). The default is the empty string, which means the server is disabled.",
 			Destination: &flags.httpEndpoint,
-			EnvVars:     []string{"HTTP_ENDPOINT"},
+			Sources:     cli.EnvVars("HTTP_ENDPOINT"),
 		},
 		&cli.StringFlag{
 			Name:        "metrics-path",
 			Usage:       "The HTTP `path` where Prometheus metrics are exposed, disabled if empty.",
 			Value:       "/metrics",
 			Destination: &flags.metricsPath,
-			EnvVars:     []string{"METRICS_PATH"},
+			Sources:     cli.EnvVars("METRICS_PATH"),
 		},
 		&cli.StringFlag{
 			Name:        "cdi-root",
 			Usage:       "Absolute path to the directory where CDI files will be generated.",
 			Value:       "/etc/cdi",
 			Destination: &flags.cdiRoot,
-			EnvVars:     []string{"CDI_ROOT"},
+			Sources:     cli.EnvVars("CDI_ROOT"),
 		},
 		&cli.StringFlag{
 			Name:        "nvidia-driver-root",
@@ -123,56 +123,56 @@ func newApp() *cli.App {
 			Value:       "/",
 			Usage:       "the root path for the NVIDIA driver installation on the host (typical values are '/' or '/run/nvidia/driver')",
 			Destination: &flags.hostDriverRoot,
-			EnvVars:     []string{"NVIDIA_DRIVER_ROOT", "HOST_DRIVER_ROOT"},
+			Sources:     cli.EnvVars("NVIDIA_DRIVER_ROOT", "HOST_DRIVER_ROOT"),
 		},
 		&cli.StringFlag{
 			Name:        "container-driver-root",
 			Value:       "/driver-root",
 			Usage:       "the path where the NVIDIA driver root is mounted in the container; used for generating CDI specifications",
 			Destination: &flags.containerDriverRoot,
-			EnvVars:     []string{"DRIVER_ROOT_CTR_PATH"},
+			Sources:     cli.EnvVars("DRIVER_ROOT_CTR_PATH"),
 		},
 		&cli.StringFlag{
 			Name:        "nvidia-cdi-hook-path",
 			Usage:       "Absolute path to the nvidia-cdi-hook executable in the host file system. Used in the generated CDI specification.",
 			Destination: &flags.nvidiaCDIHookPath,
-			EnvVars:     []string{"NVIDIA_CDI_HOOK_PATH"},
+			Sources:     cli.EnvVars("NVIDIA_CDI_HOOK_PATH"),
 		},
 		&cli.StringFlag{
 			Name:        "kubelet-registrar-directory-path",
 			Usage:       "Absolute path to the directory where kubelet stores plugin registrations.",
 			Value:       kubeletplugin.KubeletRegistryDir,
 			Destination: &flags.kubeletRegistrarDirectoryPath,
-			EnvVars:     []string{"KUBELET_REGISTRAR_DIRECTORY_PATH"},
+			Sources:     cli.EnvVars("KUBELET_REGISTRAR_DIRECTORY_PATH"),
 		},
 		&cli.StringFlag{
 			Name:        "kubelet-plugins-directory-path",
 			Usage:       "Absolute path to the directory where kubelet stores plugin data.",
 			Value:       kubeletplugin.KubeletPluginsDir,
 			Destination: &flags.kubeletPluginsDirectoryPath,
-			EnvVars:     []string{"KUBELET_PLUGINS_DIRECTORY_PATH"},
+			Sources:     cli.EnvVars("KUBELET_PLUGINS_DIRECTORY_PATH"),
 		},
 		&cli.IntFlag{
 			Name:        "healthcheck-port",
 			Usage:       "Port to start a gRPC healthcheck service. When positive, a literal port number. When zero, a random port is allocated. When negative, the healthcheck service is disabled.",
 			Value:       -1,
 			Destination: &flags.healthcheckPort,
-			EnvVars:     []string{"HEALTHCHECK_PORT"},
+			Sources:     cli.EnvVars("HEALTHCHECK_PORT"),
 		},
 	}
 	cliFlags = append(cliFlags, flags.kubeClientConfig.Flags()...)
 	cliFlags = append(cliFlags, featureGateConfig.Flags()...)
 	cliFlags = append(cliFlags, loggingConfig.Flags()...)
 
-	app := &cli.App{
+	app := &cli.Command{
 		Name:            "compute-domain-kubelet-plugin",
 		Usage:           "compute-domain-kubelet-plugin implements a DRA driver plugin for NVIDIA compute domains.",
 		ArgsUsage:       " ",
 		HideHelpCommand: true,
 		Flags:           cliFlags,
-		Before: func(c *cli.Context) error {
-			if c.Args().Len() > 0 {
-				return fmt.Errorf("arguments not supported: %v", c.Args().Slice())
+		Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+			if cmd.Args().Len() > 0 {
+				return ctx, fmt.Errorf("arguments not supported: %v", cmd.Args().Slice())
 			}
 			// `loggingConfig` must be applied before doing any logging
 			err := loggingConfig.Apply()
@@ -182,9 +182,9 @@ func newApp() *cli.App {
 			// because we do not expose the raw `cliFlags`.
 			flags.klogVerbosity = int(loggingConfig.Config.Verbosity)
 			pkgflags.LogStartupConfig(flags, loggingConfig)
-			return err
+			return ctx, err
 		},
-		Action: func(c *cli.Context) error {
+		Action: func(ctx context.Context, _ *cli.Command) error {
 			// Validate feature gate dependencies
 			if err := featuregates.ValidateFeatureGates(); err != nil {
 				return fmt.Errorf("feature gate validation failed: %w", err)
@@ -200,9 +200,9 @@ func newApp() *cli.App {
 				clientsets: clientSets,
 			}
 
-			return RunPlugin(c.Context, config)
+			return RunPlugin(ctx, config)
 		},
-		After: func(c *cli.Context) error {
+		After: func(_ context.Context, _ *cli.Command) error {
 			// Runs after `Action` (regardless of success/error). In urfave cli
 			// v2, the final error reported will be from either Action, Before,
 			// or After (whichever is non-nil and last executed).

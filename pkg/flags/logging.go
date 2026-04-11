@@ -18,7 +18,7 @@ package flags
 
 import (
 	"github.com/spf13/pflag"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	logsapi "k8s.io/component-base/logs/api/v1"
 
@@ -38,7 +38,7 @@ func NewLoggingConfig() *LoggingConfig {
 	}
 }
 
-// Apply should be called in a cli.App.Before directly after parsing command
+// Apply should be called in a cli.Command.Before directly after parsing command
 // line flags and before running any code which emits log entries.
 // It uses the global feature gate singleton.
 func (l *LoggingConfig) Apply() error {
