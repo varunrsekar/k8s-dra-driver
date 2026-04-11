@@ -71,6 +71,21 @@ docker save "\${IMAGE_REF}" | sudo ctr -n k8s.io images import -
 echo "Image loaded: \${IMAGE_REF}"
 EOF
 
+# --- Detect GPU capabilities for dynamic test filtering ---
+GPU_COUNT=$(lambda_remote nvidia-smi -L | wc -l)
+echo "Detected ${GPU_COUNT} GPU(s) on Lambda instance (type: ${LAMBDA_GPU_TYPE})"
+
+# Build filter tags based on what the instance can handle.
+FILTER='!version-specific'
+if [ "${GPU_COUNT}" -lt 2 ]; then
+  FILTER="${FILTER},!multi-gpu"
+fi
+# busGrind is slow and can hang on V100/A10 — only run on faster GPUs.
+case "${LAMBDA_GPU_TYPE}" in
+  *v100*|*a10) FILTER="${FILTER},!gpu-busgrind" ;;
+esac
+echo "Test filter: ${FILTER}"
+
 # --- Run BATS tests ---
 # Tests local artifacts: local chart + local image built from the PR.
 # This is a real presubmit -- it validates the repo's code, chart, and specs.
@@ -90,9 +105,7 @@ export TEST_NVIDIA_DRIVER_ROOT=/
 export TEST_CHART_LOCAL=true
 export SKIP_CLEANUP=true
 export DISABLE_COMPUTE_DOMAINS=true
-# !multi-gpu: skip 2-GPU test on single-GPU instances
-# !version-specific: skip attribute list test (attributes depend on host NVIDIA driver version)
-export TEST_FILTER_TAGS='!multi-gpu,!version-specific'
+export TEST_FILTER_TAGS='${FILTER}'
 export GIT_COMMIT_SHORT=${GIT_COMMIT_SHORT}
 
 make -f tests/bats/Makefile tests-gpu-single GIT_COMMIT_SHORT=${GIT_COMMIT_SHORT}
@@ -105,9 +118,18 @@ lambda_collect_artifacts /tmp/dra-driver-nvidia-gpu/k8s-dra-driver-gpu-tests-out
 # Cluster debug info
 lambda_remote bash -s <<'DEBUGEOF' > "${ARTIFACTS}/cluster-debug.txt" 2>&1 || true
 export KUBECONFIG=$HOME/.kube/config
+echo "=== nvidia-smi ===" && nvidia-smi
+echo "=== nvidia driver version ===" && cat /sys/module/nvidia/version
 echo "=== nodes ===" && kubectl get nodes -o wide
-echo "=== pods ===" && kubectl get pods -A -o wide
+echo "=== pods (all namespaces) ===" && kubectl get pods -A -o wide
+echo "=== pod describe (driver namespace) ===" && kubectl describe pods -n dra-driver-nvidia-gpu
 echo "=== resourceslices ===" && kubectl get resourceslices -A -o yaml
+echo "=== deviceclasses ===" && kubectl get deviceclass -o yaml
+echo "=== resourceclaims ===" && kubectl get resourceclaims -A -o yaml
 echo "=== events ===" && kubectl get events -A --sort-by=.lastTimestamp
-echo "=== dra driver logs ===" && kubectl logs -n dra-driver-nvidia-gpu -l dra-driver-nvidia-gpu-component=kubelet-plugin --tail=200
+echo "=== kubelet-plugin logs (gpus) ===" && kubectl logs -n dra-driver-nvidia-gpu -l dra-driver-nvidia-gpu-component=kubelet-plugin -c gpus --tail=500
+echo "=== kubelet-plugin logs (compute-domains) ===" && kubectl logs -n dra-driver-nvidia-gpu -l dra-driver-nvidia-gpu-component=kubelet-plugin -c compute-domains --tail=200
+echo "=== controller logs ===" && kubectl logs -n dra-driver-nvidia-gpu -l dra-driver-nvidia-gpu-component=controller --tail=200
+echo "=== containerd config ===" && sudo grep -E "enable_cdi|default_runtime|nvidia" /etc/containerd/config.toml
+echo "=== kubelet logs (last 100 lines) ===" && sudo journalctl -u kubelet --no-pager -n 100
 DEBUGEOF
