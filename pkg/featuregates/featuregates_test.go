@@ -422,39 +422,89 @@ func TestFeatureGateErrorHandling(t *testing.T) {
 
 func TestValidateFeatureGates(t *testing.T) {
 	tests := []struct {
-		name                    string
-		computeDomainCliques    bool
-		imexDaemonsWithDNSNames bool
-		expectError             bool
-		description             string
+		name         string
+		fgMap        map[featuregate.Feature]bool
+		expectError  bool
+		errorMessage string
+		description  string
 	}{
 		{
-			name:                    "CDCliques enabled with DNSNames enabled",
-			computeDomainCliques:    true,
-			imexDaemonsWithDNSNames: true,
-			expectError:             false,
-			description:             "should be valid when both features are enabled",
+			name:        "No features enabled",
+			fgMap:       map[featuregate.Feature]bool{},
+			expectError: false,
+			description: "should be valid when no features are enabled",
 		},
 		{
-			name:                    "CDCliques enabled without DNSNames",
-			computeDomainCliques:    true,
-			imexDaemonsWithDNSNames: false,
-			expectError:             true,
-			description:             "should fail when ComputeDomainCliques is enabled but IMEXDaemonsWithDNSNames is not",
+			name:        "CDCliques enabled with DNSNames enabled",
+			fgMap:       map[featuregate.Feature]bool{ComputeDomainCliques: true, IMEXDaemonsWithDNSNames: true},
+			expectError: false,
+			description: "should be valid when both ComputeDomainCliques and IMEXDaemonsWithDNSNames are enabled",
 		},
 		{
-			name:                    "DNSNames enabled without CDCliques",
-			computeDomainCliques:    false,
-			imexDaemonsWithDNSNames: true,
-			expectError:             false,
-			description:             "should be valid when only IMEXDaemonsWithDNSNames is enabled",
+			name:         "CDCliques enabled without DNSNames",
+			fgMap:        map[featuregate.Feature]bool{ComputeDomainCliques: true, IMEXDaemonsWithDNSNames: false},
+			expectError:  true,
+			errorMessage: "feature gate ComputeDomainCliques requires IMEXDaemonsWithDNSNames to also be enabled",
+			description:  "should fail when ComputeDomainCliques is enabled but IMEXDaemonsWithDNSNames is not",
 		},
 		{
-			name:                    "CDCliques disabled with DNSNames disabled",
-			computeDomainCliques:    false,
-			imexDaemonsWithDNSNames: false,
-			expectError:             false,
-			description:             "should be valid when both features are disabled",
+			name:        "DNSNames enabled without CDCliques",
+			fgMap:       map[featuregate.Feature]bool{IMEXDaemonsWithDNSNames: true, ComputeDomainCliques: false},
+			expectError: false,
+			description: "should be valid when IMEXDaemonsWithDNSNames is enabled but ComputeDomainCliques is not",
+		},
+		{
+			name:         "DynamicMIG enabled with PassthroughSupport",
+			fgMap:        map[featuregate.Feature]bool{DynamicMIG: true, PassthroughSupport: true},
+			expectError:  true,
+			errorMessage: "feature gate DynamicMIG is currently mutually exclusive with PassthroughSupport",
+			description:  "should fail when both DynamicMIG and PassthroughSupport are enabled",
+		},
+		{
+			name:         "DynamicMIG enabled with NVMLDeviceHealthCheck",
+			fgMap:        map[featuregate.Feature]bool{DynamicMIG: true, NVMLDeviceHealthCheck: true},
+			expectError:  true,
+			errorMessage: "feature gate DynamicMIG is currently mutually exclusive with NVMLDeviceHealthCheck",
+			description:  "should fail when both DynamicMIG and NVMLDeviceHealthCheck are enabled",
+		},
+		{
+			name:         "DynamicMIG enabled with MPSSupport",
+			fgMap:        map[featuregate.Feature]bool{DynamicMIG: true, MPSSupport: true},
+			expectError:  true,
+			errorMessage: "feature gate DynamicMIG is currently mutually exclusive with MPSSupport",
+			description:  "should fail when both DynamicMIG and MPSSupport are enabled",
+		},
+		{
+			name:        "Only DynamicMIG enabled",
+			fgMap:       map[featuregate.Feature]bool{DynamicMIG: true, PassthroughSupport: false, NVMLDeviceHealthCheck: false, MPSSupport: false},
+			expectError: false,
+			description: "should be valid when only DynamicMIG is enabled",
+		},
+		{
+			name:         "PassthroughSupport enabled with NVMLDeviceHealthCheck",
+			fgMap:        map[featuregate.Feature]bool{PassthroughSupport: true, NVMLDeviceHealthCheck: true},
+			expectError:  true,
+			errorMessage: "feature gate PassthroughSupport is currently mutually exclusive with NVMLDeviceHealthCheck",
+			description:  "should fail when both PassthroughSupport and NVMLDeviceHealthCheck are enabled",
+		},
+		{
+			name:        "Only PassthroughSupport enabled",
+			fgMap:       map[featuregate.Feature]bool{PassthroughSupport: true, DynamicMIG: false, NVMLDeviceHealthCheck: false, DeviceMetadata: false},
+			expectError: false,
+			description: "should be valid when only PassthroughSupport is enabled",
+		},
+		{
+			name:         "DeviceMetadata enabled without PassthroughSupport",
+			fgMap:        map[featuregate.Feature]bool{DeviceMetadata: true, PassthroughSupport: false},
+			expectError:  true,
+			errorMessage: "feature gate DeviceMetadata requires PassthroughSupport to also be enabled",
+			description:  "should fail when DeviceMetadata is enabled but PassthroughSupport is not",
+		},
+		{
+			name:        "DeviceMetadata enabled with PassthroughSupport",
+			fgMap:       map[featuregate.Feature]bool{DeviceMetadata: true, PassthroughSupport: true},
+			expectError: false,
+			description: "should be valid when both DeviceMetadata and PassthroughSupport are enabled",
 		},
 	}
 
@@ -462,10 +512,11 @@ func TestValidateFeatureGates(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create feature gates with test configuration
 			fg := newFeatureGates(TestVersion)
-			err := fg.SetFromMap(map[string]bool{
-				string(ComputeDomainCliques):    tt.computeDomainCliques,
-				string(IMEXDaemonsWithDNSNames): tt.imexDaemonsWithDNSNames,
-			})
+			fgMap := make(map[string]bool)
+			for feature, state := range tt.fgMap {
+				fgMap[string(feature)] = state
+			}
+			err := fg.SetFromMap(fgMap)
 			require.NoError(t, err, "SetFromMap should not fail")
 
 			// Temporarily replace global feature gates for validation
@@ -478,8 +529,7 @@ func TestValidateFeatureGates(t *testing.T) {
 
 			if tt.expectError {
 				require.Error(t, err, tt.description)
-				require.Contains(t, err.Error(), "ComputeDomainCliques", "error should mention ComputeDomainCliques")
-				require.Contains(t, err.Error(), "IMEXDaemonsWithDNSNames", "error should mention IMEXDaemonsWithDNSNames")
+				require.Contains(t, err.Error(), tt.errorMessage, "expected error message %q but got %q", tt.errorMessage, err.Error())
 			} else {
 				require.NoError(t, err, tt.description)
 			}

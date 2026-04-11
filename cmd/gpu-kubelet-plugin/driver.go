@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	coreclientset "k8s.io/client-go/kubernetes"
+	drametadatav1alpha1 "k8s.io/dynamic-resource-allocation/api/metadata/v1alpha1"
 	"k8s.io/dynamic-resource-allocation/kubeletplugin"
 	"k8s.io/dynamic-resource-allocation/resourceslice"
 	"k8s.io/klog/v2"
@@ -123,16 +124,21 @@ func NewDriver(ctx context.Context, config *Config) (*driver, error) {
 		useSplitResourceSlices: useSplitSlices,
 	}
 
-	helper, err := kubeletplugin.Start(
-		ctx,
-		driver,
+	opts := []kubeletplugin.Option{
 		kubeletplugin.KubeClient(driver.client),
 		kubeletplugin.NodeName(config.flags.nodeName),
 		kubeletplugin.DriverName(DriverName),
 		kubeletplugin.Serialize(false),
 		kubeletplugin.RegistrarDirectoryPath(config.flags.kubeletRegistrarDirectoryPath),
 		kubeletplugin.PluginDataDirectoryPath(config.DriverPluginPath()),
-	)
+	}
+	// KEP-5304: Enable Device Metadata support for the kubelet plugin implementation.
+	// See: https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/5304-dra-attributes-downward-api
+	if featuregates.Enabled(featuregates.DeviceMetadata) {
+		opts = append(opts, kubeletplugin.EnableDeviceMetadata(true))
+		opts = append(opts, kubeletplugin.MetadataVersions(drametadatav1alpha1.SchemeGroupVersion))
+	}
+	helper, err := kubeletplugin.Start(ctx, driver, opts...)
 	if err != nil {
 		return nil, err
 	}

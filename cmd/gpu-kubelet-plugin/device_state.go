@@ -754,6 +754,19 @@ func (s *DeviceState) prepareDevices(ctx context.Context, claim *resourceapi.Res
 				CDIDeviceIDs: cdiDevices,
 			}
 
+			// KEP-5304: Add device metadata to the prepared devices.
+			if featuregates.Enabled(featuregates.DeviceMetadata) {
+				if allocatableDevice.Type() == VfioDeviceType {
+					attrs := make(map[string]resourceapi.DeviceAttribute)
+					for k, v := range allocatableDevice.Vfio.GetDevice().Attributes {
+						attrs[string(k)] = v
+					}
+					device.Metadata = &kubeletplugin.DeviceMetadata{
+						Attributes: attrs,
+					}
+				}
+			}
+
 			var preparedDevice PreparedDevice
 
 			switch allocatableDevice.Type() {
