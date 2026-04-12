@@ -37,6 +37,22 @@ else
   lambda_download_k8s /tmp/k8s-bins
 fi
 
+# --- Detect k8s version for optional feature gates ---
+# These Alpha feature gates must be explicitly enabled on k8s 1.35+:
+#   DRAExtendedResource: allows nvidia.com/gpu in resources.limits (test_gpu_extres.bats)
+#   DRAPartitionableDevices: allows SharedCounters/ConsumesCounters in ResourceSlices (DynamicMIG)
+if [ -n "${K8S_VERSION}" ]; then
+  RESOLVED_K8S_VERSION="${K8S_VERSION}"
+else
+  RESOLVED_K8S_VERSION=$(curl -sL https://dl.k8s.io/release/stable.txt)
+fi
+K8S_MINOR=$(echo "${RESOLVED_K8S_VERSION}" | sed 's/v1\.\([0-9]*\)\..*/\1/')
+KUBEADM_FEATURE_GATES=""
+if [ "${K8S_MINOR}" -ge 35 ]; then
+  KUBEADM_FEATURE_GATES="DRAExtendedResource=true,DRAPartitionableDevices=true"
+  echo "K8s >= 1.35 (${RESOLVED_K8S_VERSION}): enabling DRAExtendedResource,DRAPartitionableDevices"
+fi
+
 # --- Compute git metadata before transfer ---
 # The remote host needs GIT_COMMIT_SHORT for the BATS runner image tag.
 # Compute it here where we have a real git repo.
@@ -58,6 +74,7 @@ lambda_remote env \
   ENABLE_CDI=true \
   ENABLE_DOCKER=true \
   NODE_LABELS=nvidia.com/gpu.present=true \
+  KUBEADM_FEATURE_GATES="${KUBEADM_FEATURE_GATES}" \
   bash -s < "${TESTINFRA_DIR}/experiment/lambda/lib/setup-k8s-node.sh"
 
 # --- Build driver image on Lambda and load into containerd ---
