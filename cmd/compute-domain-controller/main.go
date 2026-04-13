@@ -28,7 +28,7 @@ import (
 	"syscall"
 
 	"github.com/google/uuid"
-	"github.com/urfave/cli/v3"
+	"github.com/urfave/cli/v2"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/leaderelection"
@@ -71,7 +71,7 @@ type Flags struct {
 	metricsPath  string
 	profilePath  string
 
-	additionalNamespaces []string
+	additionalNamespaces cli.StringSlice
 	klogVerbosity        int
 }
 
@@ -83,13 +83,13 @@ type Config struct {
 }
 
 func main() {
-	if err := newApp().Run(context.Background(), os.Args); err != nil {
+	if err := newApp().Run(os.Args); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func newApp() *cli.Command {
+func newApp() *cli.App {
 	loggingConfig := pkgflags.NewLoggingConfig()
 	featureGateConfig := pkgflags.NewFeatureGateConfig()
 	flags := &Flags{}
@@ -100,34 +100,34 @@ func newApp() *cli.Command {
 			Usage:       "The name of the pod this controller is running in.",
 			Required:    true,
 			Destination: &flags.podName,
-			Sources:     cli.EnvVars("POD_NAME"),
+			EnvVars:     []string{"POD_NAME"},
 		},
 		&cli.StringFlag{
 			Name:        "namespace",
 			Usage:       "The namespace of the pod this controller is running in.",
 			Value:       "default",
 			Destination: &flags.namespace,
-			Sources:     cli.EnvVars("NAMESPACE"),
+			EnvVars:     []string{"NAMESPACE"},
 		},
 		&cli.StringFlag{
 			Name:        "image-name",
 			Usage:       "The full image name to use for rendering templates.",
 			Required:    true,
 			Destination: &flags.imageName,
-			Sources:     cli.EnvVars("IMAGE_NAME"),
+			EnvVars:     []string{"IMAGE_NAME"},
 		},
 		&cli.IntFlag{
 			Name:        "log-verbosity-cd-daemon",
 			Usage:       "Log verbosity for dynamically launched CD daemon pods",
 			Required:    true,
-			Sources:     cli.EnvVars("LOG_VERBOSITY_CD_DAEMON"),
+			EnvVars:     []string{"LOG_VERBOSITY_CD_DAEMON"},
 			Destination: &flags.logVerbosityCDDaemon,
 		},
 		&cli.IntFlag{
 			Name:        "max-nodes-per-imex-domain",
 			Usage:       "The maximum number of possible nodes per IMEX domain",
 			Value:       defaultMaxNodesPerIMEXDomain,
-			Sources:     cli.EnvVars("MAX_NODES_PER_IMEX_DOMAIN"),
+			EnvVars:     []string{"MAX_NODES_PER_IMEX_DOMAIN"},
 			Destination: &flags.maxNodesPerIMEXDomain,
 		},
 		&cli.StringFlag{
@@ -135,7 +135,7 @@ func newApp() *cli.Command {
 			Name:        "http-endpoint",
 			Usage:       "The TCP network `address` where the HTTP server for diagnostics, including pprof and metrics will listen (example: `:8080`). The default is the empty string, which means the server is disabled.",
 			Destination: &flags.httpEndpoint,
-			Sources:     cli.EnvVars("HTTP_ENDPOINT"),
+			EnvVars:     []string{"HTTP_ENDPOINT"},
 		},
 		&cli.StringFlag{
 			Category:    "HTTP server:",
@@ -143,20 +143,20 @@ func newApp() *cli.Command {
 			Usage:       "The HTTP `path` where Prometheus metrics will be exposed, disabled if empty.",
 			Value:       "/metrics",
 			Destination: &flags.metricsPath,
-			Sources:     cli.EnvVars("METRICS_PATH"),
+			EnvVars:     []string{"METRICS_PATH"},
 		},
 		&cli.StringFlag{
 			Category:    "HTTP server:",
 			Name:        "pprof-path",
 			Usage:       "The HTTP `path` where pprof profiling will be available, disabled if empty.",
 			Destination: &flags.profilePath,
-			Sources:     cli.EnvVars("PPROF_PATH"),
+			EnvVars:     []string{"PPROF_PATH"},
 		},
 		&cli.StringSliceFlag{
 			Name:        "additional-namespaces",
 			Usage:       "Additional namespaces where the driver can manage resources.",
 			Destination: &flags.additionalNamespaces,
-			Sources:     cli.EnvVars("ADDITIONAL_NAMESPACES"),
+			EnvVars:     []string{"ADDITIONAL_NAMESPACES"},
 		},
 	}
 
@@ -165,15 +165,15 @@ func newApp() *cli.Command {
 	cliFlags = append(cliFlags, featureGateConfig.Flags()...)
 	cliFlags = append(cliFlags, loggingConfig.Flags()...)
 
-	app := &cli.Command{
+	app := &cli.App{
 		Name:            "compute-domain-controller",
 		Usage:           "compute-domain-controller implements a DRA driver controller for NVIDIA compute domains.",
 		ArgsUsage:       " ",
 		HideHelpCommand: true,
 		Flags:           cliFlags,
-		Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
-			if cmd.Args().Len() > 0 {
-				return ctx, fmt.Errorf("arguments not supported: %v", cmd.Args().Slice())
+		Before: func(c *cli.Context) error {
+			if c.Args().Len() > 0 {
+				return fmt.Errorf("arguments not supported: %v", c.Args().Slice())
 			}
 			// `loggingConfig` must be applied before doing any logging
 			err := loggingConfig.Apply()
@@ -183,9 +183,9 @@ func newApp() *cli.Command {
 			// because we do not expose the raw `cliFlags`).
 			flags.klogVerbosity = int(loggingConfig.Config.Verbosity)
 			pkgflags.LogStartupConfig(flags, loggingConfig)
-			return ctx, err
+			return err
 		},
-		Action: func(ctx context.Context, _ *cli.Command) error {
+		Action: func(c *cli.Context) error {
 			common.StartDebugSignalHandlers()
 
 			// Validate feature gate dependencies
@@ -219,15 +219,15 @@ func newApp() *cli.Command {
 
 			errChan := make(chan error, 1)
 			controller := NewController(config)
-			controllerCtx, cancel := context.WithCancel(ctx)
+			ctx, cancel := context.WithCancel(c.Context)
 			go func() {
 				// Fallback to standalone mode if leader election is disabled
 				if !config.flags.leaderElectionConfig.Enabled {
 					klog.Info("Leader election disabled, starting controller directly")
-					errChan <- controller.Run(controllerCtx)
+					errChan <- controller.Run(ctx)
 					return
 				}
-				errChan <- runWithLeaderElection(controllerCtx, config, controller)
+				errChan <- runWithLeaderElection(ctx, config, controller)
 			}()
 
 			for {
@@ -244,7 +244,7 @@ func newApp() *cli.Command {
 				}
 			}
 		},
-		After: func(_ context.Context, _ *cli.Command) error {
+		After: func(c *cli.Context) error {
 			// Runs after `Action` (regardless of success/error). In urfave cli
 			// v2, the final error reported will be from either Action, Before,
 			// or After (whichever is non-nil and last executed).
