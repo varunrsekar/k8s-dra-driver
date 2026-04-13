@@ -18,6 +18,12 @@ spec:
         {{ .ComputeDomainLabelKey }}: {{ .ComputeDomainLabelValue }}
     spec:
       serviceAccountName: compute-domain-daemon-service-account
+      {{- if .ImagePullSecretNames }}
+      imagePullSecrets:
+      {{- range .ImagePullSecretNames }}
+      - name: {{ . }}
+      {{- end }}
+      {{- end }} 
       nodeSelector:
         {{ .ComputeDomainLabelKey }}: {{ .ComputeDomainLabelValue }}
       containers:

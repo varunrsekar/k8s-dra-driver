@@ -63,6 +63,9 @@ type ManagerConfig struct {
 
 	// metricsPath is the HTTP path for Prometheus metrics
 	metricsPath string
+
+	// imagePullSecretNames are the names of the image pull secrets to apply to dynamically rendered compute-domain-daemon
+	imagePullSecretNames []string
 }
 
 // Controller manages the lifecycle of the DRA driver and its components.
@@ -93,6 +96,7 @@ func (c *Controller) Run(ctx context.Context) error {
 		logVerbosityCDDaemon:  c.config.flags.logVerbosityCDDaemon,
 		httpEndpoint:          c.config.flags.httpEndpoint,
 		metricsPath:           c.config.flags.metricsPath,
+		imagePullSecretNames:  c.config.imagePullSecretNames,
 	}
 
 	// TODO: log full, nested cliFlags structure.

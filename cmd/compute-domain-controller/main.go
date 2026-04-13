@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strings"
 	"syscall"
 
 	"github.com/google/uuid"
@@ -72,14 +73,16 @@ type Flags struct {
 	profilePath  string
 
 	additionalNamespaces cli.StringSlice
+	imagePullSecretsCSV  string
 	klogVerbosity        int
 }
 
 type Config struct {
-	driverName string
-	flags      *Flags
-	clientsets pkgflags.ClientSets
-	mux        *http.ServeMux
+	driverName           string
+	flags                *Flags
+	clientsets           pkgflags.ClientSets
+	mux                  *http.ServeMux
+	imagePullSecretNames []string
 }
 
 func main() {
@@ -115,6 +118,12 @@ func newApp() *cli.App {
 			Required:    true,
 			Destination: &flags.imageName,
 			EnvVars:     []string{"IMAGE_NAME"},
+		},
+		&cli.StringFlag{
+			Name:        "cd-daemon-image-pull-secret-names",
+			Usage:       "Comma-separated imagePullSecret names for compute-domain-daemon DaemonSets (e.g. regcred,other). Empty string means none.",
+			Destination: &flags.imagePullSecretsCSV,
+			EnvVars:     []string{"CD_DAEMON_IMAGE_PULL_SECRET_NAMES"},
 		},
 		&cli.IntFlag{
 			Name:        "log-verbosity-cd-daemon",
@@ -201,10 +210,11 @@ func newApp() *cli.App {
 			}
 
 			config := &Config{
-				mux:        mux,
-				flags:      flags,
-				clientsets: clientsets,
-				driverName: DriverName,
+				mux:                  mux,
+				flags:                flags,
+				clientsets:           clientsets,
+				driverName:           DriverName,
+				imagePullSecretNames: strings.Fields(strings.ReplaceAll(strings.TrimSpace(flags.imagePullSecretsCSV), ",", " ")),
 			}
 
 			if flags.httpEndpoint != "" {
