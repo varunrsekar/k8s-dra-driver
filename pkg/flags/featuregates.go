@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
-	"github.com/urfave/cli/v3"
+	"github.com/urfave/cli/v2"
 
 	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/featuregates"
 )

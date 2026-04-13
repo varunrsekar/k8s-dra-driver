@@ -19,7 +19,7 @@ package flags
 import (
 	"time"
 
-	"github.com/urfave/cli/v3"
+	"github.com/urfave/cli/v2"
 )
 
 type LeaderElectionConfig struct {
@@ -39,7 +39,7 @@ func (l *LeaderElectionConfig) Flags() []cli.Flag {
 			Usage:       "Start a leader election client and gain leadership before executing the main loop. Enable this when running replicated components for high availability.",
 			Value:       false,
 			Destination: &l.Enabled,
-			Sources:     cli.EnvVars("LEADER_ELECTION_ENABLED"),
+			EnvVars:     []string{"LEADER_ELECTION_ENABLED"},
 		},
 		&cli.StringFlag{
 			Category:    "Leader election:",
@@ -47,7 +47,7 @@ func (l *LeaderElectionConfig) Flags() []cli.Flag {
 			Usage:       "The lease lock resource namespace.",
 			Value:       "default",
 			Destination: &l.LeaseLockNamespace,
-			Sources:     cli.EnvVars("LEADER_ELECTION_LEASE_LOCK_NAMESPACE"),
+			EnvVars:     []string{"LEADER_ELECTION_LEASE_LOCK_NAMESPACE"},
 		},
 		&cli.StringFlag{
 			Category:    "Leader election:",
@@ -55,7 +55,7 @@ func (l *LeaderElectionConfig) Flags() []cli.Flag {
 			Usage:       "The lease lock resource name.",
 			Value:       "nvidia-compute-domain-controller",
 			Destination: &l.LeaseLockName,
-			Sources:     cli.EnvVars("LEADER_ELECTION_LEASE_LOCK_NAME"),
+			EnvVars:     []string{"LEADER_ELECTION_LEASE_LOCK_NAME"},
 		},
 		&cli.DurationFlag{
 			Category:    "Leader election:",
@@ -63,7 +63,7 @@ func (l *LeaderElectionConfig) Flags() []cli.Flag {
 			Usage:       "The duration that non-leader candidates will wait to force acquire leadership. This is measured against time of last observed ack.",
 			Value:       15 * time.Second,
 			Destination: &l.LeaseDuration,
-			Sources:     cli.EnvVars("LEADER_ELECTION_LEASE_DURATION"),
+			EnvVars:     []string{"LEADER_ELECTION_LEASE_DURATION"},
 		},
 		&cli.DurationFlag{
 			Category:    "Leader election:",
@@ -71,7 +71,7 @@ func (l *LeaderElectionConfig) Flags() []cli.Flag {
 			Usage:       "The duration that the acting controlplane will retry refreshing leadership before giving up.",
 			Value:       10 * time.Second,
 			Destination: &l.RenewDeadline,
-			Sources:     cli.EnvVars("LEADER_ELECTION_RENEW_DEADLINE"),
+			EnvVars:     []string{"LEADER_ELECTION_RENEW_DEADLINE"},
 		},
 		&cli.DurationFlag{
 			Category:    "Leader election:",
@@ -79,7 +79,7 @@ func (l *LeaderElectionConfig) Flags() []cli.Flag {
 			Usage:       "The duration the LeaderElector clients should wait between tries of actions.",
 			Value:       2 * time.Second,
 			Destination: &l.RetryPeriod,
-			Sources:     cli.EnvVars("LEADER_ELECTION_RETRY_PERIOD"),
+			EnvVars:     []string{"LEADER_ELECTION_RETRY_PERIOD"},
 		},
 	}
 }

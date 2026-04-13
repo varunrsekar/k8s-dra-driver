@@ -85,7 +85,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	managerConfig := &ManagerConfig{
 		driverName:            c.config.driverName,
 		driverNamespace:       c.config.flags.namespace,
-		additionalNamespaces:  c.config.flags.additionalNamespaces,
+		additionalNamespaces:  c.config.flags.additionalNamespaces.Value(),
 		imageName:             c.config.flags.imageName,
 		maxNodesPerIMEXDomain: c.config.flags.maxNodesPerIMEXDomain,
 		clientsets:            c.config.clientsets,

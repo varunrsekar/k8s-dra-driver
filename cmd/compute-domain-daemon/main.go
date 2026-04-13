@@ -33,7 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 
-	"github.com/urfave/cli/v3"
+	"github.com/urfave/cli/v2"
 
 	nvapi "sigs.k8s.io/dra-driver-nvidia-gpu/api/nvidia.com/resource/v1beta1"
 	"sigs.k8s.io/dra-driver-nvidia-gpu/internal/common"
@@ -72,13 +72,13 @@ type IMEXConfigTemplateData struct {
 }
 
 func main() {
-	if err := newApp().Run(context.Background(), os.Args); err != nil {
+	if err := newApp().Run(os.Args); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func newApp() *cli.Command {
+func newApp() *cli.App {
 	loggingConfig := pkgflags.NewLoggingConfig()
 	featureGateConfig := pkgflags.NewFeatureGateConfig()
 	flags := &Flags{}
@@ -105,62 +105,62 @@ func newApp() *cli.Command {
 		&cli.StringFlag{
 			Name:        "cliqueid",
 			Usage:       "The clique ID for this node.",
-			Sources:     cli.EnvVars("CLIQUE_ID"),
+			EnvVars:     []string{"CLIQUE_ID"},
 			Destination: &flags.cliqueID,
 		},
 		&cli.StringFlag{
 			Name:        "compute-domain-uuid",
 			Usage:       "The UUID of the ComputeDomain to manage.",
-			Sources:     cli.EnvVars("COMPUTE_DOMAIN_UUID"),
+			EnvVars:     []string{"COMPUTE_DOMAIN_UUID"},
 			Destination: &flags.computeDomainUUID,
 		},
 		&cli.StringFlag{
 			Name:        "compute-domain-name",
 			Usage:       "The name of the ComputeDomain to manage.",
-			Sources:     cli.EnvVars("COMPUTE_DOMAIN_NAME"),
+			EnvVars:     []string{"COMPUTE_DOMAIN_NAME"},
 			Destination: &flags.computeDomainName,
 		},
 		&cli.StringFlag{
 			Name:        "compute-domain-namespace",
 			Usage:       "The namespace of the ComputeDomain to manage.",
 			Value:       "default",
-			Sources:     cli.EnvVars("COMPUTE_DOMAIN_NAMESPACE"),
+			EnvVars:     []string{"COMPUTE_DOMAIN_NAMESPACE"},
 			Destination: &flags.computeDomainNamespace,
 		},
 		&cli.StringFlag{
 			Name:        "node-name",
 			Usage:       "The name of this Kubernetes node.",
-			Sources:     cli.EnvVars("NODE_NAME"),
+			EnvVars:     []string{"NODE_NAME"},
 			Destination: &flags.nodeName,
 		},
 		&cli.StringFlag{
 			Name:        "pod-ip",
 			Usage:       "The IP address of this pod.",
-			Sources:     cli.EnvVars("POD_IP"),
+			EnvVars:     []string{"POD_IP"},
 			Destination: &flags.podIP,
 		},
 		&cli.StringFlag{
 			Name:        "pod-uid",
 			Usage:       "The UID of this pod.",
-			Sources:     cli.EnvVars("POD_UID"),
+			EnvVars:     []string{"POD_UID"},
 			Destination: &flags.podUID,
 		},
 		&cli.StringFlag{
 			Name:        "pod-name",
 			Usage:       "The name of this pod.",
-			Sources:     cli.EnvVars("POD_NAME"),
+			EnvVars:     []string{"POD_NAME"},
 			Destination: &flags.podName,
 		},
 		&cli.StringFlag{
 			Name:        "pod-namespace",
 			Usage:       "The namespace of this pod.",
-			Sources:     cli.EnvVars("POD_NAMESPACE"),
+			EnvVars:     []string{"POD_NAMESPACE"},
 			Destination: &flags.podNamespace,
 		},
 		&cli.IntFlag{
 			Name:        "max-nodes-per-imex-domain",
 			Usage:       "The maximum number of possible nodes per IMEX domain",
-			Sources:     cli.EnvVars("MAX_NODES_PER_IMEX_DOMAIN"),
+			EnvVars:     []string{"MAX_NODES_PER_IMEX_DOMAIN"},
 			Destination: &flags.maxNodesPerIMEXDomain,
 		},
 	}
@@ -168,11 +168,11 @@ func newApp() *cli.Command {
 	cliFlags = append(cliFlags, loggingConfig.Flags()...)
 
 	// Create the app
-	app := &cli.Command{
+	app := &cli.App{
 		Name:  "compute-domain-daemon",
 		Usage: "compute-domain-daemon manages the IMEX daemon for NVIDIA compute domains.",
 		Flags: cliFlags,
-		Before: func(ctx context.Context, _ *cli.Command) (context.Context, error) {
+		Before: func(c *cli.Context) error {
 			// `loggingConfig` must be applied before doing any logging
 			err := loggingConfig.Apply()
 
@@ -181,21 +181,21 @@ func newApp() *cli.Command {
 			// because we do not expose the raw `cliFlags`.
 			flags.klogVerbosity = int(loggingConfig.Config.Verbosity)
 			pkgflags.LogStartupConfig(flags, loggingConfig)
-			return ctx, err
+			return err
 		},
 		Commands: []*cli.Command{
 			{
 				Name:  "run",
 				Usage: "Run the compute domain daemon",
-				Action: func(ctx context.Context, _ *cli.Command) error {
-					return wrapper(ctx, run)
+				Action: func(c *cli.Context) error {
+					return wrapper(c.Context, run)
 				},
 			},
 			{
 				Name:  "check",
 				Usage: "Check if the node is IMEX capable and if the IMEX daemon is ready",
-				Action: func(ctx context.Context, _ *cli.Command) error {
-					return wrapper(ctx, check)
+				Action: func(c *cli.Context) error {
+					return wrapper(c.Context, check)
 				},
 			},
 		},
