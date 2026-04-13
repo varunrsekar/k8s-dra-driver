@@ -5,6 +5,9 @@ setup_file () {
   load 'helpers.sh'
   _common_setup
   local _iargs=("--set" "logVerbosity=6")
+  if [ "${DISABLE_COMPUTE_DOMAINS:-}" = "true" ]; then
+    _iargs+=("--set" "resources.computeDomains.enabled=false")
+  fi
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
 }
 
