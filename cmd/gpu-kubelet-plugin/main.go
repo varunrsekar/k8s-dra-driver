@@ -269,6 +269,8 @@ func RunPlugin(ctx context.Context, config *Config) error {
 	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer cancel()
 
+	metrics.InitializeDRARequestMetrics(DriverName)
+
 	if config.flags.httpEndpoint != "" {
 		if err := metrics.RunPrometheusMetricsServer(ctx, config.flags.httpEndpoint, config.flags.metricsPath); err != nil {
 			return fmt.Errorf("setup metrics endpoint: %w", err)

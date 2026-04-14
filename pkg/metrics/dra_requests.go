@@ -64,12 +64,12 @@ var (
 		[]string{"node", "driver", "device_type"},
 	)
 
-	// node_prepare_errors_total is scoped to kubelet node prepare failures (GPU DRA plugin).
+	// node_prepare_errors_total is scoped to kubelet node prepare failures.
 	nodePrepareErrorsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "nvidia_dra",
 			Name:      "node_prepare_errors_total",
-			Help:      "Total number of failures during DRA node prepare for the GPU kubelet plugin.",
+			Help:      "Total number of failures during DRA node prepare for kubelet plugins.",
 		},
 		[]string{"driver", "error_type"},
 	)
@@ -78,7 +78,7 @@ var (
 		prometheus.CounterOpts{
 			Namespace: "nvidia_dra",
 			Name:      "node_unprepare_errors_total",
-			Help:      "Total number of failures during DRA node unprepare for the GPU kubelet plugin.",
+			Help:      "Total number of failures during DRA node unprepare for kubelet plugins.",
 		},
 		[]string{"driver", "error_type"},
 	)
@@ -97,6 +97,26 @@ func Register() {
 	})
 }
 
+// InitializeDRARequestMetrics pre-creates zero-valued request series for a
+// driver so they are visible on the first Prometheus scrape after process
+// startup.
+func InitializeDRARequestMetrics(driver string) {
+	Register()
+	initializeDRARequestMetrics(driver)
+}
+
+func initializeDRARequestMetrics(driver string) {
+	if driver == "" {
+		return
+	}
+
+	for _, operation := range []string{"prepare", "unprepare"} {
+		draRequestsTotal.WithLabelValues(driver, operation)
+		draRequestDurationSeconds.WithLabelValues(driver, operation)
+		draRequestsInFlight.WithLabelValues(driver, operation)
+	}
+}
+
 func TrackInFlight(driver, operation string) func() {
 	Register()
 	draRequestsInFlight.WithLabelValues(driver, operation).Inc()
@@ -111,13 +131,13 @@ func ObserveRequest(driver, operation string, d time.Duration) {
 	draRequestDurationSeconds.WithLabelValues(driver, operation).Observe(d.Seconds())
 }
 
-// IncNodePrepareError increments node_prepare_errors_total (GPU kubelet plugin).
+// IncNodePrepareError increments node_prepare_errors_total for a kubelet plugin.
 func IncNodePrepareError(driver, errorType string) {
 	Register()
 	nodePrepareErrorsTotal.WithLabelValues(driver, errorType).Inc()
 }
 
-// IncNodeUnprepareError increments node_unprepare_errors_total (GPU kubelet plugin).
+// IncNodeUnprepareError increments node_unprepare_errors_total for a kubelet plugin.
 func IncNodeUnprepareError(driver, errorType string) {
 	Register()
 	nodeUnprepareErrorsTotal.WithLabelValues(driver, errorType).Inc()
