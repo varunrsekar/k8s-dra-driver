@@ -36,6 +36,15 @@ func GetVersionParts() []string {
 	return v
 }
 
+// GetGitCommit returns the git commit the binary was built from, or "unknown"
+// when not set at link time.
+func GetGitCommit() string {
+	if gitCommit != "" {
+		return gitCommit
+	}
+	return "unknown"
+}
+
 // GetVersionString returns the string representation of the version.
 func GetVersionString(more ...string) string {
 	v := append(GetVersionParts(), more...)
