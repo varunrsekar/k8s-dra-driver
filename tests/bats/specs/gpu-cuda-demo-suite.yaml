@@ -29,11 +29,19 @@ spec:
       set -ex
       nvidia-smi
       apt-get update -y -o Acquire::Retries=5
-      DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-unauthenticated -o Acquire::Retries=5 cuda-demo-suite-12-5
-      cd /usr/local/cuda-12.5/extras/demo_suite || cd /usr/local/cuda/extras/demo_suite
-      ./deviceQuery
-      ./vectorAdd
-      ./bandwidthTest
+      if [ "$(uname -m)" = "x86_64" ]; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-unauthenticated -o Acquire::Retries=5 cuda-demo-suite-12-5
+        cd /usr/local/cuda-12.5/extras/demo_suite || cd /usr/local/cuda/extras/demo_suite
+        ./deviceQuery
+        ./vectorAdd
+        ./bandwidthTest
+      else
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -o Acquire::Retries=5 git
+        git clone --depth 1 --branch v12.5 https://github.com/NVIDIA/cuda-samples.git /tmp/cuda-samples
+        cd /tmp/cuda-samples/Samples/1_Utilities/deviceQuery && make && ./deviceQuery
+        cd /tmp/cuda-samples/Samples/0_Introduction/vectorAdd && make && ./vectorAdd
+        cd /tmp/cuda-samples/Samples/1_Utilities/bandwidthTest && make && ./bandwidthTest
+      fi
     resources:
       claims:
       - name: gpu
