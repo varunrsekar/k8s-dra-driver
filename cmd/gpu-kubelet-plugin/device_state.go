@@ -85,6 +85,7 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error enumerating all possible devices: %w", err)
 	}
+	klog.Infof("DEBUG: Prepared Allocatable Devices for %d GPUs", len(perGPUAllocatable.allocatablesMap))
 
 	hostDriverRoot := config.flags.hostDriverRoot
 
