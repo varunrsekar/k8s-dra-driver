@@ -104,7 +104,15 @@ set -e
 bash tests/bats/clean-state-dirs-all-nodes.sh
 
 # Remove any stray MIG devices and disable MIG mode on all nodes.
-nvmm all sh -c 'nvidia-smi mig -dci; nvidia-smi mig -dgi; nvidia-smi -mig 0'
+# Skip on A100 cloud VMs — disabling MIG mode can put the GPU in an
+# unrecoverable state (#883). Non-fatal for GPUs that don't support MIG.
+nvmm all sh -c '
+  gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
+  case "$gpu_name" in
+    *A100*) echo "Skipping MIG cleanup on A100 (#883)"; exit 0 ;;
+  esac
+  nvidia-smi mig -dci; nvidia-smi mig -dgi; nvidia-smi -mig 0
+' || echo "nvmm MIG cleanup skipped (non-fatal)"
 
 set +x
 echo "cleanup: done"
