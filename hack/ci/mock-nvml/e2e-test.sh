@@ -121,6 +121,9 @@ collect_artifacts() {
       kubectl logs -n dra-driver-nvidia-gpu -l dra-driver-nvidia-gpu-component=controller --tail=200 2>/dev/null || true
     fi
   } > "${debug_file}" 2>&1
+
+  # Export Kind cluster logs (containerd, kubelet, etcd, etc.)
+  kind export logs "${ARTIFACTS}/kind-logs" --name "${KIND_CLUSTER_NAME}" 2>/dev/null || true
   echo "Artifacts written to ${ARTIFACTS}/"
 }
 
@@ -273,17 +276,27 @@ echo "Verifying CDI spec visible in Kind node..."
 docker exec "${KIND_CLUSTER_NAME}-control-plane" ls /var/run/cdi/nvidia.yaml
 docker exec "${KIND_CLUSTER_NAME}-control-plane" ls /var/lib/nvml-mock/driver/usr/lib64/libnvidia-ml.so.1
 
+# Create /dev/nvidia* symlinks in the Kind node so tests that scan the host's
+# /dev directory (test_gpu_robustness "ResourceSlice device count matches host
+# GPU count") can find the mock device nodes.
+for i in $(seq 0 $((GPU_COUNT - 1))); do
+  docker exec "${KIND_CLUSTER_NAME}-control-plane" \
+    ln -sf "/var/lib/nvml-mock/dev/nvidia${i}" "/dev/nvidia${i}"
+done
+
 # Bind-mount fake /proc/devices into the Kind node so the compute-domain
-# kubelet-plugin can find nvidia-caps-imex-channels. Kind nodes are Docker
-# containers, and /proc/devices inside them is the host kernel's. We overlay
-# our mock version that includes the IMEX channel device entry.
+# kubelet-plugin can find nvidia-caps-imex-channels. This requires nsenter
+# because plain `docker exec mount --bind` cannot bind-mount over /proc
+# entries from within the container.
 MOCK_PROC_DEVICES="${MOCK_ROOT}/imex/proc-devices"
 if [ -f "${MOCK_PROC_DEVICES}" ]; then
-  echo "Bind-mounting mock /proc/devices into Kind node..."
-  docker cp "${MOCK_PROC_DEVICES}" "${KIND_CLUSTER_NAME}-control-plane:/tmp/mock-proc-devices"
-  docker exec "${KIND_CLUSTER_NAME}-control-plane" mount --bind /tmp/mock-proc-devices /proc/devices
-  echo "Mock /proc/devices installed (nvidia-caps-imex-channels visible)"
-  docker exec "${KIND_CLUSTER_NAME}-control-plane" grep nvidia-caps /proc/devices
+  KIND_PID=$(docker inspect -f '{{.State.Pid}}' "${KIND_CLUSTER_NAME}-control-plane")
+  sudo cp "${MOCK_PROC_DEVICES}" "/proc/${KIND_PID}/root/tmp/mock-proc-devices"
+  if sudo nsenter -t "${KIND_PID}" -m -p -- mount --bind /tmp/mock-proc-devices /proc/devices 2>/dev/null; then
+    echo "Mock /proc/devices installed in Kind node"
+  else
+    echo "WARNING: Could not bind-mount mock /proc/devices (compute-domains will be disabled)"
+  fi
 fi
 
 # --- Step 5: Build DRA driver image and load into Kind ---
@@ -330,7 +343,9 @@ echo ""
 echo "--- Step 7: Running BATS tests ---"
 cd "${REPO_ROOT}"
 
-# Build the BATS runner image
+# Build the BATS runner image.
+# GHA CI uses flock to serialize image builds (see tests/bats/Makefile).
+mkdir -p /tmp/gh-runner-locks 2>/dev/null || true
 docker buildx use default 2>/dev/null || true
 make -f tests/bats/Makefile runner-image GIT_COMMIT_SHORT="${GIT_COMMIT_SHORT}"
 
@@ -338,16 +353,23 @@ export KUBECONFIG="${HOME}/.kube/config"
 export CI=true
 export TEST_NVIDIA_DRIVER_ROOT="${DRIVER_ROOT}"
 export TEST_CHART_LOCAL=true
-export DISABLE_COMPUTE_DOMAINS=true
+export DISABLE_COMPUTE_DOMAINS=false
 export TEST_FILTER_TAGS="${FILTER}"
 export NVMM_PATH=/cwd/tests/bats/lib/lambda
 export TEST_ALT_PROC_DEVICES="${MOCK_ROOT}/imex/proc-devices"
+# Kind kubeconfig uses 127.0.0.1; the BATS Docker container needs host networking.
+export DOCKER_NETWORK=host
 
-# Run the single-GPU-safe subset (same as Lambda CI).
-# Tests that require real CUDA compute are filtered out above.
-# SKIP_CLEANUP=true is scoped to this command so the outer EXIT trap still cleans up.
+# Run mock-compatible test files only. We skip test_gpu_cuda_workloads.bats
+# because it includes a CUDA demo suite test that requires real GPU compute
+# and has a 15-minute timeout. We also skip test_gpu_dynmig.bats (MIG).
+# TMPDIR=/tmp overrides the Makefile's CI default (CURDIR) so the BATS run
+# directory lands under /tmp which is mounted into the Docker container.
 SKIP_CLEANUP=true \
-  make -f tests/bats/Makefile tests-gpu-single GIT_COMMIT_SHORT="${GIT_COMMIT_SHORT}"
+  make -f tests/bats/Makefile tests-mock-nvml \
+    GIT_COMMIT_SHORT="${GIT_COMMIT_SHORT}" \
+    TMPDIR=/tmp \
+    TEST_ALWAYS_SHOW_OUTPUT=1
 
 echo ""
 echo "=== E2E tests complete ==="
