@@ -29,11 +29,32 @@ import (
 	cdispec "tags.cncf.io/container-device-interface/specs-go"
 )
 
+// procDevicesPath and usingAltProcDevices are set at init time from the
+// ALT_PROC_DEVICES_PATH env var. When set, the system is running against mock
+// NVML on CPU-only nodes where /proc/devices lacks NVIDIA entries, and
+// operations that depend on real kernel state should be skipped.
+var (
+	procDevicesPath     = "/proc/devices"
+	usingAltProcDevices bool
+)
+
+func init() {
+	if v := os.Getenv("ALT_PROC_DEVICES_PATH"); v != "" {
+		procDevicesPath = v
+		usingAltProcDevices = true
+	}
+}
+
 const (
-	procDevicesPath      = "/proc/devices"
 	devNvidiaCapsPath    = "/dev/nvidia-caps"
 	nvidiaCapsDeviceName = "nvidia-caps"
 )
+
+// UsingAltProcDevices reports whether an alternative /proc/devices path is
+// configured via ALT_PROC_DEVICES_PATH.
+func UsingAltProcDevices() bool {
+	return usingAltProcDevices
+}
 
 type NVcapDeviceInfo struct {
 	Major  int

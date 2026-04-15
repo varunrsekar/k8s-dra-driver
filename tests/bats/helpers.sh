@@ -50,6 +50,13 @@ iupgrade_wait() {
   # Expect array as third argument.
   local -n ADDITIONAL_INSTALL_ARGS=$3
 
+  # When running against mock NVML, pass altProcDevices so the compute-domain
+  # plugin can find nvidia-caps-imex-channels in the mock /proc/devices file.
+  local _mock_args=()
+  if [ -n "${TEST_ALT_PROC_DEVICES:-}" ]; then
+    _mock_args+=("--set" "altProcDevices=${TEST_ALT_PROC_DEVICES}")
+  fi
+
   log "iupgrade_wait: start"
   timeout -v 120 helm upgrade --install "${TEST_HELM_RELEASE_NAME}" \
     "${REPO}" \
@@ -59,7 +66,7 @@ iupgrade_wait() {
     --create-namespace \
     --namespace dra-driver-nvidia-gpu \
     --set gpuResourcesEnabledOverride=true \
-    --set nvidiaDriverRoot="${TEST_NVIDIA_DRIVER_ROOT}" "${ADDITIONAL_INSTALL_ARGS[@]}"
+    --set nvidiaDriverRoot="${TEST_NVIDIA_DRIVER_ROOT}" "${_mock_args[@]}" "${ADDITIONAL_INSTALL_ARGS[@]}"
 
   # Valueable output to have in the logs in case things went pearshaped.
   kubectl get pods -n dra-driver-nvidia-gpu

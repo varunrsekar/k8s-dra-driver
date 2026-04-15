@@ -26,6 +26,13 @@ nvidiaDriverRoot: /
 # If not specified, the default path inferred from the nvidia-container-toolkit library version will be used.
 nvidiaCDIHookPath: ""
 
+# Optional host path to a file used in place of /proc/devices inside kubelet-plugin
+# containers. Used with mock NVML to inject fake nvidia-caps-imex-channels entries
+# so the compute-domain-kubelet-plugin can initialize without a real kernel driver.
+# The file is mounted into /alt-proc-devices and the path is passed via
+# ALT_PROC_DEVICES_PATH env var. Example: /var/lib/nvml-mock/imex/proc-devices
+altProcDevices: ""
+
 nameOverride: ""
 fullnameOverride: ""
 namespaceOverride: ""
