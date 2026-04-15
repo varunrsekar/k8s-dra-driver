@@ -97,15 +97,25 @@ FILTER='!version-specific'
 if [ "${GPU_COUNT}" -lt 2 ]; then
   FILTER="${FILTER},!multi-gpu"
 fi
-# busGrind is slow and can hang on V100/A10 — only run on faster GPUs.
+# busGrind is slow and can hang on V100/A10/GH200 — only run on H100+.
 case "${LAMBDA_GPU_TYPE}" in
-  *v100*|*a10) FILTER="${FILTER},!gpu-busgrind" ;;
+  *v100*|*a10|*gh200*) FILTER="${FILTER},!gpu-busgrind" ;;
+esac
+# Dynamic MIG requires MIG-capable GPUs (A100/H100/GH200/B200).
+# On single-GPU A100 instances, DynMIG fails with "In use by another client"
+# because the driver holds the only GPU via NVML, blocking MIG mode toggle.
+# Skip DynMIG on single-GPU A100; it works on multi-GPU A100 (8x) and H100+.
+case "${LAMBDA_GPU_TYPE}" in
+  *a100*)
+    if [ "${GPU_COUNT}" -lt 2 ]; then
+      FILTER="${FILTER},!dynmig"
+    fi
+    ;;
+  *h100*|*gh200*|*b200*) ;;
+  *) FILTER="${FILTER},!dynmig" ;;
 esac
 
 # Detect whether compute domains should be disabled.
-# Compute domains (IMEX channels) require NVSwitch fabric with fabric manager,
-# which is only available on GB200/GB300 NVL systems. On all other GPU types,
-# disable compute domains to avoid the compute-domains container crashing.
 DISABLE_CD=true
 case "${LAMBDA_GPU_TYPE}" in
   *gb200*|*gb300*|*b200*) DISABLE_CD=false ;;
@@ -114,8 +124,8 @@ echo "Test filter: ${FILTER}, compute domains disabled: ${DISABLE_CD}"
 
 # --- Pre-cleanup: MIG teardown on host ---
 # Run MIG cleanup directly on the host where nvidia-smi is available.
-# The BATS Docker container doesn't have nvidia-smi, so cleanup-from-previous-run.sh
-# uses the lambda/nvmm no-op stub. We handle MIG cleanup here instead.
+# The BATS Docker container uses the lambda nvmm stub (no-op).
+# We handle MIG cleanup here instead.
 # IMPORTANT: Skip on A100 — disabling MIG mode on cloud VM A100s can put the
 # GPU in an unrecoverable state (#883).
 case "${LAMBDA_GPU_TYPE}" in
@@ -143,7 +153,7 @@ export TEST_CHART_LOCAL=true
 export DISABLE_COMPUTE_DOMAINS=${DISABLE_CD}
 export TEST_FILTER_TAGS='${FILTER}'
 export GIT_COMMIT_SHORT=${GIT_COMMIT_SHORT}
-# Use lambda nvmm stub (no GPU Operator). MIG cleanup is handled above on the host.
+# Use lambda nvmm stub (no GPU Operator). MIG cleanup handled above.
 export NVMM_PATH=/cwd/tests/bats/lib/lambda
 
 make -f tests/bats/Makefile tests-gpu-single GIT_COMMIT_SHORT=${GIT_COMMIT_SHORT}
