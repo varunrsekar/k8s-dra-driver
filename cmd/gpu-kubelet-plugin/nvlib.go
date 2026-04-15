@@ -464,11 +464,11 @@ func (l deviceLib) getGpuInfo(index int, device nvdev.Device) (*GpuInfo, error) 
 	}
 	driverVersion, ret := l.nvmllib.SystemGetDriverVersion()
 	if ret != nvml.SUCCESS {
-		return nil, fmt.Errorf("error getting driver version: %w", err)
+		return nil, fmt.Errorf("error getting driver version: %v", ret)
 	}
 	cudaDriverVersion, ret := l.nvmllib.SystemGetCudaDriverVersion()
 	if ret != nvml.SUCCESS {
-		return nil, fmt.Errorf("error getting CUDA driver version: %w", err)
+		return nil, fmt.Errorf("error getting CUDA driver version: %v", ret)
 	}
 	pciBusID, err := device.GetPCIBusID()
 	if err != nil {
