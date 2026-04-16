@@ -31,7 +31,7 @@ if [ -d "${MOCK_ROOT}" ]; then
 fi
 
 # Remove CDI spec
-sudo rm -f /var/run/cdi/nvidia.yaml
+sudo rm -f /var/run/cdi/nvidia-mock.yaml
 
 # Remove GPU Operator compat symlink
 sudo rm -f /run/nvidia/driver

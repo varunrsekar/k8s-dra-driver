@@ -217,7 +217,7 @@ check_output "/run/nvidia/driver points to driver root" "${DRIVER_ROOT}" \
 echo ""
 echo "=== Layer 7: CDI Spec ==="
 # =========================================================================
-CDI_SPEC="/var/run/cdi/nvidia.yaml"
+CDI_SPEC="/var/run/cdi/nvidia-mock.yaml"
 check "CDI spec exists" \
   test -f "${CDI_SPEC}"
 

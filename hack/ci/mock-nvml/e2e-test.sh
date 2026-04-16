@@ -273,7 +273,7 @@ echo "Kind cluster ready"
 
 # Verify CDI is visible inside Kind node
 echo "Verifying CDI spec visible in Kind node..."
-docker exec "${KIND_CLUSTER_NAME}-control-plane" ls /var/run/cdi/nvidia.yaml
+docker exec "${KIND_CLUSTER_NAME}-control-plane" ls /var/run/cdi/nvidia-mock.yaml
 docker exec "${KIND_CLUSTER_NAME}-control-plane" ls /var/lib/nvml-mock/driver/usr/lib64/libnvidia-ml.so.1
 
 # Create /dev/nvidia* symlinks in the Kind node so tests that scan the host's
@@ -382,8 +382,11 @@ export DOCKER_NETWORK=host
 SKIP_CLEANUP=true \
   make -f tests/bats/Makefile tests-mock-nvml \
     GIT_COMMIT_SHORT="${GIT_COMMIT_SHORT}" \
-    TMPDIR=/tmp \
-    TEST_ALWAYS_SHOW_OUTPUT=1
+    TMPDIR=/tmp
 
 echo ""
-echo "=== E2E tests complete ==="
+echo "=== Mock NVML E2E Summary ==="
+echo "Profile: ${GPU_PROFILE}, GPUs: ${GPU_COUNT}, Driver: ${DRIVER_VERSION}"
+echo "k8s-test-infra: ${K8S_TEST_INFRA_DIR}"
+echo "BATS target: tests-mock-nvml (MOCK_NVML=true)"
+echo "All tests passed or skipped. See ok/skip lines above for details."

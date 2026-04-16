@@ -264,10 +264,6 @@ spec:
           value: /var/run/cdi
         - name: NVIDIA_MIG_CONFIG_DEVICES
           value: all
-        {{- if .Values.altProcDevices }}
-        - name: ALT_PROC_DEVICES_PATH
-          value: /alt-proc-devices
-        {{- end }}
         - name: NODE_NAME
           valueFrom:
             fieldRef:
@@ -308,11 +304,6 @@ spec:
         - name: driver-root
           mountPath: /driver-root
           mountPropagation: HostToContainer
-        {{- if .Values.altProcDevices }}
-        - name: alt-proc-devices
-          mountPath: /alt-proc-devices
-          readOnly: true
-        {{- end }}
         {{- if and .Values.featureGates (and (hasKey .Values.featureGates "PassthroughSupport") .Values.featureGates.PassthroughSupport) }}
         - name: host-root
           mountPath: /host-root

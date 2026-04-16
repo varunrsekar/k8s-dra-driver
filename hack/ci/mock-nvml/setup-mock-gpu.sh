@@ -119,8 +119,12 @@ echo ""
 echo "--- Step 4: Installing GPU profile config ---"
 sudo cp "${PROFILE_YAML}" "${DRIVER_ROOT}/config/config.yaml"
 
-# Inject num_devices and patch version strings.
-sudo sed -i "/^system:/a\\  num_devices: ${GPU_COUNT}" "${DRIVER_ROOT}/config/config.yaml"
+# Inject num_devices (guard against duplicate key) and patch version strings.
+if grep -q "num_devices:" "${DRIVER_ROOT}/config/config.yaml"; then
+  sudo sed -i "s|num_devices:.*|num_devices: ${GPU_COUNT}|" "${DRIVER_ROOT}/config/config.yaml"
+else
+  sudo sed -i "/^system:/a\\  num_devices: ${GPU_COUNT}" "${DRIVER_ROOT}/config/config.yaml"
+fi
 sudo sed -i "s|driver_version:.*|driver_version: \"${DRIVER_VERSION}\"|" "${DRIVER_ROOT}/config/config.yaml"
 sudo sed -i "s|nvml_version:.*|nvml_version: \"12.${DRIVER_VERSION}\"|" "${DRIVER_ROOT}/config/config.yaml"
 
@@ -157,7 +161,11 @@ else
       sudo tee /etc/apt/sources.list.d/nvidia-mock.list > /dev/null
     sudo apt-get update -qq
 
-    # Download (not install) nvidia-utils, extract nvidia-smi
+    # Download (not install) nvidia-utils to extract nvidia-smi binary.
+    # We use nvidia-utils-550 because newer meta-packages (570+) don't include
+    # the nvidia-smi binary directly. The binary version (550.x) differs from
+    # DRIVER_VERSION but this is fine: nvidia-smi reads the driver version from
+    # the NVML library (our mock), not from its own binary version.
     WORKDIR=$(mktemp -d)
     pushd "${WORKDIR}" > /dev/null
     apt-get download nvidia-utils-550 2>/dev/null
@@ -261,7 +269,8 @@ EOF
 # Create mock IMEX channel device nodes. The compute-domain CDI spec injects
 # /dev/nvidia-caps-imex-channels/channel<N> into workload pods. These must
 # exist as character devices so the CDI injection succeeds and workload pods
-# can list them. We create all 2048 channels (matching getImexChannelCount()).
+# can list them. The 2048 count matches getImexChannelCount() in
+# cmd/compute-domain-kubelet-plugin/nvlib.go.
 IMEX_CHAN_DIR="${DEV_ROOT}/nvidia-caps-imex-channels"
 IMEX_CHAN_DRV_DIR="${DRIVER_ROOT}/dev/nvidia-caps-imex-channels"
 sudo mkdir -p "${IMEX_CHAN_DIR}" "${IMEX_CHAN_DRV_DIR}"
@@ -289,7 +298,7 @@ CDI_DIR="/var/run/cdi"
 sudo mkdir -p "${CDI_DIR}"
 
 # Write CDI header (uses variables, not hardcoded paths)
-sudo tee "${CDI_DIR}/nvidia.yaml" > /dev/null << CDI_HEADER
+sudo tee "${CDI_DIR}/nvidia-mock.yaml" > /dev/null << CDI_HEADER
 cdiVersion: "0.6.0"
 kind: "nvidia.com/gpu"
 containerEdits:
@@ -318,7 +327,7 @@ CDI_HEADER
 
 # Per-GPU device entries + "all" aggregate
 for i in $(seq 0 $((GPU_COUNT - 1))); do
-  sudo tee -a "${CDI_DIR}/nvidia.yaml" > /dev/null << DEVICE_EOF
+  sudo tee -a "${CDI_DIR}/nvidia-mock.yaml" > /dev/null << DEVICE_EOF
   - name: "${i}"
     containerEdits:
       deviceNodes:
@@ -334,9 +343,9 @@ done
     echo "        - path: /dev/nvidia${i}"
     echo "          hostPath: ${DEV_ROOT}/nvidia${i}"
   done
-} | sudo tee -a "${CDI_DIR}/nvidia.yaml" > /dev/null
+} | sudo tee -a "${CDI_DIR}/nvidia-mock.yaml" > /dev/null
 
-echo "CDI spec generated at ${CDI_DIR}/nvidia.yaml (${GPU_COUNT} devices)"
+echo "CDI spec generated at ${CDI_DIR}/nvidia-mock.yaml (${GPU_COUNT} devices)"
 
 echo ""
 echo "=== Mock GPU setup complete ==="

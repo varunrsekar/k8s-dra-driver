@@ -51,9 +51,27 @@ const (
 )
 
 // UsingAltProcDevices reports whether an alternative /proc/devices path is
-// configured via ALT_PROC_DEVICES_PATH.
+// configured via ALT_PROC_DEVICES_PATH or ConfigureProcDevicesPath.
 func UsingAltProcDevices() bool {
 	return usingAltProcDevices
+}
+
+// ConfigureProcDevicesPath overrides the /proc/devices path at runtime.
+// Use in tests to set different paths without relying on environment variables.
+func ConfigureProcDevicesPath(path string) {
+	procDevicesPath = path
+	usingAltProcDevices = path != "/proc/devices"
+}
+
+// ResetProcDevicesPath restores the default /proc/devices path.
+// Use in test cleanup to avoid leaking state between tests.
+func ResetProcDevicesPath() {
+	procDevicesPath = "/proc/devices"
+	usingAltProcDevices = false
+	if v := os.Getenv("ALT_PROC_DEVICES_PATH"); v != "" {
+		procDevicesPath = v
+		usingAltProcDevices = true
+	}
 }
 
 type NVcapDeviceInfo struct {
