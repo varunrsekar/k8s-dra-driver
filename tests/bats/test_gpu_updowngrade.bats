@@ -27,6 +27,7 @@ bats::on_failure() {
 
 # bats test_tags=fastfeedback
 @test "GPUs: upgrade: wipe-state, install-last-stable, upgrade-to-current-dev" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires last-stable image from registry"; fi
   # Stage 1: clean slate
   helm uninstall "${TEST_HELM_RELEASE_NAME}" -n dra-driver-nvidia-gpu --wait --timeout=30s
   kubectl wait --for=delete pods -A -l app.kubernetes.io/name=dra-driver-nvidia-gpu --timeout=10s

@@ -192,6 +192,8 @@ tests-mock-nvml: runner-image
 		tests/bats/test_gpu_sharing.bats \
 		tests/bats/test_gpu_robustness.bats \
 		tests/bats/test_gpu_extres.bats \
+		tests/bats/test_gpu_stress.bats \
+		tests/bats/test_gpu_updowngrade.bats \
 		tests/bats/test_cd_imex_chan_inject.bats \
 		tests/bats/test_cd_misc.bats \
 		tests/bats/test_cd_logging.bats \
