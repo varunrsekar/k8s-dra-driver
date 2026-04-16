@@ -208,21 +208,31 @@ func (l deviceLib) GetPerGpuAllocatableDevices(indices ...int) (*PerGPUAllocatab
 
 	count, ret := l.nvmllib.DeviceGetCount()
 	if ret != nvml.SUCCESS {
-		return nil, fmt.Errorf("error getting device count: %w", ret)
+		klog.Warningf("DEBUG: error getting device count: %w", ret)
+	} else {
+		klog.Infof("DEBUG: Found %d GPUs", count)
 	}
-	klog.Infof("DEBUG: Found %d GPUs", count)
 	err := l.VisitDevices(func(i int, d nvdev.Device) error {
 		name, ret := d.GetName()
 		if ret != nvml.SUCCESS {
-			return fmt.Errorf("error getting device name: %w", ret)
+			klog.Warningf("DEBUG: GPU %d error getting device name: %w", i, ret)
+		} else {
+			klog.Infof("DEBUG: GPU %d name: %s", i, name)
 		}
-		klog.Infof("DEBUG: GPU %d name: %s", i, name)
-		currentMigMode, pendingMigMode, ret := d.GetMigMode()
-		if ret != nvml.SUCCESS {
-			return fmt.Errorf("error getting MIG mode: %w", ret)
+		migEnabled, err := d.IsMigCapable()
+		if err != nil {
+			klog.Warningf("DEBUG: GPU %d is not mig-capable", i)
+		} else {
+			klog.Infof("DEBUG: GPU %d migEnabled: %v", i, migEnabled)
 		}
-		klog.Infof("DEBUG: GPU %d MIG mode: current=%v, pending=%v", i, currentMigMode, pendingMigMode)
-
+		if migEnabled {
+			currentMigMode, pendingMigMode, ret := d.GetMigMode()
+			if ret != nvml.SUCCESS {
+				klog.Warningf("DEBUG: GPU %d error getting MIG mode: %w", i, ret)
+			} else {
+				klog.Infof("DEBUG: GPU %d MIG mode: current=%v, pending=%v", i, currentMigMode, pendingMigMode)
+			}
+		}
 		if indices != nil && !slices.Contains(indices, i) {
 			return nil
 		}
@@ -236,7 +246,11 @@ func (l deviceLib) GetPerGpuAllocatableDevices(indices ...int) (*PerGPUAllocatab
 			klog.Warningf("DEBUG: Error getting info for GPU %d: %v", i, err)
 			return fmt.Errorf("error getting info for GPU %v: %w", i, err)
 		}
-		klog.Infof("DEBUG: GPU %d info: %+v", i, gpuInfo)
+		if gpuInfo != nil {
+			klog.Infof("DEBUG: GPU %d info: %+v", i, *gpuInfo)
+		} else {
+			klog.Warningf("DEBUG: GPU %d info is nil", i)
+		}
 
 		parentdev := &AllocatableDevice{
 			Gpu: gpuInfo,
@@ -283,7 +297,6 @@ func (l deviceLib) GetPerGpuAllocatableDevices(indices ...int) (*PerGPUAllocatab
 
 		migdevs, err := l.discoverMigDevicesByGPU(gpuInfo)
 		if err != nil {
-			klog.Warningf("DEBUG: Error discovering MIG devices for GPU %q: %v", gpuInfo.CanonicalName(), err)
 			return fmt.Errorf("error discovering MIG devices for GPU %q: %w", gpuInfo.CanonicalName(), err)
 		}
 
@@ -329,7 +342,21 @@ func (l deviceLib) GetPerGpuAllocatableDevices(indices ...int) (*PerGPUAllocatab
 		return nil, fmt.Errorf("error visiting devices: %w", err)
 	}
 
+	printPerGPUAllocatable(perGPUAllocatable)
 	return perGPUAllocatable, nil
+}
+
+func printPerGPUAllocatable(perGPUAllocatable *PerGPUAllocatableDevices) {
+	var pciBusIDs []string
+	for pciBusID, allocatables := range perGPUAllocatable.allocatablesMap {
+		var deviceNames []string
+		pciBusIDs = append(pciBusIDs, string(pciBusID))
+		for name, _ := range allocatables {
+			deviceNames = append(deviceNames, string(name))
+		}
+		klog.Infof("DEBUG: GPU %s Device names: %v", pciBusID, deviceNames)
+	}
+	klog.Infof("DEBUG: GPU PCI BUS IDS: %v", pciBusIDs)
 }
 
 func (l deviceLib) discoverMigDevicesByGPU(gpuInfo *GpuInfo) ([]*AllocatableDevice, error) {
