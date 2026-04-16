@@ -284,6 +284,20 @@ for i in $(seq 0 $((GPU_COUNT - 1))); do
     ln -sf "/var/lib/nvml-mock/dev/nvidia${i}" "/dev/nvidia${i}"
 done
 
+# Create mock IMEX channel device nodes directly inside the Kind node.
+# Kind extraMounts into /dev/ don't work (Docker manages /dev via devtmpfs),
+# so we mknod them directly. The compute-domain CDI spec references
+# /dev/nvidia-caps-imex-channels/channelN as both container and host path.
+IMEX_MAJOR=235
+docker exec "${KIND_CLUSTER_NAME}-control-plane" mkdir -p /dev/nvidia-caps-imex-channels
+echo "Creating 2048 IMEX channel device nodes inside Kind node..."
+docker exec "${KIND_CLUSTER_NAME}-control-plane" sh -c "
+  for i in \$(seq 0 2047); do
+    mknod -m 666 /dev/nvidia-caps-imex-channels/channel\${i} c ${IMEX_MAJOR} \${i} 2>/dev/null || true
+  done
+"
+echo "IMEX channel device nodes created in Kind node"
+
 # Bind-mount fake /proc/devices into the Kind node so the compute-domain
 # kubelet-plugin can find nvidia-caps-imex-channels. This requires nsenter
 # because plain `docker exec mount --bind` cannot bind-mount over /proc

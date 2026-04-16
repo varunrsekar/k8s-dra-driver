@@ -258,6 +258,20 @@ DeviceFileMode: 438
 DeviceFileModify: 0
 EOF
 
+# Create mock IMEX channel device nodes. The compute-domain CDI spec injects
+# /dev/nvidia-caps-imex-channels/channel<N> into workload pods. These must
+# exist as character devices so the CDI injection succeeds and workload pods
+# can list them. We create all 2048 channels (matching getImexChannelCount()).
+IMEX_CHAN_DIR="${DEV_ROOT}/nvidia-caps-imex-channels"
+IMEX_CHAN_DRV_DIR="${DRIVER_ROOT}/dev/nvidia-caps-imex-channels"
+sudo mkdir -p "${IMEX_CHAN_DIR}" "${IMEX_CHAN_DRV_DIR}"
+echo "Creating 2048 mock IMEX channel device nodes..."
+for i in $(seq 0 2047); do
+  sudo mknod -m 666 "${IMEX_CHAN_DIR}/channel${i}" c "${IMEX_MAJOR}" "${i}" 2>/dev/null || true
+  sudo mknod -m 666 "${IMEX_CHAN_DRV_DIR}/channel${i}" c "${IMEX_MAJOR}" "${i}" 2>/dev/null || true
+done
+echo "Created 2048 IMEX channel device nodes at ${IMEX_CHAN_DIR}/ and ${IMEX_CHAN_DRV_DIR}/"
+
 echo "Created mock /proc/devices with nvidia-caps-imex-channels (major=${IMEX_MAJOR})"
 echo "Created mock fabric-imex-mgmt capability file"
 

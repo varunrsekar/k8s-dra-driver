@@ -59,6 +59,7 @@ bats::on_failure() {
 
 # bats test_tags=fastfeedback,gpu-sharing
 @test "GPUs: MPS — 2 containers share GPU with MPS config" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires real MPS daemon"; fi
   local _specpath="tests/bats/specs/gpu-mps.yaml"
   local _podname="pod-mps"
 

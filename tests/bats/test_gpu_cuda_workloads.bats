@@ -28,6 +28,7 @@ bats::on_failure() {
 
 # bats test_tags=fastfeedback,gpu-workloads
 @test "GPUs: single GPU runs CUDA demo suite (deviceQuery, vectorAdd, bandwidthTest)" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires real CUDA compute"; fi
   local _specpath="tests/bats/specs/gpu-cuda-demo-suite.yaml"
   local _podname="pod-cuda-demo"
 
@@ -114,6 +115,7 @@ bats::on_failure() {
 
 # bats test_tags=gpu-workloads,gpu-busgrind
 @test "GPUs: busGrind memory bandwidth stress test" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires real CUDA compute"; fi
   local _specpath="tests/bats/specs/gpu-cuda-busgrind.yaml"
   local _podname="pod-cuda-busgrind"
 

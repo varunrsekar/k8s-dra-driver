@@ -45,6 +45,7 @@ bats::on_failure() {
 
 # bats test_tags=fastfeedback
 @test "CDs: daemon shutdown: confirm CD status cleanup" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires IMEX daemon"; fi
   kubectl apply -f demo/specs/imex/channel-injection.yaml
   kubectl wait --for=condition=READY pods imex-channel-injection --timeout=100s
   run kubectl logs imex-channel-injection
@@ -98,6 +99,7 @@ bats::on_failure() {
 
 # bats test_tags=fastfeedback
 @test "CDs: reject unknown field in opaque cfg in CD chan ResourceClaim" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires IMEX daemon"; fi
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" NOARGS
 
   envsubst < tests/bats/specs/rc-opaque-cfg-unknown-field.yaml.tmpl > \
@@ -145,6 +147,7 @@ bats::on_failure() {
 
 # bats test_tags=fastfeedback
 @test "CDs: self-initiated unprepare of stale RCs in PrepareStarted" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires IMEX daemon"; fi
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" NOARGS
 
   # Stage 1: provoke partially prepared claim.
@@ -214,6 +217,7 @@ bats::on_failure() {
 
 # bats test_tags=fastfeedback
 @test "CDs: global CD status" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires IMEX daemon"; fi
   kubectl apply -f demo/specs/imex/channel-injection.yaml
   kubectl wait --for=condition=READY pods imex-channel-injection --timeout=100s
 
@@ -241,6 +245,7 @@ bats::on_failure() {
 
 # bats test_tags=fastfeedback
 @test "CDs: IMEX channel injection (featureGates.ComputeDomainClique=true)" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires IMEX daemon"; fi
   local _iargs=("--set" "logVerbosity=6" "--set" "featureGates.ComputeDomainCliques=true")
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
   apply_check_delete_workload_imex_chan_inject
