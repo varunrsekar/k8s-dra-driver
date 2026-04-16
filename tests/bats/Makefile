@@ -89,6 +89,12 @@ else
   TEST_GPU_STRESS_DELAY = 1
 endif
 
+# DOCKER_NETWORK overrides the Docker network mode for the BATS runner container.
+# Set to "host" for Kind-based testing where the kubeconfig uses 127.0.0.1.
+ifneq ($(DOCKER_NETWORK),)
+  DOCKER_RUN_FLAGS += --network $(DOCKER_NETWORK)
+endif
+
 RUNDIR_PARENT ?= $(TMPDIR)/k8s-dra-driver-gpu-tests-out-$(USER)
 
 DOCKER_ENVS = \
@@ -106,7 +112,9 @@ DOCKER_ENVS = \
 	--env TEST_EXPECTED_IMAGE_SPEC_SUBSTRING=$(TEST_EXPECTED_IMAGE_SPEC_SUBSTRING) \
 	--env SKIP_CLEANUP=$(SKIP_CLEANUP) \
 	--env DISABLE_COMPUTE_DOMAINS=$(DISABLE_COMPUTE_DOMAINS) \
-	--env NVMM_PATH=$(NVMM_PATH)
+	--env NVMM_PATH=$(NVMM_PATH) \
+	--env TEST_ALT_PROC_DEVICES=$(TEST_ALT_PROC_DEVICES) \
+	--env MOCK_NVML=$(MOCK_NVML)
 
 DOCKER_UID := $(shell id -u)
 DOCKER_GID := $(shell id -g)
@@ -173,6 +181,26 @@ runner-image:
 # Single-GPU-safe subset. Suitable for CI environments with one GPU and no
 # GPU Operator (e.g., Lambda Cloud). Excludes test_basics.bats (expects GPU
 # Operator + clean state), MIG, stress, and upgrade tests.
+# Mock NVML subset: GPU + CD tests on CPU-only nodes with mock NVML.
+# MOCK_NVML=true causes tests requiring real CUDA/MPS/NVLink/IMEX to skip.
+# Excludes DynMIG (MIG hardware), basics (expects GPU Operator), MIG, and stress.
+tests-mock-nvml: MOCK_NVML := true
+tests-mock-nvml: runner-image
+	$(call RUN_BATS, \
+		tests/bats/test_gpu_basic.bats \
+		tests/bats/test_gpu_cuda_workloads.bats \
+		tests/bats/test_gpu_sharing.bats \
+		tests/bats/test_gpu_robustness.bats \
+		tests/bats/test_gpu_extres.bats \
+		tests/bats/test_gpu_stress.bats \
+		tests/bats/test_gpu_updowngrade.bats \
+		tests/bats/test_cd_imex_chan_inject.bats \
+		tests/bats/test_cd_misc.bats \
+		tests/bats/test_cd_logging.bats \
+		tests/bats/test_cd_failover.bats \
+		tests/bats/test_cd_mnnvl_workload.bats \
+		tests/bats/test_cd_updowngrade.bats)
+
 tests-gpu-single: runner-image
 	$(call RUN_BATS, \
 		tests/bats/test_gpu_basic.bats \

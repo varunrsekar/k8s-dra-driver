@@ -147,6 +147,10 @@ spec:
           value: /var/run/cdi
         - name: NVIDIA_MIG_CONFIG_DEVICES
           value: all
+        {{- if .Values.altProcDevices }}
+        - name: ALT_PROC_DEVICES_PATH
+          value: /alt-proc-devices
+        {{- end }}
         - name: NODE_NAME
           valueFrom:
             fieldRef:
@@ -186,6 +190,11 @@ spec:
           mountPath: /driver-root
           readOnly: true
           mountPropagation: HostToContainer
+        {{- if .Values.altProcDevices }}
+        - name: alt-proc-devices
+          mountPath: /alt-proc-devices
+          readOnly: true
+        {{- end }}
       {{- end }}
       {{- if .Values.resources.gpus.enabled }}
       - name: gpus
@@ -334,6 +343,12 @@ spec:
         hostPath:
           path: {{ .Values.nvidiaDriverRoot }}
           type: DirectoryOrCreate
+      {{- if .Values.altProcDevices }}
+      - name: alt-proc-devices
+        hostPath:
+          path: {{ .Values.altProcDevices }}
+          type: File
+      {{- end }}
       {{- if and .Values.featureGates (and (hasKey .Values.featureGates "PassthroughSupport") .Values.featureGates.PassthroughSupport) }}
       # This is the root filesystem of the host. This is used to execute the required
       # system commands on the host. For example, to check if a gpu's device node is free.

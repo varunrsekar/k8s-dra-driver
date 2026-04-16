@@ -30,21 +30,25 @@ teardown_file() {
 
 # bats test_tags=fastfeedback
 @test "CDs: failover nvb: force-delete worker pod 0" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires multi-node NVLink fabric"; fi
   bash tests/bats/lib/test_cd_nvb_failover.sh "$SPECPATH" 1
 }
 
 @test "CDs: failover nvb: force-delete all IMEX daemons" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires multi-node NVLink fabric"; fi
   bash tests/bats/lib/test_cd_nvb_failover.sh "$SPECPATH" 2
 }
 
 
 @test "CDs: failover nvb: regular-delete worker pod 1" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires multi-node NVLink fabric"; fi
   bash tests/bats/lib/test_cd_nvb_failover.sh "$SPECPATH" 3
 }
 
 
 # bats test_tags=fastfeedback
 @test "CDs: nvb many-iteration wrapper" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires multi-node NVLink fabric"; fi
   # Propose and test-cover a snippet that is meant to be used for manual,
   # long-running, many-iteration testing. Parameters used below: fault injection
   # type `4`: no failure; nvbandwidth parameters optimized for fast completion.

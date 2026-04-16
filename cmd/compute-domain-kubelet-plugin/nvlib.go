@@ -93,8 +93,12 @@ func newDeviceLib(driverRoot root) (*deviceLib, error) {
 		d.nvCapImexChanDevInfos = append(d.nvCapImexChanDevInfos, info)
 	}
 
-	if err := d.unmountRecursively(procDriverNvidiaPath); err != nil {
-		return nil, fmt.Errorf("error recursively unmounting %s: %w", procDriverNvidiaPath, err)
+	// Skip procfs unmount when running against mock NVML — there is no
+	// real kernel driver, so /proc/driver/nvidia does not exist.
+	if !common.UsingAltProcDevices() {
+		if err := d.unmountRecursively(procDriverNvidiaPath); err != nil {
+			return nil, fmt.Errorf("error recursively unmounting %s: %w", procDriverNvidiaPath, err)
+		}
 	}
 
 	return &d, nil

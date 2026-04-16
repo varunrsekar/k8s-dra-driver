@@ -16,6 +16,7 @@ setup () {
 
 # bats test_tags=fastfeedback
 @test "CDs: controller/plugin: startup config / detail in logs on level 0" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires IMEX daemon"; fi
   local _iargs=("--set" "logVerbosity=0")
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" _iargs
 
@@ -33,6 +34,7 @@ setup () {
 
 
 @test "CDs: controller: test log verbosity levels" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires IMEX daemon"; fi
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" NOARGS
 
   # Deploy workload: give the controller something to log about.
@@ -105,6 +107,7 @@ setup () {
 }
 
 @test "CDs: daemon: test log verbosity levels" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires IMEX daemon"; fi
   log_objects
   iupgrade_wait "${TEST_CHART_REPO}" "${TEST_CHART_VERSION}" NOARGS
 

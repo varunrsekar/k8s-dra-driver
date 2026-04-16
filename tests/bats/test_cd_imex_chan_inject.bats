@@ -15,6 +15,7 @@ setup () {
 }
 
 @test "CDs: IMEX channel injection (single)" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires IMEX daemon"; fi
   log_objects
   apply_check_delete_workload_imex_chan_inject
 }
@@ -22,6 +23,7 @@ setup () {
 
 # bats test_tags=fastfeedback
 @test "CDs: IMEX channel injection (all)" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires IMEX daemon"; fi
   log_objects
   # Example: with TEST_CHART_VERSION="v25.3.2-12390-chart"
   # the command below returns 0 (true: the tested version is smaller)

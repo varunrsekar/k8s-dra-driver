@@ -16,6 +16,7 @@ setup () {
 
 # bats test_tags=fastfeedback
 @test "CDs: nickelpie (NCCL send/recv/broadcast, 2 pods, 2 nodes, small payload)" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires multi-node NCCL"; fi
   # Do not run in checkout dir (to not pollute that).
   cd "${BATS_TEST_TMPDIR}"
   git clone https://github.com/jgehrcke/jpsnips-nv
@@ -38,6 +39,7 @@ setup () {
 # seen to take long. Maybe make this a prerequisite (to be pre-installed).
 # bats test_tags=fastfeedback
 @test "CDs: nvbandwidth (2 nodes, 2 GPUs each)" {
+  if [ "${MOCK_NVML:-}" = "true" ]; then skip "requires multi-node NVLink fabric"; fi
   kubectl create -f https://github.com/kubeflow/mpi-operator/releases/download/v0.6.0/mpi-operator.yaml || echo "ignore"
   kubectl apply -f demo/specs/imex/nvbandwidth-test-job-1.yaml
   # The canonical k8s job interface works even for MPIJob (the MPIJob has an

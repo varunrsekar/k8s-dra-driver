@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"sync"
 
@@ -571,8 +572,13 @@ func (s *DeviceState) applyComputeDomainDaemonConfig(ctx context.Context, config
 	// /proc/driver/nvidia/capabilities/fabric-imex-mgmt if IMEX is supported
 	// (if we want to start the IMEX daemon process in the CD daemon pod).
 	if s.computeDomainManager.cliqueID != "" {
+		nvcapPath := nvidiaCapFabricImexMgmtPath
+		if common.UsingAltProcDevices() {
+			nvcapPath = filepath.Join(s.config.flags.containerDriverRoot, "proc/driver/nvidia/capabilities/fabric-imex-mgmt")
+		}
+
 		// Parse the device node info for the fabric-imex-mgmt nvcap.
-		nvcapDeviceInfo, err := common.ParseNVCapDeviceInfo(nvidiaCapFabricImexMgmtPath)
+		nvcapDeviceInfo, err := common.ParseNVCapDeviceInfo(nvcapPath)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing nvcap device info for fabric-imex-mgmt: %w", err)
 		}
