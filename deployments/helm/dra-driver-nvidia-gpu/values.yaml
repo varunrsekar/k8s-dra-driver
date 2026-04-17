@@ -154,7 +154,9 @@ webhook:
   podAnnotations: {}
   podSecurityContext: {}
   nodeSelector: {}
-  tolerations: []
+  tolerations:
+  - key: CriticalAddonsOnly
+    operator: Exists
   affinity: {}
   containers:
     webhook:
