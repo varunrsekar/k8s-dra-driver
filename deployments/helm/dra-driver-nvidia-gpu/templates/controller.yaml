@@ -81,10 +81,16 @@ spec:
               fieldPath: metadata.name
         - name: NAMESPACE
           valueFrom:
-            fieldRef:
+            fieldRef: 
               fieldPath: metadata.namespace
         - name: IMAGE_NAME
           value: {{ include "dra-driver-nvidia-gpu.fullimage" . }}
+        {{- if .Values.imagePullSecrets }}
+        # Comma-separated secret names (from chart imagePullSecrets) for
+        # compute-domain-daemon DaemonSet pod specs.
+        - name: CD_DAEMON_IMAGE_PULL_SECRET_NAMES
+          value: "{{- range $i, $s := .Values.imagePullSecrets }}{{ if $i }},{{ end }}{{ $s.name }}{{ end }}"
+        {{- end }}
         # Use runc: explicit "void"; otherwise we inherit "all".
         - name: NVIDIA_VISIBLE_DEVICES
           value: void
