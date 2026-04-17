@@ -1,6 +1,6 @@
 # See the OWNERS docs at https://go.k8s.io/owners
 
-approvers:
+reviewers:
   - klueska
   - jgehrcke
   - shivamerla
@@ -8,3 +8,13 @@ approvers:
   - cdesiniotis
   - guptaNswati
   - tariq1890
+  - varunrsekar
+  - shengnuo
+  - visheshtanksale
+
+approvers:
+  - dims
+  - shivamerla
+  - varunrsekar
+  - klueska
+  - jgehrcke
