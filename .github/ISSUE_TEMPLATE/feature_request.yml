@@ -8,7 +8,7 @@ body:
       value: |
         Thank you for suggesting a feature. Please describe the problem you're trying to solve and your proposed solution.
 
-        > **Note:** Large features that introduce new feature gates or significant behavioral changes require a formal proposal. TBD
+        > **Note:** Large features that introduce new feature gates or significant behavioral changes require a formal proposal. See [docs/proposals/README.md](../../docs/proposals/README.md) for when and how to file one.
 
   - type: dropdown
     id: component
