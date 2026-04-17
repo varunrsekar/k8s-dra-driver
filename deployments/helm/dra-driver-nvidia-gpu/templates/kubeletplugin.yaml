@@ -95,9 +95,9 @@ spec:
           # example, when running under nvkind to limit the set GPUs governed
           # by the plugin even though it has cgroup access to all of them.
           if [ "${MASK_NVIDIA_DRIVER_PARAMS}" = "true" ]; then
-            cp /proc/driver/nvidia/params root/gpu-params
-            sed -i 's/^ModifyDeviceFiles: 1$/ModifyDeviceFiles: 0/' root/gpu-params
-            mount --bind root/gpu-params /proc/driver/nvidia/params
+            cp /proc/driver/nvidia/params /root/gpu-params
+            sed -i 's/^ModifyDeviceFiles: 1$/ModifyDeviceFiles: 0/' /root/gpu-params
+            mount --bind /root/gpu-params /proc/driver/nvidia/params
           fi
           compute-domain-kubelet-plugin -v $(LOG_VERBOSITY)
         resources:
@@ -212,9 +212,9 @@ spec:
           # example, when running under nvkind to limit the set GPUs governed
           # by the plugin even though it has cgroup access to all of them.
           if [ "${MASK_NVIDIA_DRIVER_PARAMS}" = "true" ]; then
-            cp /proc/driver/nvidia/params root/gpu-params
-            sed -i 's/^ModifyDeviceFiles: 1$/ModifyDeviceFiles: 0/' root/gpu-params
-            mount --bind root/gpu-params /proc/driver/nvidia/params
+            cp /proc/driver/nvidia/params /root/gpu-params
+            sed -i 's/^ModifyDeviceFiles: 1$/ModifyDeviceFiles: 0/' /root/gpu-params
+            mount --bind /root/gpu-params /proc/driver/nvidia/params
           fi
           gpu-kubelet-plugin -v $(LOG_VERBOSITY)
         resources:
