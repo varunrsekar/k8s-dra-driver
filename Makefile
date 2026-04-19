@@ -247,3 +247,19 @@ bats-gpu:
 image-build-and-copy-to-nodes:
 	make -f deployments/container/Makefile build
 	bash hack/copy-image-to-k8s-nodes.sh $(REGISTRY)/$(DRIVER_NAME):$(VERSION)
+
+# GCP + nvkind + GPU Operator e2e harness.
+# For local dev: set GCP_PROJECT=<your-project> and (optionally) GCE_ZONE,
+# which short-circuits Boskos. See hack/ci/gcp-nvkind/README.md.
+.PHONY: e2e-gcp-nvkind
+e2e-gcp-nvkind:
+	bash hack/ci/gcp-nvkind/e2e-test.sh
+
+# Run the Go/Ginkgo e2e suite against the current kubectl context. Assumes
+# the cluster already has GPU Operator (minimal mode) + the DRA driver
+# installed. The -tags=e2e build tag keeps this out of `make test`.
+.PHONY: test-e2e
+test-e2e:
+	ARTIFACTS=$${ARTIFACTS:-/tmp/test-e2e-artifacts}; mkdir -p $$ARTIFACTS; \
+	go test -mod=vendor -tags=e2e -v -timeout=30m ./test/e2e/... \
+	  -ginkgo.v -ginkgo.junit-report=$$ARTIFACTS/junit_01.xml
