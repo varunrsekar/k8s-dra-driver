@@ -20,15 +20,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"k8s.io/component-base/metrics"
 	"k8s.io/component-base/metrics/legacyregistry"
 )
 
 var (
 	registerOnce                  sync.Once
-	requestDurationSecondsBuckets = prometheus.ExponentialBuckets(0.05, 2, 9)
-	draRequestsTotal              = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	requestDurationSecondsBuckets = metrics.ExponentialBuckets(0.05, 2, 9)
+	draRequestsTotal              = metrics.NewCounterVec(
+		&metrics.CounterOpts{
 			Namespace: "nvidia_dra",
 			Name:      "requests_total",
 			Help:      "Total number of DRA prepare and unprepare requests.",
@@ -36,8 +36,8 @@ var (
 		[]string{"driver", "operation"},
 	)
 
-	draRequestDurationSeconds = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
+	draRequestDurationSeconds = metrics.NewHistogramVec(
+		&metrics.HistogramOpts{
 			Namespace: "nvidia_dra",
 			Name:      "request_duration_seconds",
 			Help:      "Duration of DRA prepare and unprepare requests.",
@@ -46,8 +46,8 @@ var (
 		[]string{"driver", "operation"},
 	)
 
-	draRequestsInFlight = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
+	draRequestsInFlight = metrics.NewGaugeVec(
+		&metrics.GaugeOpts{
 			Namespace: "nvidia_dra",
 			Name:      "requests_inflight",
 			Help:      "Number of in-flight DRA prepare and unprepare requests.",
@@ -55,8 +55,8 @@ var (
 		[]string{"driver", "operation"},
 	)
 
-	draPreparedDevices = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
+	draPreparedDevices = metrics.NewGaugeVec(
+		&metrics.GaugeOpts{
 			Namespace: "nvidia_dra",
 			Name:      "prepared_devices",
 			Help:      "Current number of prepared devices by device type.",
@@ -65,8 +65,8 @@ var (
 	)
 
 	// node_prepare_errors_total is scoped to kubelet node prepare failures.
-	nodePrepareErrorsTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	nodePrepareErrorsTotal = metrics.NewCounterVec(
+		&metrics.CounterOpts{
 			Namespace: "nvidia_dra",
 			Name:      "node_prepare_errors_total",
 			Help:      "Total number of failures during DRA node prepare for kubelet plugins.",
@@ -74,8 +74,8 @@ var (
 		[]string{"driver", "error_type"},
 	)
 
-	nodeUnprepareErrorsTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	nodeUnprepareErrorsTotal = metrics.NewCounterVec(
+		&metrics.CounterOpts{
 			Namespace: "nvidia_dra",
 			Name:      "node_unprepare_errors_total",
 			Help:      "Total number of failures during DRA node unprepare for kubelet plugins.",
@@ -86,7 +86,7 @@ var (
 
 func Register() {
 	registerOnce.Do(func() {
-		legacyregistry.RawMustRegister(
+		legacyregistry.MustRegister(
 			draRequestsTotal,
 			draRequestDurationSeconds,
 			draRequestsInFlight,

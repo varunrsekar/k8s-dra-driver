@@ -19,20 +19,20 @@ package metrics
 import (
 	"sync"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"k8s.io/component-base/metrics"
 	"k8s.io/component-base/metrics/legacyregistry"
 )
 
 var (
 	computeDomainClusterMetricsOnce sync.Once
-	computeDomains                  *prometheus.GaugeVec
+	computeDomains                  *metrics.GaugeVec
 
 	computeDomainLastStatus map[string]string // ComputeDomain UID -> last published status label
 )
 
 func initComputeDomainClusterMetrics() {
-	computeDomains = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
+	computeDomains = metrics.NewGaugeVec(
+		&metrics.GaugeOpts{
 			Namespace: "nvidia_dra",
 			Name:      "compute_domain_info",
 			Help:      "Current number of ComputeDomain custom resources in the cluster as seen by compute-domain-controller, partitioned by compute domain status.",
@@ -46,7 +46,7 @@ func initComputeDomainClusterMetrics() {
 func registerComputeDomainClusterMetrics() {
 	computeDomainClusterMetricsOnce.Do(func() {
 		initComputeDomainClusterMetrics()
-		legacyregistry.RawMustRegister(computeDomains)
+		legacyregistry.MustRegister(computeDomains)
 	})
 }
 
