@@ -97,7 +97,11 @@ FILTER='!version-specific'
 if [ "${GPU_COUNT}" -lt 2 ]; then
   FILTER="${FILTER},!multi-gpu"
 fi
-# busGrind is slow and can hang on V100/A10/GH200 — only run on H100+.
+# busGrind ships only in NVIDIA's cuda-demo-suite-* apt package, which is
+# published for x86_64 but not for sbsa/arm64 (confirmed against NVIDIA's
+# public CUDA apt repo). On V100/A10 it is also prone to hang. Gate
+# accordingly; revisit the gh200 entry if NVIDIA ever publishes
+# cuda-demo-suite for sbsa.
 case "${LAMBDA_GPU_TYPE}" in
   *v100*|*a10|*gh200*) FILTER="${FILTER},!gpu-busgrind" ;;
 esac
