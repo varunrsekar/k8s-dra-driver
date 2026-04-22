@@ -176,7 +176,7 @@ runner-image:
 # suite/file 'setup' in bats, but we'd lose output on success). During dev, you
 # may want to add --show-output-of-passing-tests (and read bats docs for other
 # cmdline args).
-.PHONY: tests-gpu tests-gpu-single tests-cd
+.PHONY: tests-gpu tests-gpu-single tests-gpu-a10 tests-cd
 
 # Single-GPU-safe subset. Suitable for CI environments with one GPU and no
 # GPU Operator (e.g., Lambda Cloud). Excludes test_basics.bats (expects GPU
@@ -206,6 +206,16 @@ tests-gpu-single: runner-image
 		tests/bats/test_gpu_basic.bats \
 		tests/bats/test_gpu_cuda_workloads.bats \
 		tests/bats/test_gpu_dynmig.bats \
+		tests/bats/test_gpu_sharing.bats \
+		tests/bats/test_gpu_robustness.bats \
+		tests/bats/test_gpu_extres.bats)
+
+# Stable single-GPU subset for pinned A10 Lambda CI. Derived from
+# tests-gpu-single, but excludes DynMIG.
+tests-gpu-a10: runner-image
+	$(call RUN_BATS, \
+		tests/bats/test_gpu_basic.bats \
+		tests/bats/test_gpu_cuda_workloads.bats \
 		tests/bats/test_gpu_sharing.bats \
 		tests/bats/test_gpu_robustness.bats \
 		tests/bats/test_gpu_extres.bats)

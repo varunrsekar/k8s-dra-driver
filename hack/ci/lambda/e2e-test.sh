@@ -17,7 +17,7 @@
 # Sources shared Lambda CI library from test-infra (available via Prow extra_refs).
 #
 # Required env: LAMBDA_API_KEY_FILE, JOB_NAME, BUILD_ID, ARTIFACTS (set by Prow)
-# Optional env: GPU_TYPE (default: gpu_1x_a10), K8S_VERSION (default: latest stable)
+# Optional env: GPU_TYPE (default: gpu_1x_a10), K8S_VERSION (default: latest stable), BATS_TARGET (default: tests-gpu-single)
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -126,6 +126,9 @@ case "${LAMBDA_GPU_TYPE}" in
 esac
 echo "Test filter: ${FILTER}, compute domains disabled: ${DISABLE_CD}"
 
+# Default CI target, overridable by test-infra job config.
+BATS_TARGET="${BATS_TARGET:-tests-gpu-single}"
+
 # --- Pre-cleanup: MIG teardown on host ---
 # Run MIG cleanup directly on the host where nvidia-smi is available.
 # The BATS Docker container uses the lambda nvmm stub (no-op).
@@ -157,10 +160,11 @@ export TEST_CHART_LOCAL=true
 export DISABLE_COMPUTE_DOMAINS=${DISABLE_CD}
 export TEST_FILTER_TAGS='${FILTER}'
 export GIT_COMMIT_SHORT=${GIT_COMMIT_SHORT}
+echo "Running BATS target: ${BATS_TARGET}"
 # Use lambda nvmm stub (no GPU Operator). MIG cleanup handled above.
 export NVMM_PATH=/cwd/tests/bats/lib/lambda
 
-make -f tests/bats/Makefile tests-gpu-single GIT_COMMIT_SHORT=${GIT_COMMIT_SHORT}
+make -f tests/bats/Makefile ${BATS_TARGET} GIT_COMMIT_SHORT=${GIT_COMMIT_SHORT}
 EOF
 
 # --- Collect artifacts ---
