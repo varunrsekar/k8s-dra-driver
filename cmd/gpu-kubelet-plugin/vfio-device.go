@@ -29,21 +29,30 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// Environment variable to enable toggling of GPU persistence mode during
+// vfio device preparation. This should be set if toggling of GPU persistence mode
+// is needed. When enabled, the GPU persistence mode will be disabled during
+// vfio device preparation and it will be set to legacy persistence mode during
+// vfio device unpreparation.
+// Note: Without setting this, vfio device preparation would break if
+// nvidia-persistenced is running.
+
 const (
-	kernelIommuGroupPath   = "/sys/kernel/iommu_groups"
-	vfioPciModule          = "vfio_pci"
-	vfioPciDriver          = "vfio-pci"
-	nvidiaDriver           = "nvidia"
-	hostRoot               = "/host-root"
-	sysModulePath          = "/sys/module"
-	pciDevicesPath         = "/sys/bus/pci/devices"
-	vfioDevicesRoot        = "/dev/vfio"
-	vfioDevicesPath        = "/dev/vfio/devices"
-	iommuDevicePath        = "/dev/iommu"
-	unbindFromDriverScript = "/usr/bin/unbind_from_driver.sh"
-	bindToDriverScript     = "/usr/bin/bind_to_driver.sh"
-	gpuFreeCheckInterval   = 1 * time.Second
-	gpuFreeCheckTimeout    = 60 * time.Second
+	kernelIommuGroupPath         = "/sys/kernel/iommu_groups"
+	vfioPciModule                = "vfio_pci"
+	vfioPciDriver                = "vfio-pci"
+	nvidiaDriver                 = "nvidia"
+	hostRoot                     = "/host-root"
+	sysModulePath                = "/sys/module"
+	pciDevicesPath               = "/sys/bus/pci/devices"
+	vfioDevicesRoot              = "/dev/vfio"
+	vfioDevicesPath              = "/dev/vfio/devices"
+	iommuDevicePath              = "/dev/iommu"
+	nvidiaPersistencedSocketPath = "/run/nvidia-persistenced/socket"
+	unbindFromDriverScript       = "/usr/bin/unbind_from_driver.sh"
+	bindToDriverScript           = "/usr/bin/bind_to_driver.sh"
+	gpuFreeCheckInterval         = 1 * time.Second
+	gpuFreeCheckTimeout          = 60 * time.Second
 )
 
 type VfioPciManager struct {
@@ -108,7 +117,7 @@ func (vm *VfioPciManager) WaitForGPUFree(ctx context.Context, info *VfioDeviceIn
 				klog.Errorf("Unexpected error checking if gpu device %q is free: %v", info.PciBusID, err)
 				continue
 			}
-			klog.Infof("gpu device %q has open fds by process(es): %s", info.PciBusID, string(out))
+			klog.V(4).Infof("gpu device %q has open fds by process(es): %s", info.PciBusID, string(out))
 		}
 	}
 }
@@ -260,7 +269,22 @@ func (vm *VfioPciManager) disableGPUPersistenceMode(pciAddress string) error {
 	// This is a cautious approach to avoid any NVML race conditions.
 	vm.Lock()
 	defer vm.Unlock()
-	return vm.nvlib.disableGPUPersistenceMode(pciAddress)
+	// We dont need to toggle persistence mode if nvidia-persistenced is not running.
+	klog.V(4).Infof("Checking if nvidia-persistenced is running: %s", filepath.Join(vm.containerDriverRoot, nvidiaPersistencedSocketPath))
+	_, err := os.Stat(filepath.Join(vm.containerDriverRoot, nvidiaPersistencedSocketPath))
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("error checking if nvidia-persistenced is running: %w", err)
+		}
+		klog.V(4).Infof("nvidia-persistenced is not running; nothing to do...")
+		return nil
+	}
+
+	err = vm.nvlib.disableGPUPersistenceMode(pciAddress)
+	if err != nil {
+		return fmt.Errorf("error disabling persistence mode for GPU %q: %w", pciAddress, err)
+	}
+	return nil
 }
 
 // Check if the vfio_pci module is loaded.

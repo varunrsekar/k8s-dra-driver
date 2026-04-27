@@ -1381,17 +1381,21 @@ func (l deviceLib) enableGPUPersistenceMode(pciAddress string) error {
 		return fmt.Errorf("error getting device handle by UUID: %v", ret)
 	}
 
+	// Check if persistence mode is already enabled.
+	mode, ret := nvml.DeviceGetPersistenceMode(device)
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("error getting persistence mode: %v", ret)
+	}
+	if mode == nvml.FEATURE_ENABLED {
+		klog.Infof("Persistence mode is already enabled for GPU PCI device %s", pciAddress)
+		return nil
+	}
+
 	ret = device.SetPersistenceMode(nvml.FEATURE_ENABLED)
 	if ret != nvml.SUCCESS {
 		return fmt.Errorf("error setting persistence mode: %v", ret)
 	}
-	mode, ret := device.GetPersistenceMode()
-	if ret != nvml.SUCCESS {
-		return fmt.Errorf("error getting persistence mode: %v", ret)
-	}
-	if mode != nvml.FEATURE_ENABLED {
-		return fmt.Errorf("persistence mode is not enabled: %v", mode)
-	}
+	klog.V(4).Infof("Enabled persistence mode for GPU PCI device %s", pciAddress)
 
 	return nil
 }
