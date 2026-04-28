@@ -619,6 +619,11 @@ func (l deviceLib) enumerateGpuVfioDevices(perGPUAllocatable *PerGPUAllocatableD
 }
 
 func (l deviceLib) getVfioDeviceInfo(idx int, device *nvpci.NvidiaPCIDevice) (*VfioDeviceInfo, error) {
+	iommuFDEnabled, err := checkIommuFDEnabled()
+	if err != nil {
+		return nil, fmt.Errorf("error checking if IOMMUFD is supported: %w", err)
+	}
+
 	var pciBusIDAttr *deviceattribute.DeviceAttribute
 	attr, err := deviceattribute.GetPCIBusIDAttribute(device.Address)
 	if err != nil {
@@ -649,6 +654,7 @@ func (l deviceLib) getVfioDeviceInfo(idx int, device *nvpci.NvidiaPCIDevice) (*V
 		vendorID:               fmt.Sprintf("0x%04x", device.Vendor),
 		numaNode:               device.NumaNode,
 		iommuGroup:             device.IommuGroup,
+		iommuFDEnabled:         iommuFDEnabled,
 		addressableMemoryBytes: memoryBytes,
 	}
 

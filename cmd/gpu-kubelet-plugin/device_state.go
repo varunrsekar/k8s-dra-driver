@@ -46,7 +46,8 @@ type OpaqueDeviceConfig struct {
 }
 
 type DeviceConfigState struct {
-	MpsControlDaemonID string `json:"mpsControlDaemonID"`
+	MpsControlDaemonID string              `json:"mpsControlDaemonID"`
+	Config             configapi.Interface `json:"-"` // don't serialize this.
 	containerEdits     *cdiapi.ContainerEdits
 }
 
@@ -96,7 +97,7 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 		cdilogger.SetOutput(io.Discard)
 	}
 
-	cdi, err := NewCDIHandler(
+	cdiOptions := []cdiOption{
 		WithNvml(nvdevlib.nvmllib),
 		WithDeviceLib(nvdevlib),
 		WithDriverRoot(string(containerDriverRoot)),
@@ -105,7 +106,16 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 		WithNVIDIACDIHookPath(config.flags.nvidiaCDIHookPath),
 		WithCDIRoot(config.flags.cdiRoot),
 		WithLogger(cdilogger),
-	)
+	}
+	var vfioCDIHandler *vfioCDIHandler
+	if featuregates.Enabled(featuregates.PassthroughSupport) {
+		vfioCDIHandler, err = NewVfioCDIHandler()
+		if err != nil {
+			return nil, fmt.Errorf("unable to create vfio CDI handler: %w", err)
+		}
+		cdiOptions = append(cdiOptions, WithVfioCDIHandler(vfioCDIHandler))
+	}
+	cdi, err := NewCDIHandler(cdiOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create CDI handler: %w", err)
 	}
@@ -1015,8 +1025,23 @@ func (s *DeviceState) applySharingConfig(ctx context.Context, config configapi.S
 }
 
 func (s *DeviceState) applyVfioDeviceConfig(ctx context.Context, config *configapi.VfioDeviceConfig, claim *resourceapi.ResourceClaim, results []*resourceapi.DeviceRequestAllocationResult) (*DeviceConfigState, error) {
-	var configState DeviceConfigState
+	configState := DeviceConfigState{
+		Config: config,
+	}
 
+	// Add common vfio device container edits to the group config. This is
+	// configuring vfio devices only for a specific group. Its assumed that
+	// there is only a single vfio device configuration applied in the
+	// resourceclaim for all its requests. This means there's only a single
+	// prepared devices group and these edits are never duplicated. This
+	// implicitly assumptes that other device types are not present in the
+	// resourceclaim allocation.
+	commonEdits, err := s.cdi.vfiocdi.GetCommonEdits(config.Iommu.ShouldEnableAPIDevice(), config.Iommu.ShouldPreferIommuFD())
+	if err != nil {
+		return nil, fmt.Errorf("error getting common vfio device container edits: %w", err)
+	}
+
+	configState.containerEdits = commonEdits
 	// Configure the vfio-pci devices.
 	for _, r := range results {
 		device := s.perGPUAllocatable.GetAllocatableDevice(r.Device)
