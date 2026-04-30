@@ -95,6 +95,16 @@ func NewVfioPciManager(containerDriverRoot string, hostDriverRoot string, nvlib 
 	return vm, nil
 }
 
+// WaitForGPUFree does a best effort scan of the GPU clients running on the host and
+// waits for them to exit on their own.
+//
+// This polls the GPU's /dev/nvidia* device node in the driver installation path on
+// the host periodically to see if any process has open fds to it. This acts as a
+// limited safety net to ensure that we don't mistakenly try to unbind a GPU from
+// the nvidia driver while it is busy.
+// Note: Here, we can only check if there are any GPU clients running on the host rootfs
+// where the driver is installed. If you have containerized GPU clients that work
+// with their own view of the device nodes, we will not able to detect it.
 func (vm *VfioPciManager) WaitForGPUFree(ctx context.Context, info *VfioDeviceInfo) error {
 	if info.parent == nil {
 		return nil
@@ -104,20 +114,24 @@ func (vm *VfioPciManager) WaitForGPUFree(ctx context.Context, info *VfioDeviceIn
 	defer ticker.Stop()
 
 	gpuDeviceNode := filepath.Join(vm.hostDriverRoot, "dev", fmt.Sprintf("nvidia%d", info.parent.minor))
+	var err error
 	for {
 		select {
 		case <-timeout:
-			return fmt.Errorf("timed out waiting for gpu to be free")
+			return fmt.Errorf("timed out waiting for gpu to be free: %w", err)
 		case <-ticker.C:
-			out, err := execCommandWithChroot(hostRoot, "fuser", []string{gpuDeviceNode}) //nolint:gosec
-			if err != nil {
-				if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			out, cmdErr := execCommandWithChroot(hostRoot, "fuser", []string{gpuDeviceNode}) //nolint:gosec
+			if cmdErr != nil {
+				// fuser returns exit code 1 if no process is using the device.
+				if exitErr, ok := cmdErr.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 					return nil
 				}
-				klog.Errorf("Unexpected error checking if gpu device %q is free: %v", info.PciBusID, err)
+				err = fmt.Errorf("unexpected error checking if gpu device %q is free: %w", info.PciBusID, cmdErr)
+				klog.V(6).Infof("[DEBUG] %w", err)
 				continue
 			}
-			klog.V(4).Infof("gpu device %q has open fds by process(es): %s", info.PciBusID, string(out))
+			err = fmt.Errorf("gpu device %q has open fds by process(es): %q", info.PciBusID, string(out))
+			klog.V(6).Infof("[DEBUG] %w", err)
 		}
 	}
 }
