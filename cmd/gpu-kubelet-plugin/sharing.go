@@ -105,6 +105,7 @@ type MpsControlDaemonTemplateData struct {
 	CUDA_VISIBLE_DEVICES            string //nolint:stylecheck
 	DefaultActiveThreadPercentage   string
 	DefaultPinnedDeviceMemoryLimits map[string]string
+	MultiUser                       bool
 	NvidiaDriverRoot                string
 	MpsShmDirectory                 string
 	MpsPipeDirectory                string
@@ -232,6 +233,7 @@ func (m *MpsControlDaemon) Start(ctx context.Context, config *configapi.MpsConfi
 		CUDA_VISIBLE_DEVICES:            strings.Join(deviceUUIDs, ","),
 		DefaultActiveThreadPercentage:   "",
 		DefaultPinnedDeviceMemoryLimits: nil,
+		MultiUser:                       false,
 		NvidiaDriverRoot:                m.manager.hostDriverRoot,
 		MpsShmDirectory:                 m.shmDir,
 		MpsPipeDirectory:                m.pipeDir,
@@ -251,6 +253,16 @@ func (m *MpsControlDaemon) Start(ctx context.Context, config *configapi.MpsConfi
 			return fmt.Errorf("error transforming DefaultPerDevicePinnedMemoryLimit into string: %w", err)
 		}
 		templateData.DefaultPinnedDeviceMemoryLimits = limits
+	}
+
+	if config != nil && config.MultiUser != nil {
+		templateData.MultiUser = *config.MultiUser
+		if templateData.MultiUser {
+			// multiuser mode requires architecture to be volta or newer
+			if err := ensureCapability(m.manager.nvdevlib.gpuInfosByUUID, m.devices.GpuUUIDs(), voltaCudaComputeCapability); err != nil {
+				return fmt.Errorf("multiuser mode was requested but is not supported: %w", err)
+			}
+		}
 	}
 
 	tmpl, err := template.ParseFiles(m.manager.templatePath)
