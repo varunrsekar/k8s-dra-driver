@@ -1,1 +1,0 @@
-../kind/build-dra-driver.sh
