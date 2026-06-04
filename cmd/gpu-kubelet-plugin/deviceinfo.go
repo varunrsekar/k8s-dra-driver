@@ -24,7 +24,10 @@ import (
 	resourceapi "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/dynamic-resource-allocation/deviceattribute"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
+
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/featuregates"
 )
 
 // Represents a specific, full, physical GPU device.
@@ -51,6 +54,17 @@ type GpuInfo struct {
 	// profiles.
 	maxCapacities PartCapacityMap
 	memSliceCount int
+
+	// Fabric Manager attributes. Populated only
+	// when an FM Manager is available and the GPU is visible to NVML at
+	// discovery time.
+	gpuModuleID int
+
+	// partitionsBySize maps an FM partition size (number of GPUs in the
+	// partition) to the partitionId of the partition of that size that
+	// includes this GPU. Used to publish the `partition1`/`partition2`/
+	// `partition4`/`partition8` device attributes.
+	partitionsBySize map[int]int
 }
 
 // Represents a specific (concrete, incarnated, created) MIG device. Annotated
@@ -273,5 +287,42 @@ func (d *VfioDeviceInfo) GetDevice() resourceapi.Device {
 		device.Attributes[d.pcieRootAttr.Name] = d.pcieRootAttr.Value
 	}
 
+	if featuregates.Enabled(featuregates.FabricManagerPartitioning) {
+		d.addFabricManagerAttributes(device.Attributes)
+	}
+
 	return device
+}
+
+// addFabricManagerAttributes publishes the Fabric Manager-derived attributes.
+// The gpuModuleId / partitionN values are owned by the parent GpuInfo (the FM
+// info always tracks the physical GPU, which is why it is resolved fresh on
+// the parent whenever the GPU is (re)discovered on the nvidia driver).
+func (d *VfioDeviceInfo) addFabricManagerAttributes(attrs map[resourceapi.QualifiedName]resourceapi.DeviceAttribute) {
+	if d.parent == nil {
+		klog.V(4).Infof("No parent GPU for %s; skipping Fabric Manager attributes", d.CanonicalName())
+		return
+	}
+
+	gpuModuleID := d.parent.gpuModuleID
+	partitionsBySize := d.parent.partitionsBySize
+	if gpuModuleID == 0 && len(partitionsBySize) == 0 {
+		klog.V(4).Infof("No Fabric Manager attributes for %s", d.CanonicalName())
+		return
+	}
+
+	klog.V(4).Infof("Adding Fabric Manager attributes for %s: gpuModuleId=%d partitionsBySize=%v",
+		d.CanonicalName(), gpuModuleID, partitionsBySize)
+	if gpuModuleID != 0 {
+		attrs["gpuModuleId"] = resourceapi.DeviceAttribute{
+			IntValue: ptr.To(int64(gpuModuleID)),
+		}
+	}
+
+	for size, partitionID := range partitionsBySize {
+		key := resourceapi.QualifiedName(fmt.Sprintf("partition%d", size))
+		attrs[key] = resourceapi.DeviceAttribute{
+			IntValue: ptr.To(int64(partitionID)),
+		}
+	}
 }

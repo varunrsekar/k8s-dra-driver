@@ -26,21 +26,30 @@ type root string
 
 // getDriverLibraryPath returns path to `libnvidia-ml.so.1` in the driver root.
 // The folder for this file is also expected to be the location of other driver files.
-func (r root) getDriverLibraryPath() (string, error) {
-	librarySearchPaths := []string{
-		"/usr/lib64",
-		"/usr/lib/x86_64-linux-gnu",
-		"/usr/lib/aarch64-linux-gnu",
-		"/lib64",
-		"/lib/x86_64-linux-gnu",
-		"/lib/aarch64-linux-gnu",
-	}
 
+var librarySearchPaths = []string{
+	"/usr/lib64",
+	"/usr/lib/x86_64-linux-gnu",
+	"/usr/lib/aarch64-linux-gnu",
+	"/lib64",
+	"/lib/x86_64-linux-gnu",
+	"/lib/aarch64-linux-gnu",
+}
+
+func (r root) getDriverLibraryPath() (string, error) {
 	libraryPath, err := r.findFile("libnvidia-ml.so.1", librarySearchPaths...)
 	if err != nil {
 		return "", err
 	}
 
+	return libraryPath, nil
+}
+
+func (r root) getFMLibraryPath() (string, error) {
+	libraryPath, err := r.findFile("libnvfm.so", librarySearchPaths...)
+	if err != nil {
+		return "", err
+	}
 	return libraryPath, nil
 }
 
