@@ -102,4 +102,4 @@ featureGates:
   IMEXDaemonsWithDNSNames: false
 ```
 
-See [Feature gates](../../reference/feature-gates.md) for all available gates.
+See [Feature gates](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/blob/main/pkg/featuregates/featuregates.go) for all available gates.

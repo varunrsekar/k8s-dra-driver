@@ -28,7 +28,7 @@ Full GPUs support two optional sharing strategies for cases where you want to di
 
 Target DeviceClass: `gpu.nvidia.com`
 
-See [Configure GPU Sharing](configure-sharing.md) for configuration examples.
+See [`demo/specs/quickstart/`](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/tree/main/demo/specs/quickstart) for configuration examples.
 
 ---
 
@@ -44,7 +44,7 @@ MIG slices support both time-slicing and MPS sharing, using the same strategies 
 
 Target DeviceClass: `mig.nvidia.com`
 
-See [Configure MIG](configure-mig.md) for configuration examples.
+See [`demo/specs/quickstart/`](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/tree/main/demo/specs/quickstart) for MIG configuration examples.
 
 ---
 
@@ -56,7 +56,7 @@ VFIO passthrough has no sharing options; one container gets one GPU.
 
 Target DeviceClass: `vfio.gpu.nvidia.com`
 
-Requires the `PassthroughSupport` feature gate (Alpha, default: false). See [Feature gates](reference/feature-gates.md) to enable it.
+Requires the `PassthroughSupport` feature gate (Alpha, default: false). See [Feature gates](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/blob/main/pkg/featuregates/featuregates.go) to enable it.
 
 ---
 

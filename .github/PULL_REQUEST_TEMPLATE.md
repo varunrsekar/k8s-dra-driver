@@ -39,7 +39,7 @@ Include "action required" if users must change configs or manifests when upgradi
 
 <!--
 Link any supporting docs, e.g.:
-- updates under docs/ (design, MIG, IMEX, sharing, etc.)
+- updates under site/content/ (design, MIG, IMEX, sharing, etc.)
 - README or demo/ updates
 - related KEPs in kubernetes/enhancements
 Use permalinks (commit SHA) rather than branch links so references stay stable.

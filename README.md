@@ -42,7 +42,7 @@ For exploration and demonstration purposes, see the "demo" section below, and al
 
 ## Installation
 
-Configuration and installation instructions can for now be found in the [/docs folder](docs/install.md).
+Configuration and installation instructions are in the [documentation site](https://dra-driver-nvidia-gpu.sigs.k8s.io/docs/install/) ([source](site/content/docs/install.md)).
 
 ## A (kind) demo
 
