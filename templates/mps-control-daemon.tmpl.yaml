@@ -44,7 +44,7 @@ spec:
             export CUDA_MPS_LOG_DIRECTORY=/driver-root/var/log/nvidia-mps
           fi
 
-          $RUN "nvidia-cuda-mps-control -d"
+          $RUN "nvidia-cuda-mps-control -d{{ if .MultiUser }} -M{{ end }}"
           {{- if .DefaultActiveThreadPercentage }}
           $RUN "echo set_default_active_thread_percentage {{.DefaultActiveThreadPercentage}} | nvidia-cuda-mps-control"
           {{- end}}
