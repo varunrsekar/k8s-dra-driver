@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/urfave/cli/v2"
@@ -55,6 +56,8 @@ type Flags struct {
 	hostDriverRoot                string
 	nvidiaCDIHookPath             string
 	imageName                     string
+	imagePullSecrets              string
+	imagePullPolicy               string
 	kubeletRegistrarDirectoryPath string
 	kubeletPluginsDirectoryPath   string
 	healthcheckPort               int
@@ -63,8 +66,10 @@ type Flags struct {
 }
 
 type Config struct {
-	flags      *Flags
-	clientsets pkgflags.ClientSets
+	flags                *Flags
+	clientsets           pkgflags.ClientSets
+	imagePullSecretNames []string
+	imagePullPolicy      string
 }
 
 func (c Config) DriverPluginPath() string {
@@ -132,6 +137,18 @@ func newApp() *cli.App {
 			Required:    true,
 			Destination: &flags.imageName,
 			EnvVars:     []string{"IMAGE_NAME"},
+		},
+		&cli.StringFlag{
+			Name:        "image-pull-secrets",
+			Usage:       "Comma-separated imagePullSecret names for MPS control daemon Deployments (e.g. regcred,other). Empty string means none.",
+			Destination: &flags.imagePullSecrets,
+			EnvVars:     []string{"IMAGE_PULL_SECRETS"},
+		},
+		&cli.StringFlag{
+			Name:        "image-pull-policy",
+			Usage:       "Image pull policy for MPS control daemon Deployments. Empty string uses the Kubernetes default.",
+			Destination: &flags.imagePullPolicy,
+			EnvVars:     []string{"IMAGE_PULL_POLICY"},
 		},
 		&cli.StringFlag{
 			Name:        "kubelet-registrar-directory-path",
@@ -211,8 +228,10 @@ func newApp() *cli.App {
 			}
 
 			config := &Config{
-				flags:      flags,
-				clientsets: clientSets,
+				flags:                flags,
+				clientsets:           clientSets,
+				imagePullSecretNames: strings.Fields(strings.ReplaceAll(strings.TrimSpace(flags.imagePullSecrets), ",", " ")),
+				imagePullPolicy:      strings.TrimSpace(flags.imagePullPolicy),
 			}
 
 			return RunPlugin(c.Context, config)

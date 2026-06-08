@@ -275,6 +275,14 @@ spec:
               fieldPath: metadata.namespace
         - name: IMAGE_NAME
           value: {{ include "dra-driver-nvidia-gpu.fullimage" . }}
+        {{- if .Values.imagePullSecrets }}
+        # Comma-separated secret names (from chart imagePullSecrets) for
+        # dynamically created MPS control daemon Deployment pod specs.
+        - name: IMAGE_PULL_SECRETS
+          value: "{{- range $i, $s := .Values.imagePullSecrets }}{{ if $i }},{{ end }}{{ $s.name }}{{ end }}"
+        {{- end }}
+        - name: IMAGE_PULL_POLICY
+          value: "{{ .Values.image.pullPolicy }}"
         {{- if .Values.nvidiaCDIHookPath }}
         - name: NVIDIA_CDI_HOOK_PATH
           value: "{{ .Values.nvidiaCDIHookPath }}"

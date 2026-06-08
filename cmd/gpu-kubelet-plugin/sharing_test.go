@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // mockFileChecker implements fileChecker for tests.
@@ -61,4 +62,32 @@ func TestSetMpsShmMountPath(t *testing.T) {
 			require.Equal(t, tc.expectedMountPath, setMpsShmMountPath(checker))
 		})
 	}
+}
+
+func TestRenderMpsControlDaemonDeploymentImagePullSettings(t *testing.T) {
+	deployment, err := renderMpsControlDaemonDeployment(
+		filepath.Join("..", "..", "templates", "mps-control-daemon.tmpl.yaml"),
+		MpsControlDaemonTemplateData{
+			NodeName:                  "node-a",
+			MpsControlDaemonNamespace: "dra-driver-nvidia-gpu",
+			MpsControlDaemonName:      "mps-control-daemon-test",
+			CUDA_VISIBLE_DEVICES:      "GPU-0",
+			NvidiaDriverRoot:          "/",
+			MpsShmDirectory:           "/var/lib/kubelet/plugins/gpu.nvidia.com/mps/test/shm",
+			MpsPipeDirectory:          "/var/lib/kubelet/plugins/gpu.nvidia.com/mps/test/pipe",
+			MpsLogDirectory:           "/var/lib/kubelet/plugins/gpu.nvidia.com/mps/test/log",
+			MpsImageName:              "registry.example.com/dra-driver:dev",
+			MpsImagePullPolicy:        "Always",
+			MpsImagePullSecretNames:   []string{"regcred", "mirrorcred"},
+			MpsShmMountPath:           MpsDefaultShmMountPath,
+		},
+	)
+	require.NoError(t, err)
+
+	require.Equal(t, []corev1.LocalObjectReference{
+		{Name: "regcred"},
+		{Name: "mirrorcred"},
+	}, deployment.Spec.Template.Spec.ImagePullSecrets)
+	require.Len(t, deployment.Spec.Template.Spec.Containers, 1)
+	require.Equal(t, corev1.PullAlways, deployment.Spec.Template.Spec.Containers[0].ImagePullPolicy)
 }
