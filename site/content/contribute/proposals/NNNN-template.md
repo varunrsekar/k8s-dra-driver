@@ -15,7 +15,7 @@ Before writing this, pause and check:
 - If you can't yet write a one-paragraph release note for this change, you
   aren't ready to propose it.
 - Small changes (a flag, a config knob, a local refactor) go straight to
-  a PR. See docs/proposals/README.md for when a proposal is actually
+  a PR. See [Enhancement proposals](_index.md) for when a proposal is actually
   needed.
 -->
 
@@ -138,7 +138,7 @@ removal is painful.
 Does this introduce a feature gate? If yes:
 - Target stability at ship time (Alpha / Beta / Stable).
 - If not Stable, what does graduation to the next level require? Use the
-  project's three criteria (see docs/proposals/README.md): feature
+  project's three criteria (see [Enhancement proposals](_index.md)): feature
   completeness, interoperability (name the adjacent features), stability
   and soak time.
 - Which existing feature gates is this mutually exclusive with, or does it

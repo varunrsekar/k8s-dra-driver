@@ -92,9 +92,9 @@ sequenceDiagram
 
 ## Reference
 
-For opaque config types and CRD definitions: [API reference](../reference/api.md)
+For opaque config types and CRD definitions: [API types](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/tree/main/api/nvidia.com/resource/v1beta1)
 
-For available feature flags and their defaults: [Feature gates](../reference/feature-gates.md)
+For available feature flags and their defaults: [Feature gates](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/blob/main/pkg/featuregates/featuregates.go)
 
 For DeviceClasses shipped by the chart: [`deviceclass-*.yaml`](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/tree/main/deployments/helm/dra-driver-nvidia-gpu/templates)
 

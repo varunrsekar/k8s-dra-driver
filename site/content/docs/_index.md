@@ -47,5 +47,5 @@ The fabric is torn down automatically when the workload finishes.
 ## Learn more
 
 - [Architecture](concepts/architecture.md) — components, request flows, and reference links.
-- [API reference](reference/api.md) — opaque config types for `ResourceClaim` specs.
-- [Feature gates](reference/feature-gates.md) — available feature flags and their defaults.
+- [API types](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/tree/main/api/nvidia.com/resource/v1beta1) — opaque config types for `ResourceClaim` specs.
+- [Feature gates](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/blob/main/pkg/featuregates/featuregates.go) — available feature flags and their defaults.
