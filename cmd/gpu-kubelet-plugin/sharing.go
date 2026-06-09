@@ -111,6 +111,8 @@ type MpsControlDaemonTemplateData struct {
 	MpsPipeDirectory                string
 	MpsLogDirectory                 string
 	MpsImageName                    string
+	MpsImagePullPolicy              string
+	MpsImagePullSecretNames         []string
 	FeatureGates                    map[string]bool
 	MpsShmMountPath                 string
 }
@@ -239,6 +241,8 @@ func (m *MpsControlDaemon) Start(ctx context.Context, config *configapi.MpsConfi
 		MpsPipeDirectory:                m.pipeDir,
 		MpsLogDirectory:                 m.logDir,
 		MpsImageName:                    m.manager.config.flags.imageName,
+		MpsImagePullPolicy:              m.manager.config.imagePullPolicy,
+		MpsImagePullSecretNames:         m.manager.config.imagePullSecretNames,
 		FeatureGates:                    featuregates.ToMap(),
 		MpsShmMountPath:                 setMpsShmMountPath(osFileChecker{}),
 	}
@@ -265,26 +269,9 @@ func (m *MpsControlDaemon) Start(ctx context.Context, config *configapi.MpsConfi
 		}
 	}
 
-	tmpl, err := template.ParseFiles(m.manager.templatePath)
+	deployment, err := renderMpsControlDaemonDeployment(m.manager.templatePath, templateData)
 	if err != nil {
-		return fmt.Errorf("failed to parse template file: %w", err)
-	}
-
-	var deploymentYaml bytes.Buffer
-	if err := tmpl.Execute(&deploymentYaml, templateData); err != nil {
-		return fmt.Errorf("failed to execute template: %w", err)
-	}
-
-	var unstructuredObj unstructured.Unstructured
-	err = yaml.Unmarshal(deploymentYaml.Bytes(), &unstructuredObj)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal yaml: %w", err)
-	}
-
-	var deployment appsv1.Deployment
-	err = runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.UnstructuredContent(), &deployment)
-	if err != nil {
-		return fmt.Errorf("failed to convert unstructured data to typed object: %w", err)
+		return err
 	}
 
 	err = os.MkdirAll(m.shmDir, 0755)
@@ -320,7 +307,7 @@ func (m *MpsControlDaemon) Start(ctx context.Context, config *configapi.MpsConfi
 		return fmt.Errorf("error setting compute mode: %w", err)
 	}
 
-	_, err = m.manager.config.clientsets.Core.AppsV1().Deployments(m.namespace).Create(ctx, &deployment, metav1.CreateOptions{})
+	_, err = m.manager.config.clientsets.Core.AppsV1().Deployments(m.namespace).Create(ctx, deployment, metav1.CreateOptions{})
 	if errors.IsAlreadyExists(err) {
 		return nil
 	}
@@ -329,6 +316,32 @@ func (m *MpsControlDaemon) Start(ctx context.Context, config *configapi.MpsConfi
 	}
 
 	return nil
+}
+
+func renderMpsControlDaemonDeployment(templatePath string, templateData MpsControlDaemonTemplateData) (*appsv1.Deployment, error) {
+	tmpl, err := template.ParseFiles(templatePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse template file: %w", err)
+	}
+
+	var deploymentYaml bytes.Buffer
+	if err := tmpl.Execute(&deploymentYaml, templateData); err != nil {
+		return nil, fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	var unstructuredObj unstructured.Unstructured
+	err = yaml.Unmarshal(deploymentYaml.Bytes(), &unstructuredObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal yaml: %w", err)
+	}
+
+	var deployment appsv1.Deployment
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.UnstructuredContent(), &deployment)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert unstructured data to typed object: %w", err)
+	}
+
+	return &deployment, nil
 }
 
 func (m *MpsControlDaemon) AssertReady(ctx context.Context) error {

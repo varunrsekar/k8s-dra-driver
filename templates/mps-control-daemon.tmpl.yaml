@@ -18,9 +18,18 @@ spec:
     spec:
       nodeName: {{ .NodeName }}
       hostPID: true
+      {{- if .MpsImagePullSecretNames }}
+      imagePullSecrets:
+      {{- range .MpsImagePullSecretNames }}
+      - name: {{ . }}
+      {{- end }}
+      {{- end }}
       containers:
       - name: mps-control-daemon
         image: {{ .MpsImageName }}
+        {{- if .MpsImagePullPolicy }}
+        imagePullPolicy: {{ .MpsImagePullPolicy }}
+        {{- end }}
         securityContext:
           privileged: true
         command: [sh, -c]
