@@ -321,6 +321,10 @@ spec:
           mountPath: /host-root
           mountPropagation: HostToContainer
           readOnly: true
+        - name: lib-modules
+          mountPath: /lib/modules/
+          mountPropagation: HostToContainer
+          readOnly: true
         - name: sysfs
           mountPath: /sys/
           mountPropagation: Bidirectional
@@ -363,10 +367,17 @@ spec:
       {{- end }}
       {{- if and .Values.featureGates (and (hasKey .Values.featureGates "PassthroughSupport") .Values.featureGates.PassthroughSupport) }}
       # This is the root filesystem of the host. This is used to execute the required
-      # system commands on the host. For example, to check if a gpu's device node is free.
+      # system commands against the host FS. For example, to test and load the vfio-pci
+      # module variant for a GPU.
       - name: host-root
         hostPath:
           path: /
+          type: Directory
+      # This is needed by `https://github.com/NVIDIA/go-nvlib/pkg/nvpassthrough` pkg
+      # to detect the vfio-pci driver variant to use with a GPU.
+      - name: lib-modules
+        hostPath:
+          path: /lib/modules/
           type: Directory
       - name: sysfs
         hostPath:

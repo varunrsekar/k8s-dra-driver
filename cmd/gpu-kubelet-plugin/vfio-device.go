@@ -18,11 +18,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,8 +34,6 @@ import (
 
 const (
 	kernelIommuGroupPath         = "/sys/kernel/iommu_groups"
-	vfioPciModule                = "vfio_pci"
-	vfioPciDriver                = "vfio-pci"
 	nvidiaDriver                 = "nvidia"
 	sysModulePath                = "/sys/module"
 	pciDevicesPath               = "/sys/bus/pci/devices"
@@ -40,8 +41,6 @@ const (
 	vfioDevicesPath              = "/dev/vfio/devices"
 	iommuDevicePath              = "/dev/iommu"
 	nvidiaPersistencedSocketPath = "/run/nvidia-persistenced/socket"
-	unbindFromDriverScript       = "/usr/bin/unbind_from_driver.sh"
-	bindToDriverScript           = "/usr/bin/bind_to_driver.sh"
 	gpuFreeCheckInterval         = 1 * time.Second
 	gpuFreeCheckTimeout          = 60 * time.Second
 )
@@ -50,23 +49,11 @@ type VfioPciManager struct {
 	sync.Mutex
 	containerDriverRoot string
 	hostDriverRoot      string
-	driver              string
 	nvlib               *deviceLib
 	nvidiaEnabled       bool
 }
 
 func NewVfioPciManager(containerDriverRoot string, hostDriverRoot string, nvlib *deviceLib, nvidiaEnabled bool) (*VfioPciManager, error) {
-	if loaded, err := checkVfioPCIModuleLoaded(nvlib.hostRoot); err == nil {
-		if !loaded {
-			err = loadVfioPciModule(nvlib.hostRoot)
-			if err != nil {
-				return nil, fmt.Errorf("failed to load vfio_pci module: %w", err)
-			}
-		}
-	} else {
-		return nil, fmt.Errorf("error checking if vfio_pci module is loaded: %w", err)
-	}
-
 	iommuEnabled, err := checkIommuEnabled(nvlib.hostRoot)
 	if err != nil {
 		return nil, fmt.Errorf("error checking if IOMMU is enabled: %w", err)
@@ -78,7 +65,6 @@ func NewVfioPciManager(containerDriverRoot string, hostDriverRoot string, nvlib 
 	vm := &VfioPciManager{
 		containerDriverRoot: containerDriverRoot,
 		hostDriverRoot:      hostDriverRoot,
-		driver:              vfioPciDriver,
 		nvlib:               nvlib,
 		nvidiaEnabled:       nvidiaEnabled,
 	}
@@ -155,14 +141,27 @@ func (vm *VfioPciManager) Configure(ctx context.Context, info *VfioDeviceInfo) e
 		return fmt.Errorf("error getting driver details for GPU %q: %w", info.PciBusID, err)
 	}
 
+	vfioDriver := getVfioDriverName(info.vfioModule)
+
 	// Skip if the GPU is already bound to the vfio-pci driver.
-	if driver == vm.driver {
+	if driver == vfioDriver {
 		return nil
 	}
 
-	// Only support vfio-pci or nvidia (if vm.nvidiaEnabled) driver.
+	// Only support vfio-pci (or variant) or nvidia (if vm.nvidiaEnabled) driver.
 	if !vm.nvidiaEnabled || driver != nvidiaDriver {
-		return fmt.Errorf("GPU %q is bound to %q driver, expected %q or %q", info.PciBusID, driver, vm.driver, nvidiaDriver)
+		return fmt.Errorf("GPU %q is bound to %q driver, expected %q or %q", info.PciBusID, driver, vfioDriver, nvidiaDriver)
+	}
+
+	if loaded, err := vm.checkKernelModuleLoaded(info.vfioModule); err == nil {
+		if !loaded {
+			err = vm.loadKernelModule(info.vfioModule)
+			if err != nil {
+				return fmt.Errorf("failed to load module %q: %w", info.vfioModule, err)
+			}
+		}
+	} else {
+		return fmt.Errorf("error checking if module %q is loaded: %w", info.vfioModule, err)
 	}
 
 	// Disable GPU Persistence Mode.
@@ -183,13 +182,21 @@ func (vm *VfioPciManager) Configure(ctx context.Context, info *VfioDeviceInfo) e
 		return fmt.Errorf("error verifying disabled VFs: %w", err)
 	}
 
-	// Change the GPU driver to vfio-pci.
-	err = vm.changeDriver(info.PciBusID, vm.driver)
+	// Change the GPU driver to vfio-pci (or variant).
+	err = vm.changeDriver(info.PciBusID, vfioDriver)
 	if err != nil {
 		return fmt.Errorf("error changing driver for GPU %q: %w", info.PciBusID, err)
 	}
 
 	return nil
+}
+
+// The driver name of vfio_pci module (and its variants) can be derived
+// by substituting all occurrences of underscores `_` with dashes `-`.
+// Eg: Given the module `vfio_pci`, its corresponding driver name under
+// `/sys/bus/pci/drivers/` is `vfio-pci`.
+func getVfioDriverName(vfioModule string) string {
+	return strings.ReplaceAll(vfioModule, "_", "-")
 }
 
 // Unconfigure binds the GPU to the nvidia driver.
@@ -236,33 +243,14 @@ func (vm *VfioPciManager) changeDriver(pciAddress, driver string) error {
 		return nil
 	}
 
-	err = vm.unbindFromDriver(pciAddress)
+	err = vm.nvlib.nvpasst.Unbind(pciAddress)
 	if err != nil {
-		return err
+		return fmt.Errorf("error unbinding GPU %q from driver %q: %w", pciAddress, currentDriver, err)
 	}
-	err = vm.bindToDriver(pciAddress, driver)
-	if err != nil {
-		return err
-	}
-	return nil
-}
 
-// Unbind the GPU from the driver it is bound to.
-func (vm *VfioPciManager) unbindFromDriver(pciAddress string) error {
-	out, err := execCommand(unbindFromDriverScript, []string{pciAddress}) //nolint:gosec
+	err = vm.nvlib.nvpasst.BindToDriver(pciAddress, driver)
 	if err != nil {
-		klog.Errorf("Attempting to unbind %s from its driver failed; stdout: %s, err: %v", pciAddress, string(out), err)
-		return err
-	}
-	return nil
-}
-
-// Bind the GPU to the given driver.
-func (vm *VfioPciManager) bindToDriver(pciAddress, driver string) error {
-	out, err := execCommand(bindToDriverScript, []string{pciAddress, driver}) //nolint:gosec
-	if err != nil {
-		klog.Errorf("Attempting to bind %s to %s driver failed; stdout: %s, err: %v", pciAddress, driver, string(out), err)
-		return err
+		return fmt.Errorf("error binding GPU %q to driver %q: %w", pciAddress, driver, err)
 	}
 	return nil
 }
@@ -300,14 +288,14 @@ func (vm *VfioPciManager) disableGPUPersistenceMode(pciAddress string) error {
 	return nil
 }
 
-// Check if the vfio_pci module is loaded.
-func checkVfioPCIModuleLoaded(hostRoot string) (bool, error) {
-	f, err := os.Stat(filepath.Join(hostRoot, sysModulePath, vfioPciModule))
+// Check if the expected kernel module is loaded.
+func (vm *VfioPciManager) checkKernelModuleLoaded(module string) (bool, error) {
+	f, err := os.Stat(filepath.Join(vm.nvlib.hostRoot, sysModulePath, module))
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return false, nil
 		}
-		return false, fmt.Errorf("failed to check if vfio_pci module is loaded: %w", err)
+		return false, fmt.Errorf("failed to check if module %q is loaded: %w", module, err)
 	}
 
 	if !f.IsDir() {
@@ -317,9 +305,9 @@ func checkVfioPCIModuleLoaded(hostRoot string) (bool, error) {
 	return true, nil
 }
 
-// Load the vfio_pci module.
-func loadVfioPciModule(hostRoot string) error {
-	_, err := execCommandWithChroot(hostRoot, "modprobe", []string{vfioPciModule}) //nolint:gosec
+// Load given kernel module.
+func (vm *VfioPciManager) loadKernelModule(module string) error {
+	_, err := execCommandWithChroot(vm.nvlib.hostRoot, "modprobe", []string{module}) //nolint:gosec
 	if err != nil {
 		return err
 	}
@@ -367,9 +355,4 @@ func execCommandWithChroot(fsRoot, cmd string, args []string) ([]byte, error) {
 	chrootArgs := []string{fsRoot, cmd}
 	chrootArgs = append(chrootArgs, args...)
 	return exec.Command("chroot", chrootArgs...).CombinedOutput()
-}
-
-// Execute a command.
-func execCommand(cmd string, args []string) ([]byte, error) {
-	return exec.Command(cmd, args...).CombinedOutput()
 }
