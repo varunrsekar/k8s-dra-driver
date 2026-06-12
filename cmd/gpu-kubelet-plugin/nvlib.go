@@ -45,13 +45,14 @@ type deviceLib struct {
 	nvpci             nvpci.Interface
 	driverLibraryPath string
 	devRoot           string
+	hostRoot          string
 	nvidiaSMIPath     string
 	gpuInfosByUUID    map[string]*GpuInfo
 	gpuUUIDbyPCIBusID map[PCIBusID]string
 	devhandleByUUID   map[string]nvml.Device
 }
 
-func newDeviceLib(driverRoot root) (*deviceLib, error) {
+func newDeviceLib(driverRoot root, hostRoot root) (*deviceLib, error) {
 	driverLibraryPath, err := driverRoot.getDriverLibraryPath()
 	if err != nil {
 		return nil, fmt.Errorf("failed to locate driver libraries: %w", err)
@@ -74,6 +75,7 @@ func newDeviceLib(driverRoot root) (*deviceLib, error) {
 		nvmllib:           nvmllib,
 		driverLibraryPath: driverLibraryPath,
 		devRoot:           driverRoot.getDevRoot(),
+		hostRoot:          string(hostRoot),
 		nvidiaSMIPath:     nvidiaSMIPath,
 		nvpci:             nvpci,
 		gpuInfosByUUID:    make(map[string]*GpuInfo),
@@ -661,7 +663,7 @@ func (l deviceLib) enumerateGpuVfioDevices(perGPUAllocatable *PerGPUAllocatableD
 }
 
 func (l deviceLib) getVfioDeviceInfo(idx int, device *nvpci.NvidiaPCIDevice) (*VfioDeviceInfo, error) {
-	iommuFDEnabled, err := checkIommuFDEnabled()
+	iommuFDEnabled, err := checkIommuFDEnabled(l.hostRoot)
 	if err != nil {
 		return nil, fmt.Errorf("error checking if IOMMUFD is supported: %w", err)
 	}

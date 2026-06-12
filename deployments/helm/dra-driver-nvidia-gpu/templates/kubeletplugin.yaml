@@ -262,6 +262,10 @@ spec:
           value: void
         - name: CDI_ROOT
           value: /var/run/cdi
+        {{- if and .Values.featureGates (and (hasKey .Values.featureGates "PassthroughSupport") .Values.featureGates.PassthroughSupport) }}
+        - name: HOST_ROOT
+          value: "/host-root"
+        {{- end }}
         - name: NVIDIA_MIG_CONFIG_DEVICES
           value: all
         - name: NODE_NAME
