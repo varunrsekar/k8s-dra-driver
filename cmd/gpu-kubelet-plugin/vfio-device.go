@@ -34,7 +34,6 @@ const (
 	vfioPciModule                = "vfio_pci"
 	vfioPciDriver                = "vfio-pci"
 	nvidiaDriver                 = "nvidia"
-	hostRoot                     = "/host-root"
 	sysModulePath                = "/sys/module"
 	pciDevicesPath               = "/sys/bus/pci/devices"
 	vfioDevicesRoot              = "/dev/vfio"
@@ -57,9 +56,9 @@ type VfioPciManager struct {
 }
 
 func NewVfioPciManager(containerDriverRoot string, hostDriverRoot string, nvlib *deviceLib, nvidiaEnabled bool) (*VfioPciManager, error) {
-	if loaded, err := checkVfioPCIModuleLoaded(); err == nil {
+	if loaded, err := checkVfioPCIModuleLoaded(nvlib.hostRoot); err == nil {
 		if !loaded {
-			err = loadVfioPciModule()
+			err = loadVfioPciModule(nvlib.hostRoot)
 			if err != nil {
 				return nil, fmt.Errorf("failed to load vfio_pci module: %w", err)
 			}
@@ -68,7 +67,7 @@ func NewVfioPciManager(containerDriverRoot string, hostDriverRoot string, nvlib 
 		return nil, fmt.Errorf("error checking if vfio_pci module is loaded: %w", err)
 	}
 
-	iommuEnabled, err := checkIommuEnabled()
+	iommuEnabled, err := checkIommuEnabled(nvlib.hostRoot)
 	if err != nil {
 		return nil, fmt.Errorf("error checking if IOMMU is enabled: %w", err)
 	}
@@ -112,7 +111,7 @@ func (vm *VfioPciManager) WaitForGPUFree(ctx context.Context, info *VfioDeviceIn
 		case <-timeout:
 			return fmt.Errorf("timed out waiting for gpu to be free: %w", err)
 		case <-ticker.C:
-			out, cmdErr := execCommandWithChroot(hostRoot, "fuser", []string{gpuDeviceNode}) //nolint:gosec
+			out, cmdErr := execCommandWithChroot(vm.nvlib.hostRoot, "fuser", []string{gpuDeviceNode}) //nolint:gosec
 			if cmdErr != nil {
 				// fuser returns exit code 1 if no process is using the device.
 				if exitErr, ok := cmdErr.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
@@ -302,7 +301,7 @@ func (vm *VfioPciManager) disableGPUPersistenceMode(pciAddress string) error {
 }
 
 // Check if the vfio_pci module is loaded.
-func checkVfioPCIModuleLoaded() (bool, error) {
+func checkVfioPCIModuleLoaded(hostRoot string) (bool, error) {
 	f, err := os.Stat(filepath.Join(hostRoot, sysModulePath, vfioPciModule))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -319,7 +318,7 @@ func checkVfioPCIModuleLoaded() (bool, error) {
 }
 
 // Load the vfio_pci module.
-func loadVfioPciModule() error {
+func loadVfioPciModule(hostRoot string) error {
 	_, err := execCommandWithChroot(hostRoot, "modprobe", []string{vfioPciModule}) //nolint:gosec
 	if err != nil {
 		return err
@@ -329,7 +328,7 @@ func loadVfioPciModule() error {
 }
 
 // Check if IOMMU is enabled.
-func checkIommuEnabled() (bool, error) {
+func checkIommuEnabled(hostRoot string) (bool, error) {
 	f, err := os.Open(filepath.Join(hostRoot, kernelIommuGroupPath))
 	if os.IsNotExist(err) {
 		return false, nil
@@ -351,7 +350,7 @@ func checkIommuEnabled() (bool, error) {
 
 // Check if IOMMUFD is enabled.
 // We correlate the IOMMUFD support with the presence of the /dev/iommu API device.
-func checkIommuFDEnabled() (bool, error) {
+func checkIommuFDEnabled(hostRoot string) (bool, error) {
 	_, err := os.Stat(filepath.Join(hostRoot, iommuDevicePath))
 	if err != nil {
 		if os.IsNotExist(err) {
