@@ -114,6 +114,7 @@ resources:
 #   LoggingBetaOptions: true           # Kubernetes logging beta features
 #   NVMLDeviceHealthCheck: false       # GPU Health Checking using NVML
 #   HostManagedIMEXDaemon: false       # Gate allowing resources.computeDomains.imex.mode=hostManaged
+#   DRAListTypeAttributes: false       # Publish list-valued DRA device attributes
 featureGates: {}
 
 # Log verbosity for all components. Zero or greater, higher number means higher

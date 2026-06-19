@@ -84,6 +84,11 @@ const (
 	// driver behavior, it only unlocks the mode for clusters where
 	// the cluster admin owns the host nvidia-imex daemon lifecycle.
 	HostManagedIMEXDaemon featuregate.Feature = "HostManagedIMEXDaemon"
+
+	// DRAListTypeAttributes allows the GPU kubelet plugin to publish list-valued
+	// DRA device attributes. The cluster must have the Kubernetes feature gate
+	// of the same name enabled before enabling this in the driver.
+	DRAListTypeAttributes featuregate.Feature = "DRAListTypeAttributes"
 )
 
 // Feature gate Version fields use driver SemVer major.minor.
@@ -170,6 +175,13 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.VersionedSpecs{
 			Default:    false,
 			PreRelease: featuregate.Alpha,
 			Version:    version.MajorMinor(0, 5),
+		},
+	},
+	DRAListTypeAttributes: {
+		{
+			Default:    false,
+			PreRelease: featuregate.Alpha,
+			Version:    version.MajorMinor(0, 4),
 		},
 	},
 }
