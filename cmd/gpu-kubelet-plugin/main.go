@@ -60,6 +60,7 @@ type Flags struct {
 	imageName                     string
 	imagePullSecrets              string
 	imagePullPolicy               string
+	serviceAccountName            string
 	kubeletRegistrarDirectoryPath string
 	kubeletPluginsDirectoryPath   string
 	healthcheckPort               int
@@ -149,15 +150,21 @@ func newApp() *cli.App {
 		},
 		&cli.StringFlag{
 			Name:        "image-pull-secrets",
-			Usage:       "Comma-separated imagePullSecret names for MPS control daemon Deployments (e.g. regcred,other). Empty string means none.",
+			Usage:       "Comma-separated imagePullSecret names for rendering pod templates (e.g. for MPS control daemon Deployments). Empty string means none.",
 			Destination: &flags.imagePullSecrets,
 			EnvVars:     []string{"IMAGE_PULL_SECRETS"},
 		},
 		&cli.StringFlag{
 			Name:        "image-pull-policy",
-			Usage:       "Image pull policy for MPS control daemon Deployments. Empty string uses the Kubernetes default.",
+			Usage:       "Image pull policy to use for rendering pod templates (e.g. for MPS control daemon Deployments). Empty string uses the Kubernetes default.",
 			Destination: &flags.imagePullPolicy,
 			EnvVars:     []string{"IMAGE_PULL_POLICY"},
+		},
+		&cli.StringFlag{
+			Name:        "service-account-name",
+			Usage:       "Service account to use for rendering pod templates (e.g. for MPS control daemon Deployments). Empty string uses the Kubernetes default.",
+			Destination: &flags.serviceAccountName,
+			EnvVars:     []string{"SERVICE_ACCOUNT_NAME"},
 		},
 		&cli.StringFlag{
 			Name:        "kubelet-registrar-directory-path",
