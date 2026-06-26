@@ -30,6 +30,27 @@ To produce the same output Netlify builds for production, from `site/`:
 npm run build   # output written to ./public
 ```
 
+## Updating docs for a release
+
+When a new release is cut, the docs changes are:
+
+1. **Update the version params in [`site/hugo.toml`](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/blob/main/site/hugo.toml)**. Both values must be updated together:
+
+   ```toml
+   driver_version = "0.4.1"       # Helm chart version (no "v" prefix)
+   driver_release_tag = "v0.4.1"  # GitHub release tag
+   ```
+
+   These params are embedded in install command examples across the docs via `{{</* param "driver_version" */>}}`. Updating them here updates every code sample automatically.
+
+2. **Update [`site/content/docs/install.md`](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/blob/main/site/content/docs/install.md)** if the install procedure changed (new flags, new prerequisites, updated verification steps).
+
+3. **Update [`site/content/docs/upgrade.md`](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/blob/main/site/content/docs/upgrade.md)**. For a patch release (x.y.Z), add a short new section describing the upgrade from the previous version. For a minor or major release (x.Y.0), the existing upgrade content can be revised in place.
+
+4. **Update any concept or guide pages** that describe behavior that changed in the release.
+
+For reference, the release notes live in [`release-notes/`](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/tree/main/release-notes) at the repo root.
+
 ## Where to look for more details
 
 | If you need to know… | Look at |

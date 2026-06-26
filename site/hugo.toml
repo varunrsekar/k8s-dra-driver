@@ -55,6 +55,10 @@ enableGitInfo = true
 # Site-wide parameters
 [params]
   copyright = "The Kubernetes Authors"
+
+  # Latest published release. Update both when cutting a new release.
+  driver_version = "0.4.1"       # Helm chart version (no "v" prefix; used with --version)
+  driver_release_tag = "v0.4.1"  # GitHub release tag (used for source links)
   github_repo = "https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu"
   github_branch = "main"
   github_subdir = "site"

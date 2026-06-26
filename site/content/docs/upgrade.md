@@ -5,12 +5,40 @@ weight: 50
 description: Upgrading the driver between releases.
 ---
 
-Upgrade the DRA Driver for NVIDIA GPUs from `v25.12.0` to `v0.4.0` without disrupting existing workloads. For the full release summary, see the [v0.4.0 release notes](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/releases/tag/v0.4.0).
-
+This page covers upgrading the DRA Driver for NVIDIA GPUs between releases.
 
 ---
 
-## What changed
+## Upgrade from v0.4.0 to v0.4.1
+
+For the full release summary, see the [v0.4.1 release notes](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/releases/tag/v0.4.1).
+
+{{< highlight bash >}}
+helm upgrade -i nvidia-dra-driver-gpu oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu \
+    --version {{< param "driver_version" >}} \
+    --namespace nvidia-dra-driver-gpu \
+    --set gpuResourcesEnabledOverride=true
+{{< /highlight >}}
+
+Append any additional `--set` flags you used at install time. For example, `--set nvidiaDriverRoot=/run/nvidia/driver` if the NVIDIA GPU Operator manages your drivers.
+
+> **Note:** The `--set nameOverride=nvidia-dra-driver-gpu` flag is also is needed if this is your first upgrade to v0.4.0 or later. Refer to [Upgrade from v25.12.0 to v0.4.0](#upgrade-from-v25120-to-v040) for more details on that flag.
+
+After upgrading, confirm all driver pods are `Running` and `Ready`:
+
+```bash
+kubectl get pods -n nvidia-dra-driver-gpu
+```
+
+---
+
+## Upgrade from v25.12.0 to v0.4.0
+
+Upgrade the DRA Driver for NVIDIA GPUs from `v25.12.0` to `v0.4.0` without disrupting existing workloads. For the full release summary, see the [v0.4.0 release notes](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/releases/tag/v0.4.0).
+
+---
+
+### What changed
 
 The v0.4.0 release introduces several changes that affect how this upgrade is performed:
 
@@ -20,12 +48,12 @@ The v0.4.0 release introduces several changes that affect how this upgrade is pe
 - Starting in v0.4.0, the chart follows SemVer and `--version 0.4.0` is required on `helm install` and `helm upgrade`.
 - Once the cluster is on v0.4.0, downgrading to v25.12.0 is not supported. Two changes prevent downgrade: the kubelet plugin checkpoint format added a `BootID` field, and the `ComputeDomain` API now allows `numNodes` to be omitted. Plan this upgrade as forward-only. See the [v0.4.0 release notes](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/releases/tag/v0.4.0) for more details.
 
-## Before you begin
+### Before you begin
 
 - Collect the `--set` flags you used at install time (for example, `gpuResourcesEnabledOverride`, `nvidiaDriverRoot`, `webhook.enabled`). You will pass the same flags on `helm upgrade`.
 - If any node hit the "device cannot be reprepared after host reboot" issue ([#951](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/issues/951)) prior to v0.4.0, remove the kubelet plugin checkpoint file on that node before upgrading. The new BootID-aware checkpoint format in v0.4.0 only invalidates checkpoints that already carry a recorded BootID; legacy checkpoints written by v25.12.0 are otherwise assumed valid.
 
-## Upgrade procedure
+### Upgrade procedure
 
 Perform the following steps in order.
 
@@ -80,7 +108,7 @@ TEST SUITE: None
 
 > Note: Subsequent `helm upgrade` calls do not need `--set nameOverride=nvidia-dra-driver-gpu`. It is only required on the first upgrade to v0.4.0 or later.
 
-## Verify the upgrade
+### Verify the upgrade
 
 After `helm upgrade` completes, confirm the new pods are running and pre-existing workloads are still healthy.
 
@@ -118,7 +146,7 @@ gpu-test1               pod2-gpu-stmv8                                          
 
 Every claim that was bound before the upgrade should still report `allocated,reserved`.
 
-## Troubleshooting
+### Troubleshooting
 
 If a workload pod is in a non-`Running` state after the upgrade, capture the kubelet plugin logs from the node where the pod was scheduled:
 

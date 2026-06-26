@@ -25,13 +25,13 @@ By default, both resource plugins are enabled. If you only need one, the other c
 
 > **Note:** On GKE, include `--set nvidiaDriverRoot=/home/kubernetes/bin/nvidia` so the driver uses the default NVIDIA driver install path on GKE.
 
-```bash
+{{< highlight bash >}}
 helm install dra-driver-nvidia-gpu oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu \
-    --version 0.4.0 \
+    --version {{< param "driver_version" >}} \
     --create-namespace \
     --namespace dra-driver-nvidia-gpu \
     --set gpuResourcesEnabledOverride=true
-```
+{{< /highlight >}}
 
 Example output:
 
@@ -138,9 +138,9 @@ The following parameters are most commonly set at install time.
 
 To list all available parameters:
 
-```bash
-helm show values oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu --version 0.4.0
-```
+{{< highlight bash >}}
+helm show values oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu --version {{< param "driver_version" >}}
+{{< /highlight >}}
 
 ## Optional: Admission webhook
 
@@ -162,14 +162,14 @@ helm install \
 
 2. Enable the webhook by including `--set webhook.enabled=true` in the Helm install command. To use a pre-existing TLS secret instead of cert-manager, set `webhook.tls.mode=secret` and provide `webhook.tls.secret.name` and `webhook.tls.secret.caBundle`.
 
-```bash
+{{< highlight bash >}}
 helm install dra-driver-nvidia-gpu oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu \
-    --version 0.4.0 \
+    --version {{< param "driver_version" >}} \
     --create-namespace \
     --namespace dra-driver-nvidia-gpu \
     --set gpuResourcesEnabledOverride=true \
     --set webhook.enabled=true
-```
+{{< /highlight >}}
 
 Example output:
 
