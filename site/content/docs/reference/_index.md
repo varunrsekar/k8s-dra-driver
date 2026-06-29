@@ -10,3 +10,4 @@ Reference material for driver release {{< param driver_release_tag >}}. Update `
 - [API reference](api/)
 - [Feature gates](feature-gates/)
 - [Helm chart values](helm-values/)
+- [ResourceSlice device attributes](resourceslice-attributes/)

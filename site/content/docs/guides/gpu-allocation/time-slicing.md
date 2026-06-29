@@ -2,6 +2,8 @@
 title: Time-slicing
 linkTitle: Time-slicing
 weight: 40
+aliases:
+  - /docs/guides/time-slicing/
 description: Share a single GPU between multiple containers using CUDA time-slicing.
 ---
 
@@ -13,6 +15,8 @@ machine.
 Use time-slicing when you want to increase GPU utilization across workloads
 that do not run continuously — for example, multiple batch jobs or development
 containers that would otherwise sit idle waiting for their own dedicated GPU.
+For how time-slicing compares to MIG and the other sharing modes, refer to
+[Choosing a resource type](../../concepts/gpu-allocation.md#choosing-a-resource-type).
 
 ## Feature status
 
@@ -22,12 +26,12 @@ containers that would otherwise sit idle waiting for their own dedicated GPU.
 |---|---|---|
 | `TimeSlicingSettings` | `false` | Alpha |
 
-See the feature gates reference for all available gates.
+Refer to the [feature gates reference](../../reference/feature-gates.md) for all available gates.
 
 ## Prerequisites
 
-- The DRA Driver for NVIDIA GPUs must be installed. See [Installation](../install.md).
-- The `TimeSlicingSettings` feature gate must be enabled. See [Enabling the feature](#enabling-the-feature).
+- The DRA Driver for NVIDIA GPUs must be installed. Refer to [Installation](../../install.md).
+- The `TimeSlicingSettings` feature gate must be enabled. Refer to [Enabling the feature](#enabling-the-feature).
 
 ## Enabling the feature
 
@@ -36,7 +40,8 @@ Enable the `TimeSlicingSettings` feature gate with `helm upgrade`:
 ```bash
 helm upgrade dra-driver-nvidia-gpu oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu \
   --namespace dra-driver-nvidia-gpu \
-  --set featureGates.TimeSlicingSettings=true
+  --set featureGates.TimeSlicingSettings=true \
+  --set gpuResourcesEnabledOverride=true
 ```
 
 The GPU kubelet plugin and webhook must both restart for the change to take effect.
@@ -71,10 +76,9 @@ If omitted, `Default` is used.
 ### CEL selectors
 
 You can add a `selectors` block under `exactly` to target a specific GPU by
-model, UUID, or other attribute. CEL-based device selection is a standard
-Kubernetes DRA feature; see the
-[Kubernetes DRA documentation](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/)
-for details on the selector syntax and available attributes.
+model, UUID, or other attribute. Refer to
+[Request full GPUs](allocating-gpus.md#select-a-gpu-by-product-name) for CEL selector examples
+and available device attributes.
 
 ## Time-slicing example
 
@@ -113,7 +117,7 @@ Multiple pods can reuse the same template: Kubernetes automatically creates one
    ```
 
    The `deviceClassName: gpu.nvidia.com` is required — it selects a full GPU.
-   Set `interval` to the time-slice duration you need. See
+   Set `interval` to the time-slice duration you need. Refer to
    [Time-slice intervals](#time-slice-intervals) for the available values.
 
 2. Apply the manifest:
@@ -221,8 +225,8 @@ GPU.
 
    Both commands return the same GPU UUID, confirming the containers share one device.
 
-For additional examples, including time-slicing with CEL selectors, see the
-[`demo/specs/`](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/tree/main/demo/specs/)
+For additional examples, including time-slicing with CEL selectors, refer to the
+[`demo/specs/`](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/tree/{{< param driver_release_tag >}}/demo/specs/)
 directory in the repository.
 
 ## Limitations and considerations

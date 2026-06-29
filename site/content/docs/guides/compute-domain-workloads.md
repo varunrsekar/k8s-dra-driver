@@ -6,11 +6,11 @@ description: Create a ComputeDomain, claim a channel, and run a Multi-Node NVLin
 ---
 
 For background on what a `ComputeDomain` is and how it fits together, see
-[ComputeDomains](../../concepts/compute-domains.md).
+[ComputeDomains](../concepts/compute-domains.md).
 
 ## Prerequisites
 
-See [Prerequisites](../../prerequisites.md) for hardware and software requirements, including the ComputeDomain-specific requirements for Multi-Node NVLink hardware, GPU Feature Discovery, and `nvidia-imex` service configuration.
+Refer to [Prerequisites](../prerequisites.md) for hardware and software requirements, including the ComputeDomain-specific requirements for Multi-Node NVLink hardware, GPU Feature Discovery, and `nvidia-imex` service configuration.
 
 ## Create a ComputeDomain
 
