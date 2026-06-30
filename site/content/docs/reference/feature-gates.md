@@ -20,7 +20,9 @@ featureGates:
 Or pass them at install time:
 
 ```bash
-helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
+helm install dra-driver-nvidia-gpu oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu \
+    --version {{< param "driver_version" >}} \
+    --namespace dra-driver-nvidia-gpu \
     --set "featureGates.TimeSlicingSettings=true"
 ```
 
@@ -40,7 +42,7 @@ helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
 
 ## Constraints
 
-The following feature gate combinations are mutually exclusive and can not be enabled together.
+The following feature gate combinations are mutually exclusive and cannot be enabled together.
 
 | Combination | Reason |
 |---|---|

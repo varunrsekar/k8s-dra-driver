@@ -23,15 +23,17 @@ By default, both resource plugins are enabled. If you only need one, the other c
 - To disable ComputeDomain support, add `--set resources.computeDomains.enabled=false`.
 - To disable GPU allocation, add `--set resources.gpus.enabled=false`.
 
-> **Note:** On GKE, include `--set nvidiaDriverRoot=/home/kubernetes/bin/nvidia` so the driver uses the default NVIDIA driver install path on GKE.
+{{% alert title="Note" %}}
+On GKE, include `--set nvidiaDriverRoot=/home/kubernetes/bin/nvidia` so the driver uses the default NVIDIA driver install path on GKE.
+{{% /alert %}}
 
-{{< highlight bash >}}
+```bash
 helm install dra-driver-nvidia-gpu oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu \
     --version {{< param "driver_version" >}} \
     --create-namespace \
     --namespace dra-driver-nvidia-gpu \
     --set gpuResourcesEnabledOverride=true
-{{< /highlight >}}
+```
 
 Example output:
 
@@ -138,9 +140,9 @@ The following parameters are most commonly set at install time.
 
 For the full parameter list, see [Helm chart values](reference/helm-values/). To dump values from the chart:
 
-{{< highlight bash >}}
+```bash
 helm show values oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu --version {{< param "driver_version" >}}
-{{< /highlight >}}
+```
 
 ## Optional: Admission webhook
 
@@ -162,14 +164,14 @@ helm install \
 
 2. Enable the webhook by including `--set webhook.enabled=true` in the Helm install command. To use a pre-existing TLS secret instead of cert-manager, set `webhook.tls.mode=secret` and provide `webhook.tls.secret.name` and `webhook.tls.secret.caBundle`.
 
-{{< highlight bash >}}
+```bash
 helm install dra-driver-nvidia-gpu oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu \
     --version {{< param "driver_version" >}} \
     --create-namespace \
     --namespace dra-driver-nvidia-gpu \
     --set gpuResourcesEnabledOverride=true \
     --set webhook.enabled=true
-{{< /highlight >}}
+```
 
 Example output:
 
@@ -202,7 +204,9 @@ dra-driver-nvidia-gpu-webhook-6c9dd4956d-r4r7z      1/1     Running   0         
 
 Deploy a sample workload that allocates a GPU through the DRA Driver and verifies it is shared correctly between containers. For additional examples, see the [`demo/` folder](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/tree/main/demo) in the repository.
 
-> **Note:** GPU resource allocation must be enabled at install time (`--set gpuResourcesEnabledOverride=true`). If you installed with `--set resources.gpus.enabled=false`, skip this section.
+{{% alert title="Note" %}}
+GPU resource allocation must be enabled at install time (`--set gpuResourcesEnabledOverride=true`). If you installed with `--set resources.gpus.enabled=false`, skip this section.
+{{% /alert %}}
 
 1. Create a namespace for the test workload:
 
@@ -327,7 +331,9 @@ namespace "dra-gpu-share-test" deleted
 
 Deploy a sample workload that provisions an IMEX channel across NVLink-connected nodes and verifies the channel device is injected into the pod.
 
-> **Note:** This section requires Multi-Node NVLink (MNNVL) hardware.
+{{% alert title="Note" %}}
+This section requires Multi-Node NVLink (MNNVL) hardware.
+{{% /alert %}}
 
 1. Validate clique node labels. GPU Feature Discovery labels each MNNVL-capable node with `nvidia.com/gpu.clique`. Confirm all expected nodes have this label:
 

@@ -5,7 +5,7 @@ weight: 50
 description: Configure the DRA driver for NVIDIA GPUs for KubeVirt VFIO passthrough.
 ---
 
-KubeVirt can attach VFIO GPU devices to virtual machines through Kubernetes Dynamic Resource Allocation (DRA). This guide covers the NVIDIA DRA driver configuration needed for KubeVirt passthrough workloads.
+KubeVirt can attach VFIO GPU devices to virtual machines through Kubernetes Dynamic Resource Allocation (DRA). This guide covers the DRA Driver for NVIDIA GPUs configuration needed for KubeVirt passthrough workloads.
 
 For KubeVirt feature gates, VM fields, and VM examples, see the [KubeVirt user guide](https://kubevirt.io/user-guide/).
 
@@ -18,13 +18,13 @@ This guide uses two Alpha feature gates, both disabled by default:
 | `PassthroughSupport` | `false` | Alpha |
 | `DeviceMetadata` | `false` | Alpha |
 
-See the [feature gates reference](../reference/feature-gates.md) and [constraints](../reference/feature-gates.md#constraints) for details.
+See the [Feature gates](../reference/feature-gates/) and [constraints](../reference/feature-gates/#constraints) for details.
 
 ## Prerequisites
 
-- Meet the general driver [prerequisites](../prerequisites.md).
+- Meet the general driver [Prerequisites](../prerequisites/).
 - **IOMMU enabled** on GPU nodes. VFIO passthrough requires IOMMU; the GPU kubelet plugin fails to start with `PassthroughSupport` enabled if IOMMU is off.
-- Use **NVIDIA DRA driver v0.4.0 or later** with the **`PassthroughSupport`** and **`DeviceMetadata`** feature gates enabled.
+- Use **DRA Driver for NVIDIA GPUs v0.4.0 or later** with the **`PassthroughSupport`** and **`DeviceMetadata`** feature gates enabled.
 - Use **KubeVirt v1.8.0 or later** with the **`GPUsWithDRA`** feature gate enabled. This gate is enabled by default from KubeVirt v1.9.0, so it only needs to be set explicitly on v1.8.x.
 
 ## Limitations and considerations
@@ -36,12 +36,12 @@ Make sure each of the following is either not using the GPU being prepared, or i
 | Component | Notes |
 |---|---|
 | **display-manager (Xorg)** | **Must be disabled.** |
-| **nvidia-device-plugin** | **Must be disabled.** Not supported on the same node as the DRA driver, which already handles both container and passthrough allocation. Exclude it from these nodes with a node selector or taint. |
-| **nvidia-persistenced** | On DRA driver v0.4.0 or later, the driver automatically disables persistence mode on the target GPU before rebinding it to `vfio-pci` and restores it afterward, so the service can keep running. Older versions don't have this handling and require stopping the service manually. |
+| **nvidia-device-plugin** | **Must be disabled.** Not supported on the same node as the DRA Driver, which already handles both container and passthrough allocation. Exclude it from these nodes with a node selector or taint. |
+| **nvidia-persistenced** | On DRA Driver v0.4.0 or later, the DRA Driver automatically disables persistence mode on the target GPU before rebinding it to `vfio-pci` and restores it afterward, so the service can keep running. Older versions don't have this handling and require stopping the service manually. |
 | **dcgm** | Recommended to disable this service. **Note:** DCGM v4.5.0+ can automatically release GPUs when switching between the `nvidia` and `vfio-pci` drivers. |
 | **dcgm-exporter** | Recommended to disable this service. **Note:** dcgm-exporter v4.5.0+ has an experimental feature, `DCGM_EXPORTER_ENABLE_GPU_BIND_UNBIND_WATCH=true` (plus a poll frequency `DCGM_EXPORTER_GPU_BIND_UNBIND_POLL_INTERVAL=1s`), to automatically release GPUs when switching between the `nvidia` and `vfio-pci` drivers. Use with caution. |
 
-## Installing the NVIDIA DRA driver
+## Install the DRA Driver
 
 Install the driver with passthrough support and device metadata:
 
@@ -139,7 +139,7 @@ resourceclaimtemplate.resource.k8s.io/dra-gpu-claim-template created
 
 ### VfioDeviceConfig parameters
 
-The opaque `VfioDeviceConfig` block tells the NVIDIA DRA driver which VFIO device nodes to mount into virt-launcher through CDI.
+The opaque `VfioDeviceConfig` block tells the DRA Driver which VFIO device nodes to mount into virt-launcher through CDI.
 
 - **`enableAPIDevice: true`** — Mounts the VFIO control device `/dev/vfio/vfio` into the virt-launcher pod. KubeVirt **requires** this device to manage VFIO PCI assignments through libvirt.
 

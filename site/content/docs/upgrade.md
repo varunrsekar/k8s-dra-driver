@@ -13,16 +13,18 @@ This page covers upgrading the DRA Driver for NVIDIA GPUs between releases.
 
 For the full release summary, see the [v0.4.1 release notes](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/releases/tag/v0.4.1).
 
-{{< highlight bash >}}
+```bash
 helm upgrade -i nvidia-dra-driver-gpu oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu \
     --version {{< param "driver_version" >}} \
     --namespace nvidia-dra-driver-gpu \
     --set gpuResourcesEnabledOverride=true
-{{< /highlight >}}
+```
 
 Append any additional `--set` flags you used at install time. For example, `--set nvidiaDriverRoot=/run/nvidia/driver` if the NVIDIA GPU Operator manages your drivers.
 
-> **Note:** The `--set nameOverride=nvidia-dra-driver-gpu` flag is also is needed if this is your first upgrade to v0.4.0 or later. Refer to [Upgrade from v25.12.0 to v0.4.0](#upgrade-from-v25120-to-v040) for more details on that flag.
+{{% alert title="Note" %}}
+The `--set nameOverride=nvidia-dra-driver-gpu` flag is also needed if this is your first upgrade to v0.4.0 or later. Refer to [Upgrade from v25.12.0 to v0.4.0](#upgrade-from-v25120-to-v040) for more details on that flag.
+{{% /alert %}}
 
 After upgrading, confirm all driver pods are `Running` and `Ready`:
 
@@ -106,7 +108,9 @@ REVISION: 2
 TEST SUITE: None
 ```
 
-> Note: Subsequent `helm upgrade` calls do not need `--set nameOverride=nvidia-dra-driver-gpu`. It is only required on the first upgrade to v0.4.0 or later.
+{{% alert title="Note" %}}
+Subsequent `helm upgrade` calls do not need `--set nameOverride=nvidia-dra-driver-gpu`. It is only required on the first upgrade to v0.4.0 or later.
+{{% /alert %}}
 
 ### Verify the upgrade
 
