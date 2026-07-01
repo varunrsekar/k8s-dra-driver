@@ -5,7 +5,7 @@ weight: 10
 description: DRA Driver components and request flows.
 ---
 
-This repo ships two independent Kubernetes DRA drivers:
+The DRA Driver for NVIDIA GPUs delivers two independent Kubernetes DRA plugins:
 
 - `gpu.nvidia.com` - manages allocation of GPUs, including GPU sharing through MIG, Time-Slicing, and MPS, across both bare-metal and sandboxed environments.
 - `compute-domain.nvidia.com` - manages IMEX daemons and allocation of IMEX channel devices required for GPU memory sharing across OS domains on Multi-Node NVLink systems.

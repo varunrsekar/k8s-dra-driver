@@ -9,9 +9,7 @@ All types belong to API group `resource.nvidia.com/v1beta1`.
 
 ## GPU opaque configuration types
 
-These types are set as opaque configuration in `ResourceClaim` and `ResourceClaimTemplate` specs to configure GPU resources. 
-They are optional, omit them to use driver defaults.
-Some fields required feature gates to be enabled before using.
+These types are set as opaque configuration in `ResourceClaim` and `ResourceClaimTemplate` specs to configure GPU resources. They are optional; omit them to use driver defaults. Some fields require feature gates to be enabled.
 
 ### GpuConfig
 
@@ -87,7 +85,9 @@ sharing:
 | `sharing.strategy` | string | `TimeSlicing` or `MPS`. |
 | `sharing.mpsConfig` | object | MPS configuration. Same fields as `GpuConfig.sharing.mpsConfig`. Requires [`MPSSupport`](feature-gates.md). |
 
-> **Note:** `timeSlicingConfig` is not available for MIG devices. Time-slicing on MIG slices does not support interval configuration.
+{{% alert title="Note" %}}
+`timeSlicingConfig` is not available for MIG devices. Time-slicing on MIG slices does not support interval configuration.
+{{% /alert %}}
 
 
 ### VfioDeviceConfig
@@ -110,7 +110,9 @@ iommu:
 | `iommu.backendPolicy` | string | `LegacyOnly` (default) or `PreferIommuFD`. Selects the IOMMU backend used for device passthrough. |
 | `iommu.enableAPIDevice` | bool | Optional. Expose `/dev/iommu` or `/dev/vfio/vfio` to the workload. Defaults to `false`. Requires the [`DeviceMetadata`](feature-gates.md) feature gate. |
 
-> Requires [`PassthroughSupport`](feature-gates.md) (Alpha, default: false). `iommu.enableAPIDevice` additionally requires [`DeviceMetadata`](feature-gates.md) (Alpha, default: false).
+{{% alert title="Note" %}}
+Requires [`PassthroughSupport`](feature-gates.md) (Alpha, default: false). `iommu.enableAPIDevice` additionally requires [`DeviceMetadata`](feature-gates.md) (Alpha, default: false).
+{{% /alert %}}
 
 ## ComputeDomain CRDs
 
@@ -152,7 +154,9 @@ spec:
 | `status.nodes[].index` | integer | Deterministic index for the node within its clique. Used to map IPs to DNS names. |
 | `status.nodes[].status` | string | Per-node daemon readiness: `Ready` or `NotReady`. |
 
-> **Note:** Do not gate workload startup on `status.status`. The status field is informational. IMEX daemons start as soon as their local node joins without waiting for all peers.
+{{% alert title="Note" %}}
+Do not gate workload startup on `status.status`. The status field is informational. IMEX daemons start as soon as their local node joins without waiting for all peers.
+{{% /alert %}}
 
 
 ### ComputeDomainClique
@@ -163,7 +167,9 @@ Each `ComputeDomainClique` is namespaced to the driver namespace and named as `<
 
 The ComputeDomain plugin reads these objects to verify that the local IMEX daemon is ready before allowing a workload container to start.
 
-> Requires [`ComputeDomainCliques`](feature-gates.md) (Beta, default: true), which depends on [`IMEXDaemonsWithDNSNames`](feature-gates.md).
+{{% alert title="Note" %}}
+Requires [`ComputeDomainCliques`](feature-gates.md) (Beta, default: true), which depends on [`IMEXDaemonsWithDNSNames`](feature-gates.md).
+{{% /alert %}}
 
 #### Fields
 

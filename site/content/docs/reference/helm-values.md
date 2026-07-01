@@ -14,9 +14,9 @@ The authoritative source for defaults is [`values.yaml`](https://github.com/kube
 
 To list the full set of values for the current release:
 
-{{< highlight bash >}}
+```bash
 helm show values oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu --version {{< param driver_version >}}
-{{< /highlight >}}
+```
 
 ## Driver and host paths
 

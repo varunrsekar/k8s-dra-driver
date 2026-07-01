@@ -82,7 +82,7 @@ The `status.status` field reports `Ready` when all expected IMEX daemons have jo
 To see the `ComputeDomainClique` objects created for this domain:
 
 ```bash
-kubectl get computedomainclique -n nvidia-dra-driver-gpu
+kubectl get computedomainclique -n dra-driver-nvidia-gpu
 ```
 
 ## Feature gates

@@ -31,7 +31,7 @@ See the feature gates reference for all available gates.
 
 ## Enabling the feature
 
-Enable the TimeSlicing feature gate with `helm upgrade`:
+Enable the `TimeSlicingSettings` feature gate with `helm upgrade`:
 
 ```bash
 helm upgrade dra-driver-nvidia-gpu oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu \

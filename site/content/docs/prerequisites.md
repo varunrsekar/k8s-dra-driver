@@ -7,7 +7,9 @@ description: Cluster, node, and tooling requirements before installing the drive
 
 Cluster, software, and hardware requirements for the DRA Driver for NVIDIA GPUs.
 
-> Tip: Most of these prerequisites can be installed and managed for you by the [NVIDIA GPU Operator](#install-prerequisites-with-nvidia-gpu-operator).
+{{% alert title="Tip" %}}
+Most of these prerequisites can be installed and managed for you by the [NVIDIA GPU Operator](#install-prerequisites-with-nvidia-gpu-operator).
+{{% /alert %}}
 
 
 | Requirement | Version / Notes |
