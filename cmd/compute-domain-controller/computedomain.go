@@ -70,6 +70,12 @@ type ComputeDomainManager struct {
 	lister        nvlisters.ComputeDomainLister
 	mutationCache cache.MutationCache
 
+	// daemonSetManager and nodeManager are nil when the driver is configured
+	// for host-managed IMEX (see pkg/imex): in that mode the driver never
+	// creates DaemonSets or ComputeDomain node labels, so this machinery
+	// (including the DaemonSet manager's nested ComputeDomainClique/status
+	// tracking) is never constructed or started at all, rather than merely
+	// left unused.
 	daemonSetManager             *MultiNamespaceDaemonSetManager
 	resourceClaimTemplateManager *WorkloadResourceClaimTemplateManager
 	nodeManager                  *NodeManager
@@ -88,9 +94,11 @@ func NewComputeDomainManager(config *ManagerConfig) *ComputeDomainManager {
 		lister:   lister,
 	}
 
-	m.daemonSetManager = NewMultiNamespaceDaemonSetManager(config, m.Get, m.List, m.UpdateStatus)
+	if !config.imexConfig.EffectiveHostManaged() {
+		m.daemonSetManager = NewMultiNamespaceDaemonSetManager(config, m.Get, m.List, m.UpdateStatus)
+		m.nodeManager = NewNodeManager(config, m.Get)
+	}
 	m.resourceClaimTemplateManager = NewWorkloadResourceClaimTemplateManager(config, m.Get)
-	m.nodeManager = NewNodeManager(config, m.Get)
 
 	return m
 }
@@ -147,30 +155,38 @@ func (m *ComputeDomainManager) Start(ctx context.Context) (rerr error) {
 		return fmt.Errorf("informer cache sync for ComputeDomains failed")
 	}
 
-	if err := m.daemonSetManager.Start(ctx); err != nil {
-		return fmt.Errorf("error starting DaemonSet manager: %w", err)
+	if m.daemonSetManager != nil {
+		if err := m.daemonSetManager.Start(ctx); err != nil {
+			return fmt.Errorf("error starting DaemonSet manager: %w", err)
+		}
 	}
 
 	if err := m.resourceClaimTemplateManager.Start(ctx); err != nil {
 		return fmt.Errorf("error creating ResourceClaim manager: %w", err)
 	}
 
-	if err := m.nodeManager.Start(ctx); err != nil {
-		return fmt.Errorf("error starting Node manager: %w", err)
+	if m.nodeManager != nil {
+		if err := m.nodeManager.Start(ctx); err != nil {
+			return fmt.Errorf("error starting Node manager: %w", err)
+		}
 	}
 
 	return nil
 }
 
 func (m *ComputeDomainManager) Stop() error {
-	if err := m.daemonSetManager.Stop(); err != nil {
-		return fmt.Errorf("error stopping DaemonSet manager: %w", err)
+	if m.daemonSetManager != nil {
+		if err := m.daemonSetManager.Stop(); err != nil {
+			return fmt.Errorf("error stopping DaemonSet manager: %w", err)
+		}
 	}
 	if err := m.resourceClaimTemplateManager.Stop(); err != nil {
 		return fmt.Errorf("error stopping ResourceClaimTemplate manager: %w", err)
 	}
-	if err := m.nodeManager.Stop(); err != nil {
-		return fmt.Errorf("error stopping Node manager: %w", err)
+	if m.nodeManager != nil {
+		if err := m.nodeManager.Stop(); err != nil {
+			return fmt.Errorf("error stopping Node manager: %w", err)
+		}
 	}
 	if m.cancelContext != nil {
 		m.cancelContext()
@@ -251,7 +267,22 @@ func (m *ComputeDomainManager) RemoveFinalizer(ctx context.Context, uid string) 
 	return nil
 }
 
+// hostManaged reports whether the driver is configured for host-managed IMEX
+// (see pkg/imex), in which case the driver never creates per-ComputeDomain
+// DaemonSets, daemon ResourceClaimTemplates, or ComputeDomain node labels.
+func (m *ComputeDomainManager) hostManaged() bool {
+	return m.config.imexConfig.EffectiveHostManaged()
+}
+
 func (m *ComputeDomainManager) calculateGlobalStatus(cd *nvapi.ComputeDomain) string {
+	// In host-managed IMEX mode the controller does not track per-node daemon
+	// readiness (there are no driver-managed daemons), so Ready means only
+	// that the ComputeDomain was admitted and its workload
+	// ResourceClaimTemplate exists.
+	if m.hostManaged() {
+		return nvapi.ComputeDomainStatusReady
+	}
+
 	// Mark the ComputeDomain as not ready if not enough nodes are present in the nodes list.
 	if len(cd.Status.Nodes) < cd.Spec.NumNodes {
 		return nvapi.ComputeDomainStatusNotReady
@@ -314,6 +345,20 @@ func (m *ComputeDomainManager) onAddOrUpdate(ctx context.Context, obj any) error
 		return nil
 	}
 
+	// Host-managed IMEX reconciles a ComputeDomain
+	// with a much smaller set of objects (no DaemonSet, no node labels)
+	// so branch out early
+	if m.hostManaged() {
+		return m.onAddOrUpdateHostManaged(ctx, cd)
+	}
+	return m.onAddOrUpdateDriverManaged(ctx, cd)
+}
+
+// onAddOrUpdateDriverManaged reconciles a ComputeDomain under the default,
+// driver-managed model: the controller owns a per-ComputeDomain DaemonSet,
+// its daemon ResourceClaimTemplate, and ComputeDomain node labels, in
+// addition to the workload ResourceClaimTemplate.
+func (m *ComputeDomainManager) onAddOrUpdateDriverManaged(ctx context.Context, cd *nvapi.ComputeDomain) error {
 	if cd.GetDeletionTimestamp() != nil {
 		if err := m.resourceClaimTemplateManager.Delete(ctx, string(cd.UID)); err != nil {
 			return fmt.Errorf("error deleting ResourceClaimTemplate: %w", err)
@@ -372,6 +417,53 @@ func (m *ComputeDomainManager) onAddOrUpdate(ctx context.Context, obj any) error
 	// Change the global Status to reflect the number of ComputeDomain daemons connected.
 	if err := m.updateGlobalStatus(ctx, cd); err != nil {
 		return fmt.Errorf("error updating global status on ComputeDoimain '%s/%s': %w", cd.Namespace, cd.Name, err)
+	}
+
+	return nil
+}
+
+// onAddOrUpdateHostManaged reconciles a ComputeDomain under host-managed
+// IMEX: the cluster admin owns the host nvidia-imex daemon lifecycle, so
+// the controller only manages the workload ResourceClaimTemplate and the
+// ComputeDomain finalizer.
+func (m *ComputeDomainManager) onAddOrUpdateHostManaged(ctx context.Context, cd *nvapi.ComputeDomain) error {
+	if cd.GetDeletionTimestamp() != nil {
+		if err := m.resourceClaimTemplateManager.Delete(ctx, string(cd.UID)); err != nil {
+			return fmt.Errorf("error deleting ResourceClaimTemplate: %w", err)
+		}
+
+		if err := m.resourceClaimTemplateManager.RemoveFinalizer(ctx, string(cd.UID)); err != nil {
+			return fmt.Errorf("error removing finalizer on ResourceClaimTemplate: %w", err)
+		}
+
+		if err := m.resourceClaimTemplateManager.AssertRemoved(ctx, string(cd.UID)); err != nil {
+			return fmt.Errorf("error asserting removal of ResourceClaimTemplate: %w", err)
+		}
+
+		if err := m.RemoveFinalizer(ctx, string(cd.UID)); err != nil {
+			return fmt.Errorf("error removing finalizer: %w", err)
+		}
+
+		metrics.ForgetComputeDomain(string(cd.UID))
+		return nil
+	}
+
+	// Add the finalizer.
+	if err := m.addFinalizer(ctx, cd); err != nil {
+		return fmt.Errorf("error adding finalizer: %w", err)
+	}
+
+	// Create the workload ResourceClaimTemplate. Its manager adds and tracks
+	// its own finalizer on the template.
+	if _, err := m.resourceClaimTemplateManager.Create(ctx, cd.Namespace, cd.Spec.Channel.ResourceClaimTemplate.Name, cd); err != nil {
+		return fmt.Errorf("error creating ResourceClaimTemplate '%s/%s': %w", cd.Namespace, cd.Spec.Channel.ResourceClaimTemplate.Name, err)
+	}
+
+	// Mark the ComputeDomain Ready. Under host-managed IMEX this only means
+	// the ComputeDomain was admitted and the workload ResourceClaimTemplate
+	// exists; it says nothing about host nvidia-imex health.
+	if err := m.updateGlobalStatus(ctx, cd); err != nil {
+		return fmt.Errorf("error updating global status on ComputeDomain '%s/%s': %w", cd.Namespace, cd.Name, err)
 	}
 
 	return nil

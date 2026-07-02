@@ -361,6 +361,23 @@ func NewWorkloadResourceClaimTemplateManager(config *ManagerConfig, getComputeDo
 	return m
 }
 
+// channelAllocationModeFor decides the AllocationMode to request in the
+// workload ResourceClaimTemplate for a ComputeDomain.
+//
+// Under host-managed IMEX this always forces AllocationMode Single (channel
+// 0), regardless of what the ComputeDomain requested: host-managed IMEX only
+// ever has channel 0 to give out today. TODO: once the controller can assign
+// a unique IMEX channel per ComputeDomain, request that channel here instead.
+//
+// Otherwise (driver-managed), the ComputeDomain's own AllocationMode is used
+// as-is.
+func channelAllocationModeFor(cd *nvapi.ComputeDomain, hostManaged bool) string {
+	if hostManaged {
+		return nvapi.ComputeDomainChannelAllocationModeSingle
+	}
+	return cd.Spec.Channel.AllocationMode
+}
+
 func (m *WorkloadResourceClaimTemplateManager) Create(ctx context.Context, namespace, name string, cd *nvapi.ComputeDomain) (*resourceapi.ResourceClaimTemplate, error) {
 	rcts, err := getByComputeDomainUID[*resourceapi.ResourceClaimTemplate](ctx, m.mutationCache, string(cd.UID))
 	if err != nil {
@@ -375,7 +392,7 @@ func (m *WorkloadResourceClaimTemplateManager) Create(ctx context.Context, names
 
 	channelConfig := nvapi.DefaultComputeDomainChannelConfig()
 	channelConfig.DomainID = string(cd.UID)
-	channelConfig.AllocationMode = cd.Spec.Channel.AllocationMode
+	channelConfig.AllocationMode = channelAllocationModeFor(cd, m.config.imexConfig.EffectiveHostManaged())
 
 	templateData := ResourceClaimTemplateTemplateData{
 		Namespace:               namespace,

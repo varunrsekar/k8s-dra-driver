@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/dra-driver-nvidia-gpu/internal/info"
 	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/featuregates"
 	pkgflags "sigs.k8s.io/dra-driver-nvidia-gpu/pkg/flags"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/imex"
 	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/metrics"
 )
 
@@ -60,11 +61,14 @@ type Flags struct {
 	healthcheckPort               int
 	klogVerbosity                 int
 	gpuCliqueLabelEnabled         bool
+	imexMode                      string
+	imexIsolation                 string
 }
 
 type Config struct {
 	flags      *Flags
 	clientsets pkgflags.ClientSets
+	imexConfig imex.Config
 }
 
 func (c Config) DriverPluginPath() string {
@@ -167,6 +171,20 @@ func newApp() *cli.App {
 			Destination: &flags.gpuCliqueLabelEnabled,
 			EnvVars:     []string{"GPU_CLIQUE_LABEL_ENABLED"},
 		},
+		&cli.StringFlag{
+			Name:        "imex-mode",
+			Usage:       "IMEX deployment mode: driverManaged or hostManaged.",
+			Value:       string(imex.ModeDriverManaged),
+			Destination: &flags.imexMode,
+			EnvVars:     []string{"IMEX_MODE"},
+		},
+		&cli.StringFlag{
+			Name:        "imex-isolation",
+			Usage:       "IMEX isolation strategy: domain (default; all workloads in the same IMEX domain share channel 0) or channel (not yet supported).",
+			Value:       string(imex.IsolationIMEXDomain),
+			Destination: &flags.imexIsolation,
+			EnvVars:     []string{"IMEX_ISOLATION"},
+		},
 	}
 	cliFlags = append(cliFlags, flags.kubeClientConfig.Flags()...)
 	cliFlags = append(cliFlags, featureGateConfig.Flags()...)
@@ -198,6 +216,11 @@ func newApp() *cli.App {
 				return fmt.Errorf("feature gate validation failed: %w", err)
 			}
 
+			imexConfig := imex.Config{Mode: imex.Mode(flags.imexMode), Isolation: imex.Isolation(flags.imexIsolation)}
+			if err := imexConfig.Validate(featuregates.Enabled(featuregates.HostManagedIMEXDaemon)); err != nil {
+				return fmt.Errorf("imex configuration validation failed: %w", err)
+			}
+
 			clientSets, err := flags.kubeClientConfig.NewClientSets()
 			if err != nil {
 				return fmt.Errorf("create client: %w", err)
@@ -206,6 +229,7 @@ func newApp() *cli.App {
 			config := &Config{
 				flags:      flags,
 				clientsets: clientSets,
+				imexConfig: imexConfig,
 			}
 
 			return RunPlugin(c.Context, config)

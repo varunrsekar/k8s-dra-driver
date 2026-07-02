@@ -78,8 +78,11 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 		return nil, fmt.Errorf("failed to create device library: %w", err)
 	}
 
-	// Check driver version if IMEXDaemonsWithDNSNames feature gate is enabled
-	if featuregates.Enabled(featuregates.IMEXDaemonsWithDNSNames) {
+	// Check driver version if IMEXDaemonsWithDNSNames feature gate is
+	// enabled. DNS-named IMEX daemons are a driver-managed-only concept (the
+	// driver never creates IMEX daemons under host-managed IMEX), so this
+	// check does not apply there
+	if !config.imexConfig.EffectiveHostManaged() && featuregates.Enabled(featuregates.IMEXDaemonsWithDNSNames) {
 		if err := validateDriverVersionForIMEXDaemonsWithDNSNames(config.flags, nvdevlib); err != nil {
 			return nil, fmt.Errorf("driver version validation failed: %w", err)
 		}
@@ -589,6 +592,11 @@ func (s *DeviceState) unprepareDevices(ctx context.Context, cs *resourceapi.Reso
 	for c := range configResultsMap {
 		switch config := c.(type) {
 		case *configapi.ComputeDomainChannelConfig:
+			// Host-managed mode never adds the ComputeDomain node label, so
+			// there is nothing to remove here.
+			if s.config.imexConfig.EffectiveHostManaged() {
+				continue
+			}
 			// If a channel type, remove the ComputeDomain label from the node
 			if err := s.computeDomainManager.RemoveNodeLabel(ctx, config.DomainID); err != nil {
 				return fmt.Errorf("error removing Node label for ComputeDomain: %w", err)
@@ -622,6 +630,58 @@ func (s *DeviceState) applyComputeDomainChannelConfig(ctx context.Context, confi
 		return nil, fmt.Errorf("applyComputeDomainChannelConfig: unexpected results %v", results)
 	}
 
+	// Host-managed IMEX skips daemon bootstrap and readiness bookkeeping entirely,
+	// so the two modes are handled by separate functions instead of threading
+	// hostManaged checks through a shared code path.
+	if s.config.imexConfig.EffectiveHostManaged() {
+		return s.applyComputeDomainChannelConfigHostManaged(ctx, config, claim, results[0])
+	}
+	return s.applyComputeDomainChannelConfigDriverManaged(ctx, config, claim)
+}
+
+// applyComputeDomainChannelConfigHostManaged handles a channel claim when the
+// cluster admin (not the driver) owns the host nvidia-imex daemon. It skips the IMEX
+// daemon management and readiness checks completely.
+func (s *DeviceState) applyComputeDomainChannelConfigHostManaged(ctx context.Context, config *configapi.ComputeDomainChannelConfig, claim *resourceapi.ResourceClaim, result *resourceapi.DeviceRequestAllocationResult) (*DeviceConfigState, error) {
+	device, ok := s.allocatable[result.Device]
+	if !ok || device.Channel == nil {
+		return nil, fmt.Errorf("applyComputeDomainChannelConfigHostManaged: %q is not an allocatable IMEX channel device", result.Device)
+	}
+	channelID := device.Channel.ID
+
+	if err := s.assertImexChannelNotAllocated(channelID); err != nil {
+		return nil, fmt.Errorf("allocation failed: %w", err)
+	}
+
+	if err := s.computeDomainManager.AssertComputeDomainNamespace(ctx, claim.Namespace, config.DomainID); err != nil {
+		return nil, permanentError{fmt.Errorf("error asserting ComputeDomain's namespace: %w", err)}
+	}
+
+	configState := DeviceConfigState{
+		Type:          ComputeDomainChannelType,
+		ComputeDomain: config.DomainID,
+	}
+
+	if s.computeDomainManager.cliqueID == "" {
+		// Non-fabric node (e.g. not part of an MNNVL clique): do not inject
+		// IMEX channel device nodes, but let the claim succeed.
+		return &configState, nil
+	}
+
+	if channelID < 0 || channelID >= len(s.nvdevlib.nvCapImexChanDevInfos) {
+		return nil, fmt.Errorf("applyComputeDomainChannelConfigHostManaged: channel %d out of range (node has %d IMEX channels)",
+			channelID, len(s.nvdevlib.nvCapImexChanDevInfos))
+	}
+	edits := s.computeDomainManager.GetComputeDomainChannelContainerEdits(s.cdi.devRoot, s.nvdevlib.nvCapImexChanDevInfos[channelID])
+	configState.containerEdits = configState.containerEdits.Append(edits)
+
+	return &configState, nil
+}
+
+// applyComputeDomainChannelConfigDriverManaged handles a channel claim under
+// the default, driver-managed model where it adds necessary node labels and checks
+// the the IMEX daemon readiness.
+func (s *DeviceState) applyComputeDomainChannelConfigDriverManaged(ctx context.Context, config *configapi.ComputeDomainChannelConfig, claim *resourceapi.ResourceClaim) (*DeviceConfigState, error) {
 	// If explicitly requested, inject all channels instead of just one.
 	chancount := 1
 	if config.AllocationMode == configapi.ComputeDomainChannelAllocationModeAll {
@@ -667,6 +727,14 @@ func (s *DeviceState) applyComputeDomainChannelConfig(ctx context.Context, confi
 }
 
 func (s *DeviceState) applyComputeDomainDaemonConfig(ctx context.Context, config *configapi.ComputeDomainDaemonConfig, claim *resourceapi.ResourceClaim, results []*resourceapi.DeviceRequestAllocationResult) (*DeviceConfigState, error) {
+	// Host-managed IMEX runs no driver-managed ComputeDomain daemons, so
+	// daemon devices are never published or allocated. A daemon claim
+	// reaching Prepare means a stale or hand-crafted object; reject it
+	// permanently.
+	if s.config.imexConfig.EffectiveHostManaged() {
+		return nil, permanentError{fmt.Errorf("ComputeDomain daemon claims are not supported when imex.mode=hostManaged")}
+	}
+
 	// Get the list of claim requests this config is being applied over.
 	var requests []string
 	for _, r := range results {
