@@ -51,6 +51,47 @@ When a new release is cut, the docs changes are:
 
 For reference, the release notes live in [`release-notes/`](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/tree/main/release-notes) at the repo root.
 
+## Using version site variables in docs
+
+Two version params are defined under `[params]` in
+[`site/hugo.toml`](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/blob/main/site/hugo.toml):
+
+| Param | Example value | Use for |
+| --- | --- | --- |
+| `driver_version` | `0.4.1` (no `v` prefix) | Helm `--version` flags and any bare chart version |
+| `driver_release_tag` | `v0.4.1` (with `v` prefix) | GitHub source links to a tagged path |
+
+Use these params anywhere the docs refer to the current release:
+
+- **`driver_version`** — any command that takes `--version`, or prose that names the chart version.
+- **`driver_release_tag`** — any link to files or directories at a tagged release (for example `tree/{{< param driver_release_tag >}}/demo`), or prose that names the GitHub release tag.
+
+Do not hardcode version strings in docs content unless you are calling out behavior that is specific to a particular driver version (for example an upgrade note that applies only when moving from `0.3.x` to `0.4.0`).
+
+Reference the param with the Docsy `param` shortcode.
+
+In prose:
+
+```text
+Install driver release {{</* param driver_release_tag */>}} with chart version {{</* param "driver_version" */>}}.
+```
+
+In a fenced code block:
+
+```text
+helm install dra-driver-nvidia-gpu oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu \
+    --version {{</* param "driver_version" */>}} \
+    --create-namespace \
+    --namespace dra-driver-nvidia-gpu \
+    --set gpuResourcesEnabledOverride=true
+```
+
+For a link to a tagged source file, place `{{</* param driver_release_tag */>}}` in the GitHub URL after `/blob/`:
+
+[`values.yaml`](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/blob/{{< param driver_release_tag >}}/deployments/helm/dra-driver-nvidia-gpu/values.yaml)
+
+When adding syntax examples to this contribute page, escape shortcode delimiters in `text` code blocks (`{{</* ... */>}}`) so Hugo shows the source literally instead of substituting the current version.
+
 ## Where to look for more details
 
 | If you need to know… | Look at |
