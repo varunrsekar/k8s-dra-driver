@@ -549,7 +549,10 @@ func TestUnprepareMissingClaimIsNoop(t *testing.T) {
 }
 
 func hostManagedConfig() *Config {
-	return &Config{imexConfig: imex.Config{Mode: imex.ModeHostManaged, Isolation: imex.IsolationIMEXDomain}}
+	return &Config{
+		flags:      &Flags{imexHostSocketPath: defaultIMEXHostSocketPath},
+		imexConfig: imex.Config{Mode: imex.ModeHostManaged, Isolation: imex.IsolationIMEXDomain},
+	}
 }
 
 // TestApplyComputeDomainChannelConfigHostManagedIgnoresAllocationMode
@@ -711,6 +714,47 @@ func TestApplyComputeDomainChannelConfigHostManagedUsesAllocatedChannel(t *testi
 
 	require.Error(t, err, "channel 2 is already allocated by another claim, so this must fail")
 	assert.Contains(t, err.Error(), "channel 2 already allocated")
+}
+
+// TestApplyComputeDomainChannelConfigHostManagedRequiresHostIMEXReady confirms
+// that on a fabric node (non-empty cliqueID), a host-managed channel claim is
+// rejected when the operator's host nvidia-imex daemon cannot be validated as
+// ready (here: nvidia-imex-ctl isn't even present under the driver root).
+// This is the only readiness signal host-managed mode has, since there is no
+// driver-managed daemon to report ComputeDomain readiness.
+func TestApplyComputeDomainChannelConfigHostManagedRequiresHostIMEXReady(t *testing.T) {
+	cd := &configapi.ComputeDomain{
+		ObjectMeta: metav1.ObjectMeta{Name: "cd", Namespace: "default", UID: "cd-uid"},
+	}
+	factory := nvinformers.NewSharedInformerFactory(nvfake.NewSimpleClientset(), 0)
+	informer := factory.Resource().V1beta1().ComputeDomains().Informer()
+	require.NoError(t, informer.AddIndexers(cache.Indexers{"computeDomainUID": uidIndexer[*configapi.ComputeDomain]}))
+	require.NoError(t, informer.GetIndexer().Add(cd))
+
+	state := &DeviceState{
+		config:               hostManagedConfig(),
+		checkpointManager:    &fakeCheckpointManager{checkpoint: checkpointWithClaims(nil)},
+		computeDomainManager: &ComputeDomainManager{informer: informer, cliqueID: "clique-a"},
+		nvdevlib:             &deviceLib{devRoot: t.TempDir()},
+		allocatable: AllocatableDevices{
+			"channel-0": &AllocatableDevice{Channel: &ComputeDomainChannelInfo{ID: 0}},
+		},
+	}
+
+	config := channelConfig("cd-uid")
+	result := allocationResult("request", DriverName, "channel-0", nil)
+	claim := claimWithResults("claim-uid", result)
+
+	_, err := state.applyComputeDomainChannelConfig(
+		context.Background(),
+		config,
+		claim,
+		[]*resourceapi.DeviceRequestAllocationResult{&result},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "host nvidia-imex daemon readiness check failed")
+	assert.False(t, isPermanentError(err), "an unready host daemon must be retried, not treated as permanently broken")
 }
 
 func TestUnprepareDevicesHostManagedSkipsRemoveNodeLabel(t *testing.T) {

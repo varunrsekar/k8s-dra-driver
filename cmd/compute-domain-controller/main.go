@@ -153,7 +153,7 @@ func newApp() *cli.App {
 		},
 		&cli.StringFlag{
 			Name:        "imex-isolation",
-			Usage:       "IMEX isolation strategy: IMEXDomain (default; all workloads in the same IMEX domain share channel 0) or IMEXChannel (not yet supported).",
+			Usage:       "IMEX isolation strategy: domain (default; all workloads in the same IMEX domain share channel 0) or channel (not yet supported).",
 			Value:       string(imex.IsolationIMEXDomain),
 			Destination: &flags.imexIsolation,
 			EnvVars:     []string{"IMEX_ISOLATION"},

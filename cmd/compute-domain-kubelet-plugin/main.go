@@ -43,6 +43,13 @@ const (
 	DriverName                              = "compute-domain.nvidia.com"
 	DriverPluginCheckpointFileBasename      = "checkpoint.json"
 	IMEXDaemonsWithDNSNamesMinDriverVersion = "570.158.01"
+
+	// defaultIMEXHostSocketPath is the default location, under the driver
+	// root, of the Unix domain socket the host nvidia-imex daemon's
+	// command/control service listens on when host-managed IMEX is enabled.
+	// It corresponds to the host's IMEX_CMD_UNIX_DOMAIN_PATH setting in
+	// /etc/nvidia-imex/config.cfg (see site/content/docs/prerequisites.md).
+	defaultIMEXHostSocketPath = "/etc/nvidia-imex/imex_ctrl.sock"
 )
 
 type Flags struct {
@@ -63,6 +70,7 @@ type Flags struct {
 	gpuCliqueLabelEnabled         bool
 	imexMode                      string
 	imexIsolation                 string
+	imexHostSocketPath            string
 }
 
 type Config struct {
@@ -184,6 +192,13 @@ func newApp() *cli.App {
 			Value:       string(imex.IsolationIMEXDomain),
 			Destination: &flags.imexIsolation,
 			EnvVars:     []string{"IMEX_ISOLATION"},
+		},
+		&cli.StringFlag{
+			Name:        "imex-host-socket-path",
+			Usage:       "Path (under the nvidia-driver-root) to the Unix domain socket the host nvidia-imex daemon's command/control service listens on. Only used when imex-mode=hostManaged, to validate host IMEX readiness during channel allocation.",
+			Value:       defaultIMEXHostSocketPath,
+			Destination: &flags.imexHostSocketPath,
+			EnvVars:     []string{"IMEX_HOST_SOCKET_PATH"},
 		},
 	}
 	cliFlags = append(cliFlags, flags.kubeClientConfig.Flags()...)

@@ -31,21 +31,21 @@ func TestConfigValidate(t *testing.T) {
 		description string
 	}{
 		{
-			name:        "driverManaged with empty isolation defaults to IMEXDomain",
+			name:        "driverManaged with empty isolation defaults to domain",
 			config:      Config{Mode: ModeDriverManaged, Isolation: ""},
 			gateEnabled: false,
 			expectError: false,
-			description: "empty isolation is treated the same as the IMEXDomain default",
+			description: "empty isolation is treated the same as the domain default",
 		},
 		{
-			name:        "driverManaged with explicit IMEXDomain isolation succeeds",
+			name:        "driverManaged with explicit domain isolation succeeds",
 			config:      Config{Mode: ModeDriverManaged, Isolation: IsolationIMEXDomain},
 			gateEnabled: false,
 			expectError: false,
-			description: "IMEXDomain is the default, supported isolation strategy under driverManaged too",
+			description: "domain is the default, supported isolation strategy under driverManaged too",
 		},
 		{
-			name:        "driverManaged with IMEXChannel isolation errors",
+			name:        "driverManaged with channel isolation errors",
 			config:      Config{Mode: ModeDriverManaged, Isolation: IsolationIMEXChannel},
 			gateEnabled: false,
 			expectError: true,
@@ -66,21 +66,21 @@ func TestConfigValidate(t *testing.T) {
 			description: "mode=hostManaged is rejected when HostManagedIMEXDaemon is disabled",
 		},
 		{
-			name:        "hostManaged with empty isolation defaults to IMEXDomain",
+			name:        "hostManaged with empty isolation defaults to domain",
 			config:      Config{Mode: ModeHostManaged, Isolation: ""},
 			gateEnabled: true,
 			expectError: false,
-			description: "empty isolation is treated the same as the IMEXDomain default under hostManaged too",
+			description: "empty isolation is treated the same as the domain default under hostManaged too",
 		},
 		{
-			name:        "hostManaged with explicit IMEXDomain isolation succeeds",
+			name:        "hostManaged with explicit domain isolation succeeds",
 			config:      Config{Mode: ModeHostManaged, Isolation: IsolationIMEXDomain},
 			gateEnabled: true,
 			expectError: false,
-			description: "IMEXDomain is the default isolation strategy, supported under hostManaged",
+			description: "domain is the default isolation strategy, supported under hostManaged",
 		},
 		{
-			name:        "hostManaged with IMEXChannel isolation errors for now",
+			name:        "hostManaged with channel isolation errors for now",
 			config:      Config{Mode: ModeHostManaged, Isolation: IsolationIMEXChannel},
 			gateEnabled: true,
 			expectError: true,

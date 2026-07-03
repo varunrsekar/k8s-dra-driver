@@ -210,8 +210,9 @@ true
 
 {{/*
 Validates resources.computeDomains.imex.mode / .isolation against
-featureGates.HostManagedIMEXDaemon. Included from controller.yaml and
-kubeletplugin.yaml (both already gated on resources.computeDomains.enabled)
+featureGates.HostManagedIMEXDaemon so `helm install`/`helm template` fails fast
+with a clear message instead of the controller/kubelet-plugin pods crash-looping
+on an invalid combination. Produces no output on success.
 */}}
 {{- define "dra-driver-nvidia-gpu.validateIMEXConfig" -}}
 {{- $imex := .Values.resources.computeDomains.imex | default dict -}}

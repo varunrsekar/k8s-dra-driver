@@ -640,8 +640,10 @@ func (s *DeviceState) applyComputeDomainChannelConfig(ctx context.Context, confi
 }
 
 // applyComputeDomainChannelConfigHostManaged handles a channel claim when the
-// cluster admin (not the driver) owns the host nvidia-imex daemon. It skips the IMEX
-// daemon management and readiness checks completely.
+// cluster admin (not the driver) owns the host nvidia-imex daemon. It skips
+// the driver-managed IMEX daemon management entirely, but on fabric nodes
+// still validates that the operator's host nvidia-imex daemon is actually
+// ready before handing out a channel, via checkHostIMEXReady.
 func (s *DeviceState) applyComputeDomainChannelConfigHostManaged(ctx context.Context, config *configapi.ComputeDomainChannelConfig, claim *resourceapi.ResourceClaim, result *resourceapi.DeviceRequestAllocationResult) (*DeviceConfigState, error) {
 	device, ok := s.allocatable[result.Device]
 	if !ok || device.Channel == nil {
@@ -666,6 +668,10 @@ func (s *DeviceState) applyComputeDomainChannelConfigHostManaged(ctx context.Con
 		// Non-fabric node (e.g. not part of an MNNVL clique): do not inject
 		// IMEX channel device nodes, but let the claim succeed.
 		return &configState, nil
+	}
+
+	if err := s.nvdevlib.checkHostIMEXReady(s.config.flags.imexHostSocketPath); err != nil {
+		return nil, fmt.Errorf("host nvidia-imex daemon readiness check failed: %w", err)
 	}
 
 	if channelID < 0 || channelID >= len(s.nvdevlib.nvCapImexChanDevInfos) {
