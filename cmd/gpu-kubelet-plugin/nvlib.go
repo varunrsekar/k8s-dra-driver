@@ -525,7 +525,7 @@ func (l deviceLib) getGpuInfo(index int, device nvdev.Device) (*GpuInfo, error) 
 		return nil, fmt.Errorf("error getting PCI bus ID for device %d: %w", index, err)
 	}
 
-	numaNode, err := l.discoverNumaNode(pciBusID, device.GetNumaNodeId)
+	numaNode, err := l.discoverNumaNode(pciBusID)
 	if err != nil {
 		return nil, fmt.Errorf("error getting NUMA node ID for device %d: %w", index, err)
 	}
@@ -641,18 +641,7 @@ func (l deviceLib) getGpuInfo(index int, device nvdev.Device) (*GpuInfo, error) 
 	return gpuInfo, nil
 }
 
-func (l deviceLib) discoverNumaNode(pciBusID string, getNVMLNumaNode func() (int, nvml.Return)) (*int, error) {
-	if node, ret := getNVMLNumaNode(); ret == nvml.SUCCESS {
-		if node < 0 {
-			return nil, nil
-		}
-		return &node, nil
-	} else if ret != nvml.ERROR_NOT_SUPPORTED && ret != nvml.ERROR_FUNCTION_NOT_FOUND && ret != nvml.ERROR_NOT_FOUND {
-		return nil, fmt.Errorf("nvmlDeviceGetNumaNodeId returned %v", ret)
-	} else {
-		klog.V(4).Infof("NVML NUMA node ID unavailable for PCI bus ID %s, falling back to PCI sysfs: %v", pciBusID, ret)
-	}
-
+func (l deviceLib) discoverNumaNode(pciBusID string) (*int, error) {
 	if l.nvpci == nil {
 		return nil, nil
 	}

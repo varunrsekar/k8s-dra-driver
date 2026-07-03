@@ -20,23 +20,10 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/go-nvlib/pkg/nvpci"
-	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/stretchr/testify/require"
 )
 
-func TestDiscoverNumaNodeUsesNVMLWhenAvailable(t *testing.T) {
-	lib := deviceLib{}
-
-	numaNode, err := lib.discoverNumaNode("0000:9f:00.0", func() (int, nvml.Return) {
-		return 1, nvml.SUCCESS
-	})
-
-	require.NoError(t, err)
-	require.NotNil(t, numaNode)
-	require.Equal(t, 1, *numaNode)
-}
-
-func TestDiscoverNumaNodeFallsBackToPCIWhenNVMLUnsupported(t *testing.T) {
+func TestDiscoverNumaNodeUsesPCI(t *testing.T) {
 	pci := &nvpci.InterfaceMock{
 		GetGPUByPciBusIDFunc: func(pciBusID string) (*nvpci.NvidiaPCIDevice, error) {
 			require.Equal(t, "0000:9f:00.0", pciBusID)
@@ -45,9 +32,7 @@ func TestDiscoverNumaNodeFallsBackToPCIWhenNVMLUnsupported(t *testing.T) {
 	}
 	lib := deviceLib{nvpci: pci}
 
-	numaNode, err := lib.discoverNumaNode("0000:9f:00.0", func() (int, nvml.Return) {
-		return 0, nvml.ERROR_NOT_SUPPORTED
-	})
+	numaNode, err := lib.discoverNumaNode("0000:9f:00.0")
 
 	require.NoError(t, err)
 	require.NotNil(t, numaNode)
@@ -63,9 +48,7 @@ func TestDiscoverNumaNodeOmitsUnknownPCINumaNode(t *testing.T) {
 	}
 	lib := deviceLib{nvpci: pci}
 
-	numaNode, err := lib.discoverNumaNode("0000:9f:00.0", func() (int, nvml.Return) {
-		return 0, nvml.ERROR_NOT_SUPPORTED
-	})
+	numaNode, err := lib.discoverNumaNode("0000:9f:00.0")
 
 	require.NoError(t, err)
 	require.Nil(t, numaNode)
