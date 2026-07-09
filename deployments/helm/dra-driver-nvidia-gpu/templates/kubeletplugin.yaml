@@ -175,6 +175,8 @@ spec:
         - name: HEALTHCHECK_PORT
           value: {{ .Values.kubeletPlugin.containers.computeDomains.healthcheckPort | quote }}
         {{- end }}
+        - name: GPU_CLIQUE_LABEL_ENABLED
+          value: {{ .Values.kubeletPlugin.containers.computeDomains.gpuCliqueLabelEnabled | quote }}
         {{- with .Values.kubeletPlugin.containers.computeDomains.env }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

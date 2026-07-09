@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,6 +26,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
@@ -39,6 +41,13 @@ import (
 
 const (
 	computeDomainLabelKey = "resource.nvidia.com/computeDomain"
+
+	// gpuCliqueLabelKey sets the node label historically set by
+	// gpu-feature-discovery (see
+	// https://github.com/NVIDIA/k8s-device-plugin/blob/main/docs/gpu-feature-discovery/README.md#generated-labels).
+	// gpu-feature-discovery that is bundled with the k8s-device-plugin is being deprecated,
+	// so the kubelet plugin now owns setting it on systems where the DRA driver is enabled.
+	gpuCliqueLabelKey = "nvidia.com/gpu.clique"
 
 	informerResyncPeriod = 10 * time.Minute
 	cleanupInterval      = 10 * time.Minute
@@ -116,6 +125,10 @@ func (m *ComputeDomainManager) Start(ctx context.Context) (rerr error) {
 
 	if !cache.WaitForCacheSync(ctx.Done(), m.informer.HasSynced) {
 		return fmt.Errorf("informer cache sync for ComputeDomains failed")
+	}
+
+	if err := m.SetGPUCliqueLabel(ctx); err != nil {
+		return fmt.Errorf("error setting %s node label: %w", gpuCliqueLabelKey, err)
 	}
 
 	return nil
@@ -358,6 +371,38 @@ func (m *ComputeDomainManager) RemoveNodeLabel(ctx context.Context, cdUID string
 
 	if _, err := m.config.clientsets.Core.CoreV1().Nodes().Update(ctx, newNode, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("error updating Node to remove label: %w", err)
+	}
+
+	return nil
+}
+
+// SetGPUCliqueLabel sets the nvidia.com/gpu.clique node label based on the
+// clique ID discovered from NVML at plugin startup. If no clique ID was
+// discovered (e.g. fabric not attached), the label is simply left unset.
+func (m *ComputeDomainManager) SetGPUCliqueLabel(ctx context.Context) error {
+	if !m.config.flags.gpuCliqueLabelEnabled {
+		return nil
+	}
+
+	if m.cliqueID == "" {
+		return nil
+	}
+
+	patch := map[string]any{
+		"metadata": map[string]any{
+			"labels": map[string]string{
+				gpuCliqueLabelKey: m.cliqueID,
+			},
+		},
+	}
+
+	patchBytes, err := json.Marshal(patch)
+	if err != nil {
+		return fmt.Errorf("failed to marshal patch: %w", err)
+	}
+
+	if _, err := m.config.clientsets.Core.CoreV1().Nodes().Patch(ctx, m.config.flags.nodeName, types.MergePatchType, patchBytes, metav1.PatchOptions{}); err != nil {
+		return fmt.Errorf("error patching Node with label %s: %w", gpuCliqueLabelKey, err)
 	}
 
 	return nil

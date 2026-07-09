@@ -277,6 +277,9 @@ kubeletPlugin:
       # Port running a gRPC health service checked by a livenessProbe.
       # Set to a negative value to disable the service and the probe.
       healthcheckPort: 51515
+      # Set the nvidia.com/gpu.clique node label, historically set by
+      # gpu-feature-discovery. Disabled by default.
+      gpuCliqueLabelEnabled: false
     gpus:
       env: []
       securityContext:
