@@ -4,8 +4,8 @@ go 1.26.0
 
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
-	github.com/NVIDIA/go-nvlib v0.11.0
-	github.com/NVIDIA/go-nvml v0.13.1-0
+	github.com/NVIDIA/go-nvlib v0.12.0
+	github.com/NVIDIA/go-nvml v0.13.3-1
 	github.com/NVIDIA/nvidia-container-toolkit v1.19.1
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.32.0
@@ -81,7 +81,7 @@ require (
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
