@@ -49,6 +49,8 @@ const (
 	// so the kubelet plugin now owns setting it on systems where the DRA driver is enabled.
 	gpuCliqueLabelKey = "nvidia.com/gpu.clique"
 
+	gpuCliqueLabelRefreshInterval = 10 * time.Minute
+
 	informerResyncPeriod = 10 * time.Minute
 	cleanupInterval      = 10 * time.Minute
 
@@ -65,7 +67,11 @@ type ComputeDomainManager struct {
 	informer cache.SharedIndexInformer
 
 	configFilesRoot string
-	cliqueID        string
+
+	cliqueIDMu sync.RWMutex
+	cliqueID   string
+
+	getCliqueIDFunc func() (string, error)
 }
 
 type ComputeDomainDaemonSettings struct {
@@ -76,10 +82,15 @@ type ComputeDomainDaemonSettings struct {
 	nodesConfigPath string
 }
 
-func NewComputeDomainManager(config *Config, cliqueID string) *ComputeDomainManager {
+func NewComputeDomainManager(config *Config, getCliqueIDFunc func() (string, error)) (*ComputeDomainManager, error) {
 	factory := nvinformers.NewSharedInformerFactory(config.clientsets.Nvidia, informerResyncPeriod)
 	informer := factory.Resource().V1beta1().ComputeDomains().Informer()
 	configFilesRoot := filepath.Join(config.DriverPluginPath(), ComputeDomainDaemonConfigFilesDirName)
+
+	cliqueID, err := getCliqueIDFunc()
+	if err != nil {
+		return nil, fmt.Errorf("error getting cliqueID: %w", err)
+	}
 
 	m := &ComputeDomainManager{
 		config:          config,
@@ -87,9 +98,25 @@ func NewComputeDomainManager(config *Config, cliqueID string) *ComputeDomainMana
 		informer:        informer,
 		configFilesRoot: configFilesRoot,
 		cliqueID:        cliqueID,
+		getCliqueIDFunc: getCliqueIDFunc,
 	}
 
-	return m
+	return m, nil
+}
+
+// CliqueID returns the most recently known GPU clique ID. Safe for
+// concurrent use.
+func (m *ComputeDomainManager) CliqueID() string {
+	m.cliqueIDMu.RLock()
+	defer m.cliqueIDMu.RUnlock()
+	return m.cliqueID
+}
+
+// setCliqueID stores a newly observed GPU clique ID.
+func (m *ComputeDomainManager) setCliqueID(cliqueID string) {
+	m.cliqueIDMu.Lock()
+	defer m.cliqueIDMu.Unlock()
+	m.cliqueID = cliqueID
 }
 
 func (m *ComputeDomainManager) Start(ctx context.Context) (rerr error) {
@@ -127,18 +154,38 @@ func (m *ComputeDomainManager) Start(ctx context.Context) (rerr error) {
 		return fmt.Errorf("informer cache sync for ComputeDomains failed")
 	}
 
-	if err := m.SetGPUCliqueLabel(ctx); err != nil {
-		return fmt.Errorf("error setting %s node label: %w", gpuCliqueLabelKey, err)
+	if m.config.flags.gpuCliqueLabelEnabled {
+		if err := m.SetGPUCliqueLabel(ctx); err != nil {
+			return fmt.Errorf("error setting %s node label: %w", gpuCliqueLabelKey, err)
+		}
+	}
+
+	if m.getCliqueIDFunc != nil {
+		m.waitGroup.Add(1)
+		go func() {
+			defer m.waitGroup.Done()
+			m.periodicGPUCliqueIDRefresh(ctx)
+		}()
 	}
 
 	return nil
 }
 
+//nolint:contextcheck
 func (m *ComputeDomainManager) Stop() error {
 	if m.cancelContext != nil {
 		m.cancelContext()
 	}
 	m.waitGroup.Wait()
+
+	if m.config.flags.gpuCliqueLabelEnabled {
+		rmCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := m.RemoveGPUCliqueLabel(rmCtx); err != nil {
+			klog.Errorf("error removing %s node label: %v", gpuCliqueLabelKey, err)
+		}
+	}
+
 	return nil
 }
 
@@ -175,7 +222,7 @@ func (s *ComputeDomainDaemonSettings) GetCDIContainerEditsCommon(ctx context.Con
 	edits := &cdiapi.ContainerEdits{
 		ContainerEdits: &cdispec.ContainerEdits{
 			Env: []string{
-				fmt.Sprintf("CLIQUE_ID=%s", s.manager.cliqueID),
+				fmt.Sprintf("CLIQUE_ID=%s", s.manager.CliqueID()),
 				fmt.Sprintf("COMPUTE_DOMAIN_UUID=%s", cd.UID),
 				fmt.Sprintf("COMPUTE_DOMAIN_NAME=%s", cd.Name),
 				fmt.Sprintf("COMPUTE_DOMAIN_NAMESPACE=%s", cd.Namespace),
@@ -290,7 +337,7 @@ func (m *ComputeDomainManager) isCurrentNodeReadyInStatus(cd *nvapi.ComputeDomai
 
 // isCurrentNodeReadyInClique checks if the current node is marked as ready in the ComputeDomainClique.
 func (m *ComputeDomainManager) isCurrentNodeReadyInClique(ctx context.Context, cd *nvapi.ComputeDomain) bool {
-	cliqueName := fmt.Sprintf("%s.%s", cd.UID, m.cliqueID)
+	cliqueName := fmt.Sprintf("%s.%s", cd.UID, m.CliqueID())
 
 	clique, err := m.config.clientsets.Nvidia.ResourceV1beta1().ComputeDomainCliques(m.config.flags.namespace).Get(ctx, cliqueName, metav1.GetOptions{})
 	if err != nil {
@@ -380,18 +427,15 @@ func (m *ComputeDomainManager) RemoveNodeLabel(ctx context.Context, cdUID string
 // clique ID discovered from NVML at plugin startup. If no clique ID was
 // discovered (e.g. fabric not attached), the label is simply left unset.
 func (m *ComputeDomainManager) SetGPUCliqueLabel(ctx context.Context) error {
-	if !m.config.flags.gpuCliqueLabelEnabled {
-		return nil
-	}
-
-	if m.cliqueID == "" {
+	cliqueID := m.CliqueID()
+	if cliqueID == "" {
 		return nil
 	}
 
 	patch := map[string]any{
 		"metadata": map[string]any{
 			"labels": map[string]string{
-				gpuCliqueLabelKey: m.cliqueID,
+				gpuCliqueLabelKey: cliqueID,
 			},
 		},
 	}
@@ -402,7 +446,70 @@ func (m *ComputeDomainManager) SetGPUCliqueLabel(ctx context.Context) error {
 	}
 
 	if _, err := m.config.clientsets.Core.CoreV1().Nodes().Patch(ctx, m.config.flags.nodeName, types.MergePatchType, patchBytes, metav1.PatchOptions{}); err != nil {
-		return fmt.Errorf("error patching Node with label %s: %w", gpuCliqueLabelKey, err)
+		return fmt.Errorf("error patching node with label %s: %w", gpuCliqueLabelKey, err)
+	}
+
+	return nil
+}
+
+// RemoveGPUCliqueLabel removes the nvidia.com/gpu.clique node label, e.g. on
+// plugin shutdown.
+func (m *ComputeDomainManager) RemoveGPUCliqueLabel(ctx context.Context) error {
+	patch := map[string]any{
+		"metadata": map[string]any{
+			"labels": map[string]any{
+				gpuCliqueLabelKey: nil,
+			},
+		},
+	}
+
+	patchBytes, err := json.Marshal(patch)
+	if err != nil {
+		return fmt.Errorf("failed to marshal patch: %w", err)
+	}
+
+	if _, err := m.config.clientsets.Core.CoreV1().Nodes().Patch(ctx, m.config.flags.nodeName, types.MergePatchType, patchBytes, metav1.PatchOptions{}); err != nil {
+		return fmt.Errorf("error removing Node label %s: %w", gpuCliqueLabelKey, err)
+	}
+
+	return nil
+}
+
+// periodicGPUCliqueIDRefresh periodically re-reads the GPU clique ID from
+// NVML and updates the nvidia.com/gpu.clique node label if it changed.
+func (m *ComputeDomainManager) periodicGPUCliqueIDRefresh(ctx context.Context) {
+	ticker := time.NewTicker(gpuCliqueLabelRefreshInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := m.refreshGPUCliqueID(ctx); err != nil {
+				klog.Errorf("error refreshing %s node label: %v", gpuCliqueLabelKey, err)
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// refreshGPUCliqueLabel re-reads the GPU clique ID and, if it differs from
+// the last known value, updates the in-memory state and the node label.
+func (m *ComputeDomainManager) refreshGPUCliqueID(ctx context.Context) error {
+	newCliqueID, err := m.getCliqueIDFunc()
+	if err != nil {
+		return fmt.Errorf("error getting cliqueID: %w", err)
+	}
+
+	if oldCliqueID := m.CliqueID(); newCliqueID != "" && newCliqueID != oldCliqueID {
+		klog.Infof("GPU clique ID changed from %q to %q, updating %s node label", oldCliqueID, newCliqueID, gpuCliqueLabelKey)
+		m.setCliqueID(newCliqueID)
+	}
+
+	if m.config.flags.gpuCliqueLabelEnabled {
+		if err := m.SetGPUCliqueLabel(ctx); err != nil {
+			return fmt.Errorf("error updating %s node label: %w", gpuCliqueLabelKey, err)
+		}
 	}
 
 	return nil

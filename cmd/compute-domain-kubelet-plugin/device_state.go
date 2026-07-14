@@ -108,14 +108,10 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 		return nil, fmt.Errorf("unable to create CDI handler: %w", err)
 	}
 
-	// TODO: explore calling this not only during plugin startup because this
-	// information may change during runtime.
-	cliqueID, err := nvdevlib.getCliqueID()
+	computeDomainManager, err := NewComputeDomainManager(config, nvdevlib.getCliqueID)
 	if err != nil {
-		return nil, fmt.Errorf("error getting cliqueID: %w", err)
+		return nil, fmt.Errorf("unable to create computedomain manager: %v", err)
 	}
-
-	computeDomainManager := NewComputeDomainManager(config, cliqueID)
 
 	if err := cdi.CreateStandardDeviceSpecFile(allocatable); err != nil {
 		return nil, fmt.Errorf("unable to create base CDI spec file: %v", err)
@@ -657,7 +653,7 @@ func (s *DeviceState) applyComputeDomainChannelConfig(ctx context.Context, confi
 		return nil, fmt.Errorf("error asserting ComputeDomain Ready: %w", err)
 	}
 
-	if s.computeDomainManager.cliqueID == "" {
+	if s.computeDomainManager.CliqueID() == "" {
 		// Do not inject IMEX channel device nodes.
 		return &configState, nil
 	}
@@ -716,7 +712,7 @@ func (s *DeviceState) applyComputeDomainDaemonConfig(ctx context.Context, config
 	// Only inject dev nodes related to
 	// /proc/driver/nvidia/capabilities/fabric-imex-mgmt if IMEX is supported
 	// (if we want to start the IMEX daemon process in the CD daemon pod).
-	if s.computeDomainManager.cliqueID != "" {
+	if s.computeDomainManager.CliqueID() != "" {
 		nvcapPath := nvidiaCapFabricImexMgmtPath
 		if common.UsingAltProcDevices() {
 			nvcapPath = filepath.Join(s.config.flags.containerDriverRoot, "proc/driver/nvidia/capabilities/fabric-imex-mgmt")
