@@ -59,6 +59,7 @@ type Flags struct {
 	kubeletPluginsDirectoryPath   string
 	healthcheckPort               int
 	klogVerbosity                 int
+	gpuCliqueLabelEnabled         bool
 }
 
 type Config struct {
@@ -158,6 +159,13 @@ func newApp() *cli.App {
 			Value:       -1,
 			Destination: &flags.healthcheckPort,
 			EnvVars:     []string{"HEALTHCHECK_PORT"},
+		},
+		&cli.BoolFlag{
+			Name:        "gpu-clique-label-enabled",
+			Usage:       "Set the nvidia.com/gpu.clique node label, historically set by gpu-feature-discovery.",
+			Value:       false,
+			Destination: &flags.gpuCliqueLabelEnabled,
+			EnvVars:     []string{"GPU_CLIQUE_LABEL_ENABLED"},
 		},
 	}
 	cliFlags = append(cliFlags, flags.kubeClientConfig.Flags()...)
