@@ -78,6 +78,12 @@ const (
 	// FabricManagerPartitioning enables Fabric Manager (NVSwitch) partition
 	// management for Passthrough VFIO devices.
 	FabricManagerPartitioning featuregate.Feature = "FabricManagerPartitioning"
+
+	// HostManagedIMEXDaemon gates whether the imex deployment mode
+	// may be set to "hostManaged" (see pkg/imex). It does not directly change
+	// driver behavior, it only unlocks the mode for clusters where
+	// the cluster admin owns the host nvidia-imex daemon lifecycle.
+	HostManagedIMEXDaemon featuregate.Feature = "HostManagedIMEXDaemon"
 )
 
 // Feature gate Version fields use driver SemVer major.minor.
@@ -153,6 +159,13 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.VersionedSpecs{
 		},
 	},
 	FabricManagerPartitioning: {
+		{
+			Default:    false,
+			PreRelease: featuregate.Alpha,
+			Version:    version.MajorMinor(0, 5),
+		},
+	},
+	HostManagedIMEXDaemon: {
 		{
 			Default:    false,
 			PreRelease: featuregate.Alpha,

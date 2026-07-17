@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/dynamic-resource-allocation/kubeletplugin"
 	"k8s.io/kubernetes/pkg/kubelet/checkpointmanager"
 	"k8s.io/utils/ptr"
@@ -34,6 +35,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	configapi "sigs.k8s.io/dra-driver-nvidia-gpu/api/nvidia.com/resource/v1beta1"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/imex"
+	nvfake "sigs.k8s.io/dra-driver-nvidia-gpu/pkg/nvidia.com/clientset/versioned/fake"
+	nvinformers "sigs.k8s.io/dra-driver-nvidia-gpu/pkg/nvidia.com/informers/externalversions"
 )
 
 type fakeCheckpointManager struct {
@@ -542,6 +546,228 @@ func TestUnprepareMissingClaimIsNoop(t *testing.T) {
 	err := state.Unprepare(context.Background(), claimRef)
 
 	require.NoError(t, err)
+}
+
+func hostManagedConfig() *Config {
+	return &Config{
+		flags:      &Flags{imexHostSocketPath: defaultIMEXHostSocketPath},
+		imexConfig: imex.Config{Mode: imex.ModeHostManaged, Isolation: imex.IsolationIMEXDomain},
+	}
+}
+
+// TestApplyComputeDomainChannelConfigHostManagedIgnoresAllocationMode
+// confirms the kubelet plugin does not (re-)validate AllocationMode under
+// host-managed IMEX: today the controller is the one that always requests
+// AllocationMode Single (channel 0) for host-managed ComputeDomains, so the
+// kubelet plugin trusts it rather than duplicating that policy. This leaves
+// room for the controller to later request other channels without needing a
+// matching change here.
+func TestApplyComputeDomainChannelConfigHostManagedIgnoresAllocationMode(t *testing.T) {
+	for _, mode := range []string{"", configapi.ComputeDomainChannelAllocationModeSingle, configapi.ComputeDomainChannelAllocationModeAll, "foo"} {
+		t.Run(mode, func(t *testing.T) {
+			cd := &configapi.ComputeDomain{
+				ObjectMeta: metav1.ObjectMeta{Name: "cd", Namespace: "default", UID: "cd-uid"},
+			}
+
+			// Empty cliqueID keeps this fixture minimal (no nvdevlib/cdi
+			// setup needed): it only needs to reach past the removed
+			// AllocationMode check to prove the mode is no longer rejected.
+			factory := nvinformers.NewSharedInformerFactory(nvfake.NewSimpleClientset(), 0)
+			informer := factory.Resource().V1beta1().ComputeDomains().Informer()
+			require.NoError(t, informer.AddIndexers(cache.Indexers{"computeDomainUID": uidIndexer[*configapi.ComputeDomain]}))
+			require.NoError(t, informer.GetIndexer().Add(cd))
+
+			state := &DeviceState{
+				config:               hostManagedConfig(),
+				checkpointManager:    &fakeCheckpointManager{checkpoint: checkpointWithClaims(nil)},
+				computeDomainManager: &ComputeDomainManager{informer: informer, cliqueID: ""},
+				allocatable: AllocatableDevices{
+					"channel-0": &AllocatableDevice{Channel: &ComputeDomainChannelInfo{ID: 0}},
+				},
+			}
+
+			result := allocationResult("request", DriverName, "channel-0", nil)
+			config := channelConfig("cd-uid")
+			config.AllocationMode = mode
+
+			_, err := state.applyComputeDomainChannelConfig(
+				context.Background(),
+				config,
+				claimWithResults("claim-uid", result),
+				[]*resourceapi.DeviceRequestAllocationResult{&result},
+			)
+
+			require.NoError(t, err, "AllocationMode %q must not be rejected by the kubelet plugin under host-managed IMEX", mode)
+		})
+	}
+}
+
+func TestApplyComputeDomainDaemonConfigHostManagedRejected(t *testing.T) {
+	result := allocationResult("request", DriverName, "daemon-0", nil)
+
+	state := &DeviceState{config: hostManagedConfig()}
+	_, err := state.applyComputeDomainDaemonConfig(
+		context.Background(),
+		daemonConfig("cd-uid"),
+		claimWithResults("claim-uid", result),
+		[]*resourceapi.DeviceRequestAllocationResult{&result},
+	)
+
+	require.Error(t, err)
+	assert.True(t, isPermanentError(err), "daemon claims must be a permanent error under host-managed IMEX")
+}
+
+func TestApplyComputeDomainChannelConfigHostManagedNoCliqueSkipsInjection(t *testing.T) {
+	cd := &configapi.ComputeDomain{
+		ObjectMeta: metav1.ObjectMeta{Name: "cd", Namespace: "default", UID: "cd-uid"},
+	}
+
+	// A ComputeDomainManager whose informer already holds the CD (so the
+	// namespace assertion passes) but with an empty cliqueID, simulating a
+	// non-MNNVL node with no NVLink fabric.
+	factory := nvinformers.NewSharedInformerFactory(nvfake.NewSimpleClientset(), 0)
+	informer := factory.Resource().V1beta1().ComputeDomains().Informer()
+	require.NoError(t, informer.AddIndexers(cache.Indexers{"computeDomainUID": uidIndexer[*configapi.ComputeDomain]}))
+	require.NoError(t, informer.GetIndexer().Add(cd))
+
+	state := &DeviceState{
+		config:               hostManagedConfig(),
+		checkpointManager:    &fakeCheckpointManager{checkpoint: checkpointWithClaims(nil)},
+		computeDomainManager: &ComputeDomainManager{informer: informer, cliqueID: ""},
+		allocatable: AllocatableDevices{
+			"channel-0": &AllocatableDevice{Channel: &ComputeDomainChannelInfo{ID: 0}},
+		},
+	}
+
+	config := channelConfig("cd-uid")
+	config.AllocationMode = configapi.ComputeDomainChannelAllocationModeSingle
+	result := allocationResult("request", DriverName, "channel-0", nil)
+	claim := claimWithResults("claim-uid", result)
+
+	// applyComputeDomainChannelConfigHostManaged never calls
+	// AddNodeLabel/AssertComputeDomainReady at all (unlike the driver-managed
+	// path), which would otherwise dereference the manager's nil config;
+	// reaching the clique check (without panicking) proves the host-managed
+	// branch was taken.
+	//
+	// Like the driver-managed path, a missing clique must not fail the claim:
+	// some nodes in a cluster are legitimately non-MNNVL, and claim
+	// preparation there should still succeed, just without an injected
+	// channel device node.
+	configState, err := state.applyComputeDomainChannelConfig(
+		context.Background(),
+		config,
+		claim,
+		[]*resourceapi.DeviceRequestAllocationResult{&result},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, configState)
+	assert.Equal(t, ComputeDomainChannelType, configState.Type)
+	assert.Nil(t, configState.containerEdits, "no clique on this node means no IMEX channel device node is injected")
+}
+
+// TestApplyComputeDomainChannelConfigHostManagedUsesAllocatedChannel confirms
+// that the channel-conflict check operates on whichever channel was actually
+// allocated for the claim (via result.Device), not a hardcoded channel 0.
+// Today the controller only ever requests channel 0, but this proves the
+// kubelet plugin itself imposes no such restriction.
+func TestApplyComputeDomainChannelConfigHostManagedUsesAllocatedChannel(t *testing.T) {
+	cd := &configapi.ComputeDomain{
+		ObjectMeta: metav1.ObjectMeta{Name: "cd", Namespace: "default", UID: "cd-uid"},
+	}
+	factory := nvinformers.NewSharedInformerFactory(nvfake.NewSimpleClientset(), 0)
+	informer := factory.Resource().V1beta1().ComputeDomains().Informer()
+	require.NoError(t, informer.AddIndexers(cache.Indexers{"computeDomainUID": uidIndexer[*configapi.ComputeDomain]}))
+	require.NoError(t, informer.GetIndexer().Add(cd))
+
+	// Seed the checkpoint with channel 2 (not channel 0) already allocated by
+	// another claim.
+	checkpoint := checkpointWithClaims(map[string]PreparedClaim{
+		"existing-uid": {
+			CheckpointState: ClaimCheckpointStatePrepareCompleted,
+			PreparedDevices: PreparedDevices{
+				{Devices: PreparedDeviceList{preparedChannel(2)}},
+			},
+		},
+	})
+
+	state := &DeviceState{
+		config:               hostManagedConfig(),
+		checkpointManager:    &fakeCheckpointManager{checkpoint: checkpoint},
+		computeDomainManager: &ComputeDomainManager{informer: informer, cliqueID: ""},
+		allocatable: AllocatableDevices{
+			"channel-2": &AllocatableDevice{Channel: &ComputeDomainChannelInfo{ID: 2}},
+		},
+	}
+
+	config := channelConfig("cd-uid")
+	result := allocationResult("request", DriverName, "channel-2", nil)
+	claim := claimWithResults("claim-uid", result)
+
+	_, err := state.applyComputeDomainChannelConfig(
+		context.Background(),
+		config,
+		claim,
+		[]*resourceapi.DeviceRequestAllocationResult{&result},
+	)
+
+	require.Error(t, err, "channel 2 is already allocated by another claim, so this must fail")
+	assert.Contains(t, err.Error(), "channel 2 already allocated")
+}
+
+// TestApplyComputeDomainChannelConfigHostManagedRequiresHostIMEXReady confirms
+// that on a fabric node (non-empty cliqueID), a host-managed channel claim is
+// rejected when the operator's host nvidia-imex daemon cannot be validated as
+// ready (here: nvidia-imex-ctl isn't even present under the driver root).
+// This is the only readiness signal host-managed mode has, since there is no
+// driver-managed daemon to report ComputeDomain readiness.
+func TestApplyComputeDomainChannelConfigHostManagedRequiresHostIMEXReady(t *testing.T) {
+	cd := &configapi.ComputeDomain{
+		ObjectMeta: metav1.ObjectMeta{Name: "cd", Namespace: "default", UID: "cd-uid"},
+	}
+	factory := nvinformers.NewSharedInformerFactory(nvfake.NewSimpleClientset(), 0)
+	informer := factory.Resource().V1beta1().ComputeDomains().Informer()
+	require.NoError(t, informer.AddIndexers(cache.Indexers{"computeDomainUID": uidIndexer[*configapi.ComputeDomain]}))
+	require.NoError(t, informer.GetIndexer().Add(cd))
+
+	state := &DeviceState{
+		config:               hostManagedConfig(),
+		checkpointManager:    &fakeCheckpointManager{checkpoint: checkpointWithClaims(nil)},
+		computeDomainManager: &ComputeDomainManager{informer: informer, cliqueID: "clique-a"},
+		nvdevlib:             &deviceLib{devRoot: t.TempDir()},
+		allocatable: AllocatableDevices{
+			"channel-0": &AllocatableDevice{Channel: &ComputeDomainChannelInfo{ID: 0}},
+		},
+	}
+
+	config := channelConfig("cd-uid")
+	result := allocationResult("request", DriverName, "channel-0", nil)
+	claim := claimWithResults("claim-uid", result)
+
+	_, err := state.applyComputeDomainChannelConfig(
+		context.Background(),
+		config,
+		claim,
+		[]*resourceapi.DeviceRequestAllocationResult{&result},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "host nvidia-imex daemon readiness check failed")
+	assert.False(t, isPermanentError(err), "an unready host daemon must be retried, not treated as permanently broken")
+}
+
+func TestUnprepareDevicesHostManagedSkipsRemoveNodeLabel(t *testing.T) {
+	// computeDomainManager is intentionally nil: the channel branch must skip
+	// RemoveNodeLabel under host-managed IMEX, so it must never be
+	// dereferenced.
+	state := testDeviceState()
+	state.config = hostManagedConfig()
+	status := claimStatus([]resourceapi.DeviceRequestAllocationResult{
+		allocationResult("channel-request", DriverName, "channel-0", nil),
+	})
+
+	require.NoError(t, state.unprepareDevices(context.Background(), &status))
 }
 
 func testDeviceState() *DeviceState {

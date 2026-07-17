@@ -37,6 +37,26 @@ import (
 	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/workqueue"
 )
 
+// computeDomainPublishedDevices returns the devices the kubelet plugin should
+// advertise in its node ResourceSlice. IMEX channel devices other than
+// channel 0 are never advertised here (they are advertised as a network
+// resource from the control plane instead). ComputeDomain daemon devices are
+// additionally omitted when hostManaged is true, since daemon claims are
+// never valid in that mode (see applyComputeDomainDaemonConfig).
+func computeDomainPublishedDevices(allocatable AllocatableDevices, hostManaged bool) []resourceapi.Device {
+	var devices []resourceapi.Device
+	for _, device := range allocatable {
+		if device.Type() == ComputeDomainChannelType && device.Channel.ID != 0 {
+			continue
+		}
+		if hostManaged && device.Type() == ComputeDomainDaemonType {
+			continue
+		}
+		devices = append(devices, device.GetDevice())
+	}
+	return devices
+}
+
 const (
 	// ErrorRetryMaxTimeout limits the amount of time spent in the request
 	// handlers UnprepareResourceClaims() and PrepareResourceClaims(), so that
@@ -102,16 +122,9 @@ func NewDriver(ctx context.Context, config *Config) (*driver, error) {
 	}
 	driver.pluginhelper = helper
 
-	// Enumerate the set of ComputeDomain daemon devices and publish them
+	// Enumerate the set of ComputeDomain devices to publish.
 	var resourceSlice resourceslice.Slice
-	for _, device := range state.allocatable {
-		// Explicitly exclude ComputeDomain channels from being advertised here. They
-		// are instead advertised in as a network resource from the control plane.
-		if device.Type() == ComputeDomainChannelType && device.Channel.ID != 0 {
-			continue
-		}
-		resourceSlice.Devices = append(resourceSlice.Devices, device.GetDevice())
-	}
+	resourceSlice.Devices = computeDomainPublishedDevices(state.allocatable, config.imexConfig.EffectiveHostManaged())
 
 	resources := resourceslice.DriverResources{
 		Pools: map[string]resourceslice.Pool{

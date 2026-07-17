@@ -24,6 +24,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/flags"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/imex"
 	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/workqueue"
 )
 
@@ -42,6 +43,9 @@ type ManagerConfig struct {
 
 	// maxNodesPerIMEXDomain is the maximum number of nodes per IMEX domain to allocate
 	maxNodesPerIMEXDomain int
+
+	// imexConfig holds the resolved imex.mode / imex.isolation configuration.
+	imexConfig imex.Config
 
 	// clientsets provides access to various Kubernetes API client interfaces
 	clientsets flags.ClientSets
@@ -91,6 +95,7 @@ func (c *Controller) Run(ctx context.Context) error {
 		additionalNamespaces:  c.config.flags.additionalNamespaces.Value(),
 		imageName:             c.config.flags.imageName,
 		maxNodesPerIMEXDomain: c.config.flags.maxNodesPerIMEXDomain,
+		imexConfig:            c.config.imexConfig,
 		clientsets:            c.config.clientsets,
 		workQueue:             workQueue,
 		logVerbosityCDDaemon:  c.config.flags.logVerbosityCDDaemon,

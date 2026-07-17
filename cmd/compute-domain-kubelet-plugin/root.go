@@ -62,6 +62,30 @@ func (r root) getNvidiaSMIPath() (string, error) {
 	return binaryPath, nil
 }
 
+// getNvidiaImexCtlPath returns the path to the `nvidia-imex-ctl` executable
+// in the driver root. Unlike nvidia-smi, this is not resolved eagerly at
+// startup: nvidia-imex-ctl ships with the optional nvidia-imex package,
+// which is only expected to be present when the host administrator runs
+// nvidia-imex as a host service (see the HostManagedIMEXDaemon feature
+// gate), so callers should look it up lazily and treat its absence as an
+// ordinary, actionable error rather than a startup failure.
+func (r root) getNvidiaImexCtlPath() (string, error) {
+	binarySearchPaths := []string{
+		"/opt/bin",
+		"/usr/bin",
+		"/usr/sbin",
+		"/bin",
+		"/sbin",
+	}
+
+	binaryPath, err := r.findFile("nvidia-imex-ctl", binarySearchPaths...)
+	if err != nil {
+		return "", err
+	}
+
+	return binaryPath, nil
+}
+
 // isDevRoot checks whether the specified root is a dev root.
 // A dev root is defined as a root containing a /dev folder.
 func (r root) isDevRoot() bool {

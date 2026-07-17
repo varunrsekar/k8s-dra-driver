@@ -45,6 +45,7 @@ import (
 	"sigs.k8s.io/dra-driver-nvidia-gpu/internal/info"
 	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/featuregates"
 	pkgflags "sigs.k8s.io/dra-driver-nvidia-gpu/pkg/flags"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/imex"
 	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/metrics"
 )
 
@@ -68,6 +69,9 @@ type Flags struct {
 	maxNodesPerIMEXDomain int
 	logVerbosityCDDaemon  int
 
+	imexMode      string
+	imexIsolation string
+
 	httpEndpoint string
 	metricsPath  string
 	profilePath  string
@@ -83,6 +87,7 @@ type Config struct {
 	clientsets           pkgflags.ClientSets
 	mux                  *http.ServeMux
 	imagePullSecretNames []string
+	imexConfig           imex.Config
 }
 
 func main() {
@@ -138,6 +143,20 @@ func newApp() *cli.App {
 			Value:       defaultMaxNodesPerIMEXDomain,
 			EnvVars:     []string{"MAX_NODES_PER_IMEX_DOMAIN"},
 			Destination: &flags.maxNodesPerIMEXDomain,
+		},
+		&cli.StringFlag{
+			Name:        "imex-mode",
+			Usage:       "IMEX deployment mode: driverManaged or hostManaged.",
+			Value:       string(imex.ModeDriverManaged),
+			Destination: &flags.imexMode,
+			EnvVars:     []string{"IMEX_MODE"},
+		},
+		&cli.StringFlag{
+			Name:        "imex-isolation",
+			Usage:       "IMEX isolation strategy: domain (default; all workloads in the same IMEX domain share channel 0) or channel (not yet supported).",
+			Value:       string(imex.IsolationIMEXDomain),
+			Destination: &flags.imexIsolation,
+			EnvVars:     []string{"IMEX_ISOLATION"},
 		},
 		&cli.StringFlag{
 			Category:    "HTTP server:",
@@ -202,6 +221,22 @@ func newApp() *cli.App {
 				return fmt.Errorf("feature gate validation failed: %w", err)
 			}
 
+			imexConfig := imex.Config{Mode: imex.Mode(flags.imexMode), Isolation: imex.Isolation(flags.imexIsolation)}
+			if err := imexConfig.Validate(featuregates.Enabled(featuregates.HostManagedIMEXDaemon)); err != nil {
+				return fmt.Errorf("imex configuration validation failed: %w", err)
+			}
+			if imexConfig.EffectiveHostManaged() {
+				// The driver never creates per-ComputeDomain IMEX DaemonSets or
+				// ComputeDomainClique objects in host-managed mode, so these gates
+				// are meaningless (and their defaults would otherwise conflict).
+				if err := featuregates.FeatureGates().SetFromMap(map[string]bool{
+					string(featuregates.IMEXDaemonsWithDNSNames): false,
+					string(featuregates.ComputeDomainCliques):    false,
+				}); err != nil {
+					return fmt.Errorf("error forcing feature gates for hostManaged IMEX: %w", err)
+				}
+			}
+
 			mux := http.NewServeMux()
 
 			clientsets, err := flags.kubeClientConfig.NewClientSets()
@@ -215,6 +250,7 @@ func newApp() *cli.App {
 				clientsets:           clientsets,
 				driverName:           DriverName,
 				imagePullSecretNames: strings.Fields(strings.ReplaceAll(strings.TrimSpace(flags.imagePullSecretsCSV), ",", " ")),
+				imexConfig:           imexConfig,
 			}
 
 			if flags.httpEndpoint != "" {

@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/dra-driver-nvidia-gpu/internal/info"
 	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/featuregates"
 	pkgflags "sigs.k8s.io/dra-driver-nvidia-gpu/pkg/flags"
+	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/imex"
 	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/metrics"
 )
 
@@ -42,6 +43,13 @@ const (
 	DriverName                              = "compute-domain.nvidia.com"
 	DriverPluginCheckpointFileBasename      = "checkpoint.json"
 	IMEXDaemonsWithDNSNamesMinDriverVersion = "570.158.01"
+
+	// defaultIMEXHostSocketPath is the default location, under the driver
+	// root, of the Unix domain socket the host nvidia-imex daemon's
+	// command/control service listens on when host-managed IMEX is enabled.
+	// It corresponds to the host's IMEX_CMD_UNIX_DOMAIN_PATH setting in
+	// /etc/nvidia-imex/config.cfg (see site/content/docs/prerequisites.md).
+	defaultIMEXHostSocketPath = "/etc/nvidia-imex/imex_ctrl.sock"
 )
 
 type Flags struct {
@@ -60,11 +68,15 @@ type Flags struct {
 	healthcheckPort               int
 	klogVerbosity                 int
 	gpuCliqueLabelEnabled         bool
+	imexMode                      string
+	imexIsolation                 string
+	imexHostSocketPath            string
 }
 
 type Config struct {
 	flags      *Flags
 	clientsets pkgflags.ClientSets
+	imexConfig imex.Config
 }
 
 func (c Config) DriverPluginPath() string {
@@ -167,6 +179,27 @@ func newApp() *cli.App {
 			Destination: &flags.gpuCliqueLabelEnabled,
 			EnvVars:     []string{"GPU_CLIQUE_LABEL_ENABLED"},
 		},
+		&cli.StringFlag{
+			Name:        "imex-mode",
+			Usage:       "IMEX deployment mode: driverManaged or hostManaged.",
+			Value:       string(imex.ModeDriverManaged),
+			Destination: &flags.imexMode,
+			EnvVars:     []string{"IMEX_MODE"},
+		},
+		&cli.StringFlag{
+			Name:        "imex-isolation",
+			Usage:       "IMEX isolation strategy: domain (default; all workloads in the same IMEX domain share channel 0) or channel (not yet supported).",
+			Value:       string(imex.IsolationIMEXDomain),
+			Destination: &flags.imexIsolation,
+			EnvVars:     []string{"IMEX_ISOLATION"},
+		},
+		&cli.StringFlag{
+			Name:        "imex-host-socket-path",
+			Usage:       "Path (under the nvidia-driver-root) to the Unix domain socket the host nvidia-imex daemon's command/control service listens on. Only used when imex-mode=hostManaged, to validate host IMEX readiness during channel allocation.",
+			Value:       defaultIMEXHostSocketPath,
+			Destination: &flags.imexHostSocketPath,
+			EnvVars:     []string{"IMEX_HOST_SOCKET_PATH"},
+		},
 	}
 	cliFlags = append(cliFlags, flags.kubeClientConfig.Flags()...)
 	cliFlags = append(cliFlags, featureGateConfig.Flags()...)
@@ -198,6 +231,11 @@ func newApp() *cli.App {
 				return fmt.Errorf("feature gate validation failed: %w", err)
 			}
 
+			imexConfig := imex.Config{Mode: imex.Mode(flags.imexMode), Isolation: imex.Isolation(flags.imexIsolation)}
+			if err := imexConfig.Validate(featuregates.Enabled(featuregates.HostManagedIMEXDaemon)); err != nil {
+				return fmt.Errorf("imex configuration validation failed: %w", err)
+			}
+
 			clientSets, err := flags.kubeClientConfig.NewClientSets()
 			if err != nil {
 				return fmt.Errorf("create client: %w", err)
@@ -206,6 +244,7 @@ func newApp() *cli.App {
 			config := &Config{
 				flags:      flags,
 				clientsets: clientSets,
+				imexConfig: imexConfig,
 			}
 
 			return RunPlugin(c.Context, config)

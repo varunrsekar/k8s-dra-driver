@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/klog/v2"
@@ -382,6 +383,38 @@ func (l deviceLib) getNVCapIMEXChannelDeviceInfo(channelID int) (*common.NVcapDe
 	}
 
 	return info, nil
+}
+
+// nvidiaImexCtlBinaryName is the CLI tool shipped alongside nvidia-imex that
+// queries the local IMEX daemon's readiness.
+const nvidiaImexCtlBinaryName = "nvidia-imex-ctl"
+
+// checkHostIMEXReady validates that the operator-managed host nvidia-imex
+// daemon (see the HostManagedIMEXDaemon feature gate) is up and ready.
+//
+// It runs `nvidia-imex-ctl -q --u=<socketPath>` ("Query the status of the
+// IMEX daemon once and return", connecting over the given Unix domain
+// socket) chrooted into the driver root.
+//
+// This check requires the host's nvidia-imex daemon to be configured with
+// IMEX_CMD_UNIX_DOMAIN_PATH (see site/content/docs/prerequisites.md).
+func (l deviceLib) checkHostIMEXReady(socketPath string) error {
+	if _, err := root(l.devRoot).getNvidiaImexCtlPath(); err != nil {
+		return fmt.Errorf("%s not found under driver root %q: %w (is nvidia-imex installed on this node?)",
+			nvidiaImexCtlBinaryName, l.devRoot, err)
+	}
+
+	cmd := exec.Command("chroot", l.devRoot, nvidiaImexCtlBinaryName, "-q", "--u="+socketPath) //nolint:gosec
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error running %s (socket %q): %w, output: %s", nvidiaImexCtlBinaryName, socketPath, err, string(output))
+	}
+
+	if !strings.Contains(string(output), "READY") {
+		return fmt.Errorf("host nvidia-imex daemon not ready: %s", string(output))
+	}
+
+	return nil
 }
 
 func (l deviceLib) unmountRecursively(root string) error {
