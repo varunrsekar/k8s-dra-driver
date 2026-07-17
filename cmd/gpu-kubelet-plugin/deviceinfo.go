@@ -263,9 +263,6 @@ func (d *VfioDeviceInfo) GetDevice() resourceapi.Device {
 			"vendorID": {
 				StringValue: &d.vendorID,
 			},
-			"numa": {
-				IntValue: ptr.To(int64(d.numaNode)),
-			},
 			"productName": {
 				StringValue: &d.productName,
 			},
