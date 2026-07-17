@@ -19,6 +19,27 @@ jobs:
             const title = issue.title || '';
             const labelsToAdd = [];
 
+            // Extract the content of a single GitHub issue-form section by its
+            // heading. Issue forms render each field's label as a Markdown
+            // heading (e.g. "### Feature Gates (non-default settings)") followed
+            // by the user's answer, up to the next heading.
+            function getSection(markdown, heading) {
+              const lines = markdown.split(/\r?\n/);
+              const headingRegex = /^#{1,6}\s+(.*?)\s*$/;
+              let capturing = false;
+              const collected = [];
+              for (const line of lines) {
+                const match = line.match(headingRegex);
+                if (match) {
+                  if (capturing) break;
+                  if (match[1] === heading) capturing = true;
+                  continue;
+                }
+                if (capturing) collected.push(line);
+              }
+              return collected.join('\n').trim();
+            }
+
             // Component detection from issue form dropdown
             const componentMap = {
               'gpu-kubelet-plugin': 'component/gpu-kubelet-plugin',
@@ -51,8 +72,19 @@ jobs:
               'IMEXDaemonsWithDNSNames',
             ];
 
+            // Only inspect the dedicated "Feature Gates" form field, not the
+            // whole body. Otherwise gate names appearing in pasted logs or prose
+            // (e.g. the plugin's "Feature gates: map[...]" output) would wrongly
+            // trigger every feature-gate/* label. "_No response_" means the user
+            // left the field empty.
+            const featureGatesSection = getSection(body, 'Feature Gates (non-default settings)');
+            const featureGatesText =
+              featureGatesSection && featureGatesSection !== '_No response_'
+                ? featureGatesSection
+                : '';
+
             for (const gate of featureGates) {
-              if (body.includes(gate) || title.includes(gate)) {
+              if (featureGatesText.includes(gate) || title.includes(gate)) {
                 labelsToAdd.push(`feature-gate/${gate}`);
               }
             }
