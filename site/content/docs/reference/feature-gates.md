@@ -39,6 +39,7 @@ helm install dra-driver-nvidia-gpu oci://registry.k8s.io/dra-driver-nvidia/chart
 | `ComputeDomainCliques` | Beta | `true` | Uses `ComputeDomainClique` CRD objects to track IMEX daemon membership. Requires `IMEXDaemonsWithDNSNames`. |
 | `CrashOnNVLinkFabricErrors` | Beta | `true` | Causes the kubelet plugin to crash rather than fall back to non-fabric mode when NVLink fabric errors are detected. |
 | `DeviceMetadata` | Alpha | `false` | Enables IOMMU API device exposure (`/dev/iommu` or `/dev/vfio/vfio`) for VFIO workloads via `VfioDeviceConfig`. Requires `PassthroughSupport`. |
+| `FabricManagerPartitioning` | Alpha | `false` | Enables Fabric Manager (NVSwitch) partition management in single-node NVL systems for Passthrough VFIO devices. Requires `PassthroughSupport`. |
 
 ## Constraints
 
@@ -58,4 +59,5 @@ The feature gates below have the following dependencies:
 |---|---|
 | `ComputeDomainCliques` | `IMEXDaemonsWithDNSNames` |
 | `DeviceMetadata` | `PassthroughSupport` |
+| `FabricManagerPartitioning` | `PassthroughSupport` |
 | `DynamicMIG` (Kubernetes 1.34–1.35) | `DRAPartitionableDevices` Kubernetes feature gate enabled on kube-apiserver and kube-scheduler |
