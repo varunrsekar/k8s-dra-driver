@@ -2,12 +2,14 @@
 title: KubeVirt VFIO GPU passthrough
 linkTitle: KubeVirt VFIO GPU passthrough
 weight: 50
+aliases:
+  - /docs/guides/kubevirt-vfio-gpu-passthrough/
 description: Configure the DRA driver for NVIDIA GPUs for KubeVirt VFIO passthrough.
 ---
 
 KubeVirt can attach VFIO GPU devices to virtual machines through Kubernetes Dynamic Resource Allocation (DRA). This guide covers the DRA Driver for NVIDIA GPUs configuration needed for KubeVirt passthrough workloads.
 
-For KubeVirt feature gates, VM fields, and VM examples, see the [KubeVirt user guide](https://kubevirt.io/user-guide/).
+For KubeVirt feature gates, VM fields, and VM examples, refer to the [KubeVirt user guide](https://kubevirt.io/user-guide/).
 
 ## Feature status
 
@@ -18,11 +20,11 @@ This guide uses two Alpha feature gates, both disabled by default:
 | `PassthroughSupport` | `false` | Alpha |
 | `DeviceMetadata` | `false` | Alpha |
 
-See the [Feature gates](../reference/feature-gates/) and [constraints](../reference/feature-gates/#constraints) for details.
+Refer to the [feature gates reference](../../reference/feature-gates.md) and [constraints](../../reference/feature-gates.md#constraints) for details.
 
 ## Prerequisites
 
-- Meet the general driver [Prerequisites](../prerequisites/).
+- Meet the general driver [prerequisites](../../prerequisites.md).
 - **IOMMU enabled** on GPU nodes. VFIO passthrough requires IOMMU; the GPU kubelet plugin fails to start with `PassthroughSupport` enabled if IOMMU is off.
 - Use **DRA Driver for NVIDIA GPUs v0.4.0 or later** with the **`PassthroughSupport`** and **`DeviceMetadata`** feature gates enabled.
 - Use **KubeVirt v1.8.0 or later** with the **`GPUsWithDRA`** feature gate enabled. This gate is enabled by default from KubeVirt v1.9.0, so it only needs to be set explicitly on v1.8.x.
@@ -89,6 +91,12 @@ Example output:
 NAME                                                            NODE                                   DRIVER           POOL                                   AGE
 00000-gpu.nvidia.com-dra-driver-nvidia-gpu-cluster-worker-tr5pp dra-driver-nvidia-gpu-cluster-worker gpu.nvidia.com   dra-driver-nvidia-gpu-cluster-worker   3m17s
 ```
+
+VFIO devices carry the `gpu.nvidia.com/type` attribute value `vfio`. For the VFIO
+device attributes you can match with CEL selectors, refer to
+[ResourceSlice device attributes](../../reference/resourceslice-attributes.md#vfio-passthrough-type-vfio).
+To inspect ResourceSlice output on your cluster, refer to
+[View available GPU resources](view-resources.md).
 
 ## VFIO passthrough claim template
 
