@@ -116,14 +116,18 @@ body:
       description: Select any feature gates you have changed from their defaults (enabled Alpha gates, or disabled Beta gates).
       multiple: true
       options:
-        - "TimeSlicingSettings (disabled)"
-        - "MPSSupport (disabled)"
-        - "PassthroughSupport (enabled)"
-        - "DynamicMIG (disabled)"
-        - "NVMLDeviceHealthCheck (disabled)"
-        - "IMEXDaemonsWithDNSNames (disabled)"
         - "ComputeDomainCliques (disabled)"
         - "CrashOnNVLinkFabricErrors (disabled)"
+        - "DRAListTypeAttributes (enabled)"
+        - "DeviceMetadata (enabled)"
+        - "DynamicMIG (enabled)"
+        - "FabricManagerPartitioning (enabled)"
+        - "HostManagedIMEXDaemon (enabled)"
+        - "IMEXDaemonsWithDNSNames (disabled)"
+        - "MPSSupport (enabled)"
+        - "NVMLDeviceHealthCheck (enabled)"
+        - "PassthroughSupport (enabled)"
+        - "TimeSlicingSettings (enabled)"
 
   - type: textarea
     id: helm-values
