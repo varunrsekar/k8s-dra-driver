@@ -110,7 +110,7 @@ func (l deviceLib) init() error {
 	// We use the INIT_FLAG_NO_GPUS flag to avoid failing if there are no GPUs.
 	ret := l.nvmllib.InitWithFlags(nvml.INIT_FLAG_NO_GPUS)
 	if ret != nvml.SUCCESS {
-		return fmt.Errorf("error initializing NVML: %v", ret)
+		return fmt.Errorf("error initializing NVML: %w", ret)
 	}
 	return nil
 }
@@ -130,7 +130,7 @@ func (l deviceLib) getDriverVersion() (*version.Version, error) {
 
 	driverVersion, ret := l.nvmllib.SystemGetDriverVersion()
 	if ret != nvml.SUCCESS {
-		return nil, fmt.Errorf("error getting driver version: %v", ret)
+		return nil, fmt.Errorf("error getting driver version: %w", ret)
 	}
 
 	// Parse the version using Kubernetes version utilities
@@ -297,7 +297,7 @@ func (l deviceLib) getCliqueIDStrict() (string, error) {
 		}
 
 		if ret != nvml.SUCCESS {
-			return fmt.Errorf("failed to get GPU fabric info (device %d/%s): %v", i, duid, ret)
+			return fmt.Errorf("failed to get GPU fabric info (device %d/%s): %w", i, duid, ret)
 		}
 
 		if info.State == nvml.GPU_FABRIC_STATE_NOT_SUPPORTED {

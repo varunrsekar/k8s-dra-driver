@@ -154,13 +154,13 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 	if featuregates.Enabled(featuregates.PassthroughSupport) {
 		vfioPciManager, err = NewVfioPciManager(string(containerDriverRoot), string(hostDriverRoot), nvdevlib, true /* nvidiaEnabled */)
 		if err != nil {
-			return nil, fmt.Errorf("unable to create vfio pci manager: %v", err)
+			return nil, fmt.Errorf("unable to create vfio pci manager: %w", err)
 		}
 	}
 
 	checkpointManager, err := checkpointmanager.NewCheckpointManager(config.DriverPluginPath())
 	if err != nil {
-		return nil, fmt.Errorf("unable to create checkpoint manager: %v", err)
+		return nil, fmt.Errorf("unable to create checkpoint manager: %w", err)
 	}
 
 	cpLockPath := filepath.Join(config.DriverPluginPath(), "cp.lock")
@@ -180,7 +180,7 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 
 	checkpoints, err := state.checkpointManager.ListCheckpoints()
 	if err != nil {
-		return nil, fmt.Errorf("unable to list checkpoints: %v", err)
+		return nil, fmt.Errorf("unable to list checkpoints: %w", err)
 	}
 
 	currentBootID, err := bootid.GetCurrentBootID()
@@ -220,7 +220,7 @@ func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 	klog.Infof("Create empty checkpoint")
 	newCheckpoint := &Checkpoint{V2: &CheckpointV2{NodeBootID: currentBootID}}
 	if err := state.createCheckpoint(ctx, newCheckpoint); err != nil {
-		return nil, fmt.Errorf("unable to create fresh checkpoint: %v", err)
+		return nil, fmt.Errorf("unable to create fresh checkpoint: %w", err)
 	}
 
 	return state, nil
@@ -237,7 +237,7 @@ func (s *DeviceState) Prepare(ctx context.Context, claim *resourceapi.ResourceCl
 	tgcp0 := time.Now()
 	cp, err := s.getCheckpoint(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get checkpoint: %v", err)
+		return nil, fmt.Errorf("unable to get checkpoint: %w", err)
 	}
 	klog.V(7).Infof("t_prep_get_checkpoint %.3f s", time.Since(tgcp0).Seconds())
 
@@ -430,7 +430,7 @@ func (s *DeviceState) Unprepare(ctx context.Context, claimRef kubeletplugin.Name
 
 	checkpoint, err := s.getCheckpoint(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to get checkpoint: %v", err)
+		return fmt.Errorf("unable to get checkpoint: %w", err)
 	}
 
 	claimUID := string(claimRef.UID)
@@ -700,7 +700,7 @@ func (s *DeviceState) prepareDevices(ctx context.Context, claim *resourceapi.Res
 		claim.Status.Allocation.Devices.Config,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("error getting opaque device configs: %v", err)
+		return nil, fmt.Errorf("error getting opaque device configs: %w", err)
 	}
 
 	// Add the default GPU and MIG device Configs to the front of the config
