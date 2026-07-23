@@ -443,6 +443,13 @@ func (m *MpsControlDaemon) Stop(ctx context.Context) error {
 		return fmt.Errorf("failed to delete deployment: %w", err)
 	}
 
+	// Start() sets the compute mode of these GPUs to EXCLUSIVE_PROCESS as
+	// required by MPS. Reset it back to DEFAULT here so the GPUs are not left
+	// stuck in EXCLUSIVE_PROCESS after teardown.
+	if err := m.manager.nvdevlib.setComputeMode(m.devices.GpuUUIDs(), "DEFAULT"); err != nil {
+		return fmt.Errorf("error resetting compute mode to DEFAULT: %w", err)
+	}
+
 	mountExecutable, err := exec.LookPath("mount")
 	if err != nil {
 		return fmt.Errorf("error finding 'mount' executable: %w", err)
