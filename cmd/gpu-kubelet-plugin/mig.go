@@ -100,8 +100,8 @@ type MigSpec struct {
 
 func (m *MigSpec) Tuple() *MigSpecTuple {
 	return &MigSpecTuple{
-		ParentMinor:    m.Parent.minor,
-		ParentPCIBusID: m.Parent.pciBusID,
+		ParentMinor:    m.Parent.Minor,
+		ParentPCIBusID: m.Parent.PciBusID,
 		ProfileID:      int(m.GIProfileInfo.Id),
 		PlacementStart: int(m.Placement.Start),
 	}
@@ -156,34 +156,34 @@ func CommonAttributesMig(parent *GpuInfo, profileName string) map[resourceapi.Qu
 			StringValue: ptr.To(profileName),
 		},
 		"productName": {
-			StringValue: &parent.productName,
+			StringValue: &parent.ProductName,
 		},
 		"brand": {
-			StringValue: &parent.brand,
+			StringValue: &parent.Brand,
 		},
 		"architecture": {
-			StringValue: &parent.architecture,
+			StringValue: &parent.Architecture,
 		},
 		"cudaComputeCapability": {
-			VersionValue: ptr.To(semver.MustParse(parent.cudaComputeCapability).String()),
+			VersionValue: ptr.To(semver.MustParse(parent.CudaComputeCapability).String()),
 		},
 		"driverVersion": {
-			VersionValue: ptr.To(semver.MustParse(parent.driverVersion).String()),
+			VersionValue: ptr.To(semver.MustParse(parent.DriverVersion).String()),
 		},
 		"cudaDriverVersion": {
-			VersionValue: ptr.To(semver.MustParse(parent.cudaDriverVersion).String()),
+			VersionValue: ptr.To(semver.MustParse(parent.CudaDriverVersion).String()),
 		},
 	}
 
-	if parent.addressingMode != nil {
+	if parent.AddressingMode != nil {
 		attrs["addressingMode"] = resourceapi.DeviceAttribute{
-			StringValue: parent.addressingMode,
+			StringValue: parent.AddressingMode,
 		}
 	}
 
-	addDeviceAttribute(attrs, parent.pciBusIDAttr)
-	addDeviceAttribute(attrs, parent.pcieRootAttr)
-	addDeviceAttribute(attrs, parent.numaNodeAttr)
+	addDeviceAttribute(attrs, parent.PciBusIDAttr)
+	addDeviceAttribute(attrs, parent.PcieRootAttr)
+	addDeviceAttribute(attrs, parent.NumaNodeAttr)
 
 	return attrs
 }
@@ -259,12 +259,12 @@ func (m *MigSpec) validateMigProfiles() error {
 }
 
 type MigProfileInfo struct {
-	profile    nvdev.MigProfile
-	placements []*MigDevicePlacement
+	Profile    nvdev.MigProfile
+	Placements []*MigDevicePlacement
 }
 
 func (p MigProfileInfo) String() string {
-	return p.profile.String()
+	return p.Profile.String()
 }
 
 type MigDevicePlacement struct {

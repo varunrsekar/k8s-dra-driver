@@ -41,7 +41,7 @@ type PreparedDevice struct {
 }
 
 type PreparedGpu struct {
-	Info   *GpuInfo            `json:"info"`
+	Info   *GpuLiveTuple       `json:"info"`
 	Device *CheckpointedDevice `json:"device"`
 }
 
@@ -55,7 +55,7 @@ type PreparedMigDevice struct {
 }
 
 type PreparedVfioDevice struct {
-	Info   *VfioDeviceInfo     `json:"info"`
+	Info   *VfioLiveTuple      `json:"info"`
 	Device *CheckpointedDevice `json:"device"`
 }
 

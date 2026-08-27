@@ -1083,7 +1083,7 @@ func (s *DeviceState) prepareDevices(ctx context.Context, claim *resourceapi.Res
 			switch allocatableDevice.Type() {
 			case GpuDeviceType:
 				preparedDevice.Gpu = &PreparedGpu{
-					Info:   allocatableDevice.Gpu,
+					Info:   allocatableDevice.Gpu.LiveTuple(),
 					Device: device,
 				}
 			case MigStaticDeviceType:
@@ -1115,7 +1115,7 @@ func (s *DeviceState) prepareDevices(ctx context.Context, claim *resourceapi.Res
 				}
 			case VfioDeviceType:
 				preparedDevice.Vfio = &PreparedVfioDevice{
-					Info:   allocatableDevice.Vfio,
+					Info:   allocatableDevice.Vfio.LiveTuple(),
 					Device: device,
 				}
 			}
@@ -1151,15 +1151,15 @@ func (s *DeviceState) unprepareDevices(ctx context.Context, claimUID string, dev
 		for _, device := range group.Devices {
 			switch device.Type() {
 			case GpuDeviceType:
-				klog.V(4).Infof("Unprepare: regular GPU: noop (GPU %s)", device.Gpu.Info.String())
+				klog.V(4).Infof("Unprepare: regular GPU: noop (GPU %s)", device.Gpu.Device.DeviceName)
 			case PreparedMigDeviceType:
 				if featuregates.Enabled(featuregates.DynamicMIG) {
 					mig := device.Mig.Concrete
 					if isConsumableSharesEnabled(s.config) && isMigDeviceInUseByOtherClaims(checkpoint, claimUID, mig.MigUUID, device.Mig.Device.DeviceName) {
-						klog.V(4).Infof("Unprepare: dynamic MIG device '%s' still in use by other claims, skipping deletion", mig.MigUUID)
+						klog.V(4).Infof("Unprepare: dynamic MIG device %q still in use by other claims, skipping deletion", mig.MigUUID)
 						continue
 					}
-					klog.V(4).Infof("Unprepare: tear down MIG device '%s' for claim '%s'", mig.MigUUID, claimUID)
+					klog.V(4).Infof("Unprepare: tear down MIG device %q for claim '%s'", mig.MigUUID, claimUID)
 					// Errors during MIG device deletion are generally rare but
 					// have to be expected, and should fail the
 					// NodeUnprepareResources() operation. This may for example
@@ -1245,7 +1245,7 @@ func (s *DeviceState) unprepareVfioDevices(ctx context.Context, devices Prepared
 func (s *DeviceState) discoverSiblingAllocatables(device *AllocatableDevice) error {
 	switch device.Type() {
 	case GpuDeviceType:
-		if !featuregates.Enabled(featuregates.PassthroughSupport) || !s.nvdevlib.IsVfioEnabled() || !device.Gpu.vfioEnabled {
+		if !featuregates.Enabled(featuregates.PassthroughSupport) || !s.nvdevlib.IsVfioEnabled() || !device.Gpu.VfioEnabled {
 			return nil
 		}
 		vfioAllocatable, err := s.nvdevlib.discoverVfioDevice(device.Gpu)
@@ -1265,7 +1265,7 @@ func (s *DeviceState) discoverSiblingAllocatables(device *AllocatableDevice) err
 		if err != nil {
 			return fmt.Errorf("error adding allocatable device: %w", err)
 		}
-		device.Vfio.parent = gpu.Gpu
+		device.Vfio.Parent = gpu.Gpu
 		// Always invalidate after rebinding, even if the minor is unchanged.
 		// getDeviceSpecsByUUIDAndMinor only refreshes entries with a mismatched
 		// minor, so a same-minor cache entry could hide a stale host device node.
@@ -1467,12 +1467,12 @@ func (s *DeviceState) resolveFabricPartition(gpus []*GpuInfo) (int, error) {
 		if gpu == nil {
 			return 0, fmt.Errorf("fabric manager: missing physical GPU identity")
 		}
-		physicalID, found, err := s.fmManager.PhysicalIDForGPU(gpu.UUID, gpu.pciBusID, gpu.gpuModuleID)
+		physicalID, found, err := s.fmManager.PhysicalIDForGPU(gpu.UUID, gpu.PciBusID, gpu.GpuModuleID)
 		if err != nil {
 			return 0, err
 		}
 		if !found {
-			return 0, fmt.Errorf("fabric manager: no member for GPU UUID %q PCI %q (NVML module ID %d)", gpu.UUID, gpu.pciBusID, gpu.gpuModuleID)
+			return 0, fmt.Errorf("fabric manager: no member for GPU UUID %q PCI %q (NVML module ID %d)", gpu.UUID, gpu.PciBusID, gpu.GpuModuleID)
 		}
 		physicalIDs = append(physicalIDs, physicalID)
 	}
@@ -1500,7 +1500,7 @@ func (s *DeviceState) gpuInfosFromPreparedClaim(results []resourceapi.DeviceRequ
 		case GpuDeviceType:
 			gpus = append(gpus, device.Gpu)
 		case VfioDeviceType:
-			gpus = append(gpus, device.Vfio.parent)
+			gpus = append(gpus, device.Vfio.Parent)
 		default:
 			klog.V(6).Infof("device %q has unsupported type %q; skipping for fabric partition", r.Device, device.Type())
 		}
@@ -1549,21 +1549,21 @@ func (s *DeviceState) attachFabricManagerPartitions(gpu *GpuInfo) error {
 	if !s.fabricManagerPartitioningEnabled() || gpu == nil {
 		return nil
 	}
-	physicalID, found, err := s.fmManager.PhysicalIDForGPU(gpu.UUID, gpu.pciBusID, gpu.gpuModuleID)
+	physicalID, found, err := s.fmManager.PhysicalIDForGPU(gpu.UUID, gpu.PciBusID, gpu.GpuModuleID)
 	if err != nil {
 		return err
 	}
 	if !found {
-		klog.Warningf("GPU UUID %q PCI %q has no Fabric Manager member; skipping partition attributes", gpu.UUID, gpu.pciBusID)
-		gpu.partitionsBySize = nil
+		klog.Warningf("GPU UUID %q PCI %q has no Fabric Manager member; skipping partition attributes", gpu.UUID, gpu.PciBusID)
+		gpu.PartitionsBySize = nil
 		return nil
 	}
 	bySize, err := s.fmManager.GetPartitionsBySizeByPhysicalID(physicalID)
 	if err != nil {
 		return fmt.Errorf("getting partition-by-size mapping for physical ID %d: %w", physicalID, err)
 	}
-	klog.V(4).Infof("Fabric Manager: GPU UUID %s PCI %s NVML module ID %d maps to physical ID %d", gpu.UUID, gpu.pciBusID, gpu.gpuModuleID, physicalID)
-	gpu.partitionsBySize = bySize
+	klog.V(4).Infof("Fabric Manager: GPU UUID %s PCI %s NVML module ID %d maps to physical ID %d", gpu.UUID, gpu.PciBusID, gpu.GpuModuleID, physicalID)
+	gpu.PartitionsBySize = bySize
 	return nil
 }
 
@@ -2037,7 +2037,7 @@ func (s *DeviceState) AddDeviceTaint(d *AllocatableDevice, taint *resourceapi.De
 // Used by the driver at startup to gate the DynamicMIG-specific code paths.
 func (s *DeviceState) IsMigCapable() bool {
 	for _, gpu := range s.nvdevlib.gpuInfosByUUID {
-		if gpu.migCapable {
+		if gpu.MigCapable {
 			return true
 		}
 	}

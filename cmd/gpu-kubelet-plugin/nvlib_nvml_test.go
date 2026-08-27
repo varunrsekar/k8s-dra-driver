@@ -233,9 +233,9 @@ func TestDeviceLibGetMigDevices(t *testing.T) {
 	}
 	gpuInfo := &GpuInfo{
 		UUID:        "GPU-1",
-		minor:       1,
-		migEnabled:  true,
-		migProfiles: []*MigProfileInfo{{profile: testMigProfile()}},
+		Minor:       1,
+		MigEnabled:  true,
+		MigProfiles: []*MigProfileInfo{{Profile: testMigProfile()}},
 	}
 	l := deviceLib{devhandleByUUID: map[string]nvml.Device{gpuInfo.UUID: gpu}}
 
@@ -275,7 +275,7 @@ func TestDeviceLibCreateMigDevice(t *testing.T) {
 	// not the MIG device handle. The MIG device UUID must be resolved via the
 	// parent's MIG device handles, never from ComputeInstanceInfo.Device.
 	ci.info.Device = gpu
-	parent := &GpuInfo{UUID: "GPU-1", minor: 1}
+	parent := &GpuInfo{UUID: "GPU-1", Minor: 1}
 	l := deviceLib{
 		Interface:       fakeNVMLDeviceLib{device: fakeNVDevice{}},
 		devhandleByUUID: map[string]nvml.Device{parent.UUID: gpu},
@@ -324,7 +324,7 @@ func TestDeviceStateRollbackAfterComputeInstanceCreationFailure(t *testing.T) {
 		giProfile: nvml.GpuInstanceProfileInfo{Id: 19},
 		events:    &events,
 	}
-	parent := &GpuInfo{UUID: "GPU-1", minor: 1, pciBusID: "0000:01:00.0"}
+	parent := &GpuInfo{UUID: "GPU-1", Minor: 1, PciBusID: "0000:01:00.0"}
 	nvmllib := &mockNVMLLibrary{
 		deviceGetHandleByUUIDFunc: func(uuid string) (nvml.Device, nvml.Return) {
 			if uuid != parent.UUID {
@@ -337,7 +337,7 @@ func TestDeviceStateRollbackAfterComputeInstanceCreationFailure(t *testing.T) {
 		Interface:         fakeNVMLDeviceLib{device: fakeNVDevice{migEnabled: true}},
 		nvmllib:           nvmllib,
 		gpuInfosByUUID:    map[string]*GpuInfo{parent.UUID: parent},
-		gpuUUIDbyPCIBusID: map[PCIBusID]string{parent.pciBusID: parent.UUID},
+		gpuUUIDbyPCIBusID: map[PCIBusID]string{parent.PciBusID: parent.UUID},
 		devhandleByUUID:   make(map[string]nvml.Device),
 	}
 	migSpec := &MigSpec{
@@ -371,7 +371,7 @@ func TestDeviceStateRollbackAfterComputeInstanceCreationFailure(t *testing.T) {
 	state := &DeviceState{
 		nvdevlib: l,
 		perGPUAllocatable: &PerGPUAllocatableDevices{allocatablesMap: map[PCIBusID]AllocatableDevices{
-			parent.pciBusID: {
+			parent.PciBusID: {
 				deviceName: {MigDynamic: migSpec},
 			},
 		}},
@@ -390,7 +390,7 @@ func TestDeviceLibDeleteMigDevice(t *testing.T) {
 	ci := &fakeNVMLComputeInstance{events: &events}
 	gi := &fakeNVMLGpuInstance{ci: ci, events: &events}
 	gpu := &fakeNVMLGPU{gi: gi, events: &events}
-	parent := &GpuInfo{UUID: "GPU-1", minor: 1}
+	parent := &GpuInfo{UUID: "GPU-1", Minor: 1}
 	l := deviceLib{
 		devhandleByUUID: map[string]nvml.Device{parent.UUID: gpu},
 		gpuInfosByUUID:  map[string]*GpuInfo{parent.UUID: parent},
@@ -407,11 +407,11 @@ func withoutMigDeviceRuntimeFields(info *MigDeviceInfo) *MigDeviceInfo {
 		return nil
 	}
 	copy := *info
-	copy.parent = nil
-	copy.giProfileInfo = nil
-	copy.gIInfo = nil
-	copy.ciProfileInfo = nil
-	copy.cIInfo = nil
+	copy.Parent = nil
+	copy.GiProfileInfo = nil
+	copy.GIInfo = nil
+	copy.CiProfileInfo = nil
+	copy.CIInfo = nil
 	return &copy
 }
 
@@ -472,7 +472,7 @@ func TestDeviceLibInspectMigProfilesAndPlacements(t *testing.T) {
 			}
 			partial := testMigProfile().GetInfo()
 			partial.C = 0
-			parent := &GpuInfo{minor: 1}
+			parent := &GpuInfo{Minor: 1}
 			device := fakeNVDevice{
 				profiles:   append(append([]nvdev.MigProfile{}, profiles...), &partial),
 				giProfile:  nvml.GpuInstanceProfileInfo{Id: 19, MultiprocessorCount: 16},

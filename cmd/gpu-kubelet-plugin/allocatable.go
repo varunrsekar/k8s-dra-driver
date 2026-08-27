@@ -46,15 +46,15 @@ type PerGPUAllocatableDevices struct {
 
 // AllocatableDevice represents an individual device that can be allocated.
 type AllocatableDevice struct {
-	Gpu        *GpuInfo
-	MigDynamic *MigSpec
-	MigStatic  *MigDeviceInfo
-	Vfio       *VfioDeviceInfo
+	Gpu        *GpuInfo        `json:"gpu,omitempty"`
+	MigDynamic *MigSpec        `json:"migDynamic,omitempty"`
+	MigStatic  *MigDeviceInfo  `json:"migStatic,omitempty"`
+	Vfio       *VfioDeviceInfo `json:"vfio,omitempty"`
 
-	// taints holds DRA device taints set by the health monitor. Published
+	// DeviceTaints holds DRA device taints set by the health monitor. Published
 	// as part of the device's ResourceSlice entry so the scheduler and
 	// kubelet honour them per KEP-5055.
-	taints []resourceapi.DeviceTaint
+	DeviceTaints []resourceapi.DeviceTaint `json:"deviceTaints,omitempty"`
 }
 
 func (d AllocatableDevice) Type() string {
@@ -146,11 +146,11 @@ func (d AllocatableDevice) UUID() string {
 func (d *AllocatableDevice) GetGPUPCIBusID() string {
 	switch d.Type() {
 	case GpuDeviceType:
-		return d.Gpu.pciBusID
+		return d.Gpu.PciBusID
 	case MigStaticDeviceType:
-		return d.MigStatic.parent.pciBusID
+		return d.MigStatic.Parent.PciBusID
 	case MigDynamicDeviceType:
-		return d.MigDynamic.Parent.pciBusID
+		return d.MigDynamic.Parent.PciBusID
 	case VfioDeviceType:
 		return d.Vfio.PciBusID
 	}
@@ -309,7 +309,7 @@ func (d *PerGPUAllocatableDevices) RemoveSiblingDevices(device *AllocatableDevic
 	var pciBusID string
 	switch device.Type() {
 	case GpuDeviceType:
-		pciBusID = device.Gpu.pciBusID
+		pciBusID = device.Gpu.PciBusID
 	case VfioDeviceType:
 		pciBusID = device.Vfio.PciBusID
 	case MigStaticDeviceType:
@@ -344,7 +344,7 @@ func (d *PerGPUAllocatableDevices) RemoveSiblingDevices(device *AllocatableDevic
 // Taints returns a copy of the device's taints to prevent data races
 // when being read concurrently by the ResourceSlice builder.
 func (d *AllocatableDevice) Taints() []resourceapi.DeviceTaint {
-	return slices.Clone(d.taints)
+	return slices.Clone(d.DeviceTaints)
 }
 
 // AddOrUpdateTaint adds a new taint or updates an existing one with the same
@@ -352,7 +352,7 @@ func (d *AllocatableDevice) Taints() []resourceapi.DeviceTaint {
 // recovery removes them.
 // Returns true if the taint set was modified.
 func (d *AllocatableDevice) AddOrUpdateTaint(taint *resourceapi.DeviceTaint) bool {
-	for i, existing := range d.taints {
+	for i, existing := range d.DeviceTaints {
 		if existing.Key == taint.Key {
 			// 1. If nothing actually changed, exit early to avoid API calls
 			if existing.Value == taint.Value && existing.Effect == taint.Effect {
@@ -365,24 +365,24 @@ func (d *AllocatableDevice) AddOrUpdateTaint(taint *resourceapi.DeviceTaint) boo
 			}
 
 			// 2. Otherwise, update the fields and the timestamp
-			d.taints[i].Value = taint.Value
-			d.taints[i].Effect = taint.Effect
-			d.taints[i].TimeAdded = nil // reset timestamp for the API server
+			d.DeviceTaints[i].Value = taint.Value
+			d.DeviceTaints[i].Effect = taint.Effect
+			d.DeviceTaints[i].TimeAdded = nil // reset timestamp for the API server
 			return true
 		}
 	}
 
 	// 3. Key doesn't exist yet, append the dereferenced struct
-	d.taints = append(d.taints, *taint)
+	d.DeviceTaints = append(d.DeviceTaints, *taint)
 	return true
 }
 
 // RemoveTaint removes the taint with the specified key. It returns true when a
 // taint was removed.
 func (d *AllocatableDevice) RemoveTaint(key string) (resourceapi.DeviceTaint, bool) {
-	for i, taint := range d.taints {
+	for i, taint := range d.DeviceTaints {
 		if taint.Key == key {
-			d.taints = slices.Delete(d.taints, i, i+1)
+			d.DeviceTaints = slices.Delete(d.DeviceTaints, i, i+1)
 			return taint, true
 		}
 	}

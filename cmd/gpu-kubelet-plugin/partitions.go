@@ -32,12 +32,12 @@ type PartCapacityMap map[resourceapi.QualifiedName]resourceapi.DeviceCapacity
 // dispatched separately (feature-gate-gated in publishResources()), so
 // without a shared helper they may silently drift.
 func (d *GpuInfo) fullGpuCapacity() PartCapacityMap {
-	if d.memoryBytes == nil {
+	if d.MemoryBytes == nil {
 		return nil
 	}
 	return PartCapacityMap{
 		"memory": resourceapi.DeviceCapacity{
-			Value: *resource.NewQuantity(int64(*d.memoryBytes), resource.BinarySI),
+			Value: *resource.NewQuantity(int64(*d.MemoryBytes), resource.BinarySI),
 		},
 	}
 }
@@ -51,8 +51,8 @@ func (d *GpuInfo) fullGpuCapacity() PartCapacityMap {
 // legacy non-DynamicMIG GetDevice() path so that the full GPU device is
 // announced with quantitative capacity in both paths.
 func (d *GpuInfo) PartCapacities() PartCapacityMap {
-	if len(d.maxCapacities) > 0 {
-		return d.maxCapacities
+	if len(d.MaxCapacities) > 0 {
+		return d.MaxCapacities
 	}
 	return d.fullGpuCapacity()
 }
@@ -73,12 +73,12 @@ func (d *GpuInfo) PartSharedCounterSets() []resourceapi.CounterSet {
 	// no partitions, so a per-GPU CounterSet has no consumers and the
 	// Kubernetes API would reject an empty Counters map.
 	// error: spec.sharedCounters[0].counters: Required value
-	if len(d.maxCapacities) == 0 {
+	if len(d.MaxCapacities) == 0 {
 		return nil
 	}
 	return []resourceapi.CounterSet{{
 		Name:     d.GetSharedCounterSetName(),
-		Counters: addCountersForMemSlices(capacitiesToCounters(d.maxCapacities), 0, d.memSliceCount),
+		Counters: addCountersForMemSlices(capacitiesToCounters(d.MaxCapacities), 0, d.MemSliceCount),
 	}}
 }
 
@@ -89,12 +89,12 @@ func (d *GpuInfo) PartSharedCounterSets() []resourceapi.CounterSet {
 func (d *GpuInfo) PartConsumesCounters() []resourceapi.DeviceCounterConsumption {
 	// Returns nil when no MIG profile data has been collected for this GPU
 	// (matches PartSharedCounterSets — there is no CounterSet to consume from).
-	if len(d.maxCapacities) == 0 {
+	if len(d.MaxCapacities) == 0 {
 		return nil
 	}
 	return []resourceapi.DeviceCounterConsumption{{
 		CounterSet: d.GetSharedCounterSetName(),
-		Counters:   addCountersForMemSlices(capacitiesToCounters(d.maxCapacities), 0, d.memSliceCount),
+		Counters:   addCountersForMemSlices(capacitiesToCounters(d.MaxCapacities), 0, d.MemSliceCount),
 	}}
 }
 
@@ -109,8 +109,8 @@ func (d *GpuInfo) PartGetDevice() resourceapi.Device {
 
 	// Not available in all environments, enrich advertised device only
 	// conditionally.
-	if d.pcieRootAttr != nil {
-		dev.Attributes[d.pcieRootAttr.Name] = d.pcieRootAttr.Value
+	if d.PcieRootAttr != nil {
+		dev.Attributes[d.PcieRootAttr.Name] = d.PcieRootAttr.Value
 	}
 
 	return dev

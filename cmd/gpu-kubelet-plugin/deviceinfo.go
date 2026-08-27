@@ -32,39 +32,44 @@ import (
 
 // Represents a specific, full, physical GPU device.
 type GpuInfo struct {
-	UUID                  string `json:"uuid"`
-	minor                 int
-	migCapable            bool
-	migEnabled            bool
-	vfioEnabled           bool
-	memoryBytes           *uint64
-	productName           string
-	brand                 string
-	architecture          string
-	cudaComputeCapability string
-	driverVersion         string
-	cudaDriverVersion     string
-	pciBusID              string
-	pciBusIDAttr          *deviceattribute.DeviceAttribute
-	pcieRootAttr          *deviceattribute.DeviceAttribute
-	numaNodeAttr          *deviceattribute.DeviceAttribute
-	migProfiles           []*MigProfileInfo
-	addressingMode        *string
+	UUID                  string                           `json:"uuid"`
+	Minor                 int                              `json:"minor"`
+	MigCapable            bool                             `json:"migCapable"`
+	MigEnabled            bool                             `json:"migEnabled"`
+	VfioEnabled           bool                             `json:"vfioEnabled"`
+	MemoryBytes           *uint64                          `json:"memoryBytes"`
+	ProductName           string                           `json:"productName"`
+	Brand                 string                           `json:"brand"`
+	Architecture          string                           `json:"architecture"`
+	CudaComputeCapability string                           `json:"cudaComputeCapability"`
+	DriverVersion         string                           `json:"driverVersion"`
+	CudaDriverVersion     string                           `json:"cudaDriverVersion"`
+	PciBusID              string                           `json:"pciBusID"`
+	PciBusIDAttr          *deviceattribute.DeviceAttribute `json:"pciBusIDAttr"`
+	PcieRootAttr          *deviceattribute.DeviceAttribute `json:"pcieRootAttr"`
+	NumaNodeAttr          *deviceattribute.DeviceAttribute `json:"numaNodeAttr"`
+	MigProfiles           []*MigProfileInfo                `json:"migProfiles"`
+	AddressingMode        *string                          `json:"addressingMode"`
 
 	// The following properties that can only be known after inspecting MIG
 	// profiles.
-	maxCapacities PartCapacityMap
-	memSliceCount int
+	MaxCapacities PartCapacityMap `json:"maxCapacities"`
+	MemSliceCount int             `json:"memSliceCount"`
 
 	// NVML module ID, published when FM partitioning is enabled. This is
 	// distinct from FM's physical GPU ID on some platforms.
-	gpuModuleID int
+	GpuModuleID int `json:"gpuModuleID"`
 
 	// partitionsBySize maps an FM partition size (number of GPUs in the
 	// partition) to the partitionId of the partition of that size that
 	// includes this GPU. Used to publish the `partition1`/`partition2`/
 	// `partition4`/`partition8` device attributes.
-	partitionsBySize map[int]int
+	PartitionsBySize map[int]int `json:"partitionsBySize"`
+}
+
+type GpuLiveTuple struct {
+	UUID  string `json:"uuid"`
+	Minor *int   `json:"minor,omitempty"`
 }
 
 // Represents a specific (concrete, incarnated, created) MIG device. Annotated
@@ -88,30 +93,35 @@ type MigDeviceInfo struct {
 	PlacementStart int `json:"placementStart"`
 	PlacementSize  int `json:"placementSize"`
 
-	gIInfo        *nvml.GpuInstanceInfo
-	cIInfo        *nvml.ComputeInstanceInfo
-	parent        *GpuInfo
-	giProfileInfo *nvml.GpuInstanceProfileInfo
-	ciProfileInfo *nvml.ComputeInstanceProfileInfo
+	GIInfo        *nvml.GpuInstanceInfo            `json:"giInfo"`
+	CIInfo        *nvml.ComputeInstanceInfo        `json:"ciInfo"`
+	Parent        *GpuInfo                         `json:"parent"`
+	GiProfileInfo *nvml.GpuInstanceProfileInfo     `json:"giProfileInfo"`
+	CiProfileInfo *nvml.ComputeInstanceProfileInfo `json:"ciProfileInfo"`
 }
 
 type VfioDeviceInfo struct {
-	UUID        string `json:"uuid"`
-	deviceID    string
-	vendorID    string
-	index       int
-	parent      *GpuInfo
-	productName string
+	UUID        string   `json:"uuid"`
+	DeviceID    string   `json:"deviceID"`
+	VendorID    string   `json:"vendorID"`
+	Index       int      `json:"index"`
+	Parent      *GpuInfo `json:"parent"`
+	ProductName string   `json:"productName"`
 	// `omitempty`: postdates 25.12.0; emitting "pciBusID":"" would trip
 	// CorruptCheckpointError on upgrade. See issue 1080.
-	PciBusID               string `json:"pciBusID,omitempty"`
-	pciBusIDAttr           *deviceattribute.DeviceAttribute
-	pcieRootAttr           *deviceattribute.DeviceAttribute
-	numaNodeAttr           *deviceattribute.DeviceAttribute
-	iommuGroup             int
-	iommuFDEnabled         bool
-	addressableMemoryBytes uint64
-	vfioModule             string
+	PciBusID               string                           `json:"pciBusID,omitempty"`
+	PciBusIDAttr           *deviceattribute.DeviceAttribute `json:"pciBusIDAttr"`
+	PcieRootAttr           *deviceattribute.DeviceAttribute `json:"pcieRootAttr"`
+	NumaNodeAttr           *deviceattribute.DeviceAttribute `json:"numaNodeAttr"`
+	IommuGroup             int                              `json:"iommuGroup"`
+	IommuFDEnabled         bool                             `json:"iommuFDEnabled"`
+	AddressableMemoryBytes uint64                           `json:"addressableMemoryBytes"`
+	VfioModule             string                           `json:"vfioModule"`
+}
+
+type VfioLiveTuple struct {
+	UUID     string `json:"uuid"`
+	PciBusID string `json:"pciBusID"`
 }
 
 // CanonicalName returns the nameused for device announcement (in ResourceSlice
@@ -119,13 +129,20 @@ type VfioDeviceInfo struct {
 // device announcement. Some context can be found at
 // https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/issues/563#issuecomment-3345631087.
 func (d *GpuInfo) CanonicalName() DeviceName {
-	return fmt.Sprintf("gpu-%d", d.minor)
+	return fmt.Sprintf("gpu-%d", d.Minor)
 }
 
 // String returns both the GPU minor for easy recognizability, but also the
 // UUID for precision. It is intended for usage in log messages.
 func (d *GpuInfo) String() string {
 	return fmt.Sprintf("%s-%s", d.CanonicalName(), d.UUID)
+}
+
+func (d *GpuInfo) LiveTuple() *GpuLiveTuple {
+	return &GpuLiveTuple{
+		UUID:  d.UUID,
+		Minor: &d.Minor,
+	}
 }
 
 func (m *MigDeviceInfo) SpecTuple() *MigSpecTuple {
@@ -154,14 +171,21 @@ func (d *MigDeviceInfo) CanonicalName() string {
 }
 
 func (d *VfioDeviceInfo) CanonicalName() string {
-	return fmt.Sprintf("gpu-vfio-%d", d.index)
+	return fmt.Sprintf("gpu-vfio-%d", d.Index)
+}
+
+func (d *VfioDeviceInfo) LiveTuple() *VfioLiveTuple {
+	return &VfioLiveTuple{
+		UUID:     d.UUID,
+		PciBusID: d.PciBusID,
+	}
 }
 
 // Populate internal data structures -- detail that is only known after
 // inspecting all individual MIG profiles associated with this physical GPU.
 func (d *GpuInfo) AddDetailAfterWalkingMigProfiles(maxcap PartCapacityMap, memSliceCount int) {
-	d.maxCapacities = maxcap
-	d.memSliceCount = memSliceCount
+	d.MaxCapacities = maxcap
+	d.MemSliceCount = memSliceCount
 }
 
 func (d *GpuInfo) Attributes() map[resourceapi.QualifiedName]resourceapi.DeviceAttribute {
@@ -173,32 +197,32 @@ func (d *GpuInfo) Attributes() map[resourceapi.QualifiedName]resourceapi.DeviceA
 			StringValue: &d.UUID,
 		},
 		"productName": {
-			StringValue: &d.productName,
+			StringValue: &d.ProductName,
 		},
 		"brand": {
-			StringValue: &d.brand,
+			StringValue: &d.Brand,
 		},
 		"architecture": {
-			StringValue: &d.architecture,
+			StringValue: &d.Architecture,
 		},
 		"cudaComputeCapability": {
-			VersionValue: ptr.To(semver.MustParse(d.cudaComputeCapability).String()),
+			VersionValue: ptr.To(semver.MustParse(d.CudaComputeCapability).String()),
 		},
 		"driverVersion": {
-			VersionValue: ptr.To(semver.MustParse(d.driverVersion).String()),
+			VersionValue: ptr.To(semver.MustParse(d.DriverVersion).String()),
 		},
 		"cudaDriverVersion": {
-			VersionValue: ptr.To(semver.MustParse(d.cudaDriverVersion).String()),
+			VersionValue: ptr.To(semver.MustParse(d.CudaDriverVersion).String()),
 		},
 	}
 
-	addDeviceAttribute(attrs, d.pciBusIDAttr)
-	addDeviceAttribute(attrs, d.pcieRootAttr)
-	addDeviceAttribute(attrs, d.numaNodeAttr)
+	addDeviceAttribute(attrs, d.PciBusIDAttr)
+	addDeviceAttribute(attrs, d.PcieRootAttr)
+	addDeviceAttribute(attrs, d.NumaNodeAttr)
 
-	if d.addressingMode != nil {
+	if d.AddressingMode != nil {
 		attrs["addressingMode"] = resourceapi.DeviceAttribute{
-			StringValue: d.addressingMode,
+			StringValue: d.AddressingMode,
 		}
 	}
 
@@ -217,20 +241,20 @@ func (d *GpuInfo) addFabricManagerAttributes(attrs map[resourceapi.QualifiedName
 		return
 	}
 
-	if d.gpuModuleID == 0 && len(d.partitionsBySize) == 0 {
+	if d.GpuModuleID == 0 && len(d.PartitionsBySize) == 0 {
 		klog.V(4).Infof("No Fabric Manager attributes for %s", d.CanonicalName())
 		return
 	}
 
 	klog.V(4).Infof("Adding Fabric Manager attributes for %s: gpuModuleID=%d partitionsBySize=%v",
-		d.CanonicalName(), d.gpuModuleID, d.partitionsBySize)
-	if d.gpuModuleID != 0 {
+		d.CanonicalName(), d.GpuModuleID, d.PartitionsBySize)
+	if d.GpuModuleID != 0 {
 		attrs["gpuModuleID"] = resourceapi.DeviceAttribute{
-			IntValue: ptr.To(int64(d.gpuModuleID)),
+			IntValue: ptr.To(int64(d.GpuModuleID)),
 		}
 	}
 
-	for size, partitionID := range d.partitionsBySize {
+	for size, partitionID := range d.PartitionsBySize {
 		key := resourceapi.QualifiedName(fmt.Sprintf("partition%d", size))
 		attrs[key] = resourceapi.DeviceAttribute{
 			IntValue: ptr.To(int64(partitionID)),
@@ -249,7 +273,7 @@ func (d *GpuInfo) GetDevice() resourceapi.Device {
 
 func (d *MigDeviceInfo) GetDevice() resourceapi.Device {
 
-	attrs := CommonAttributesMig(d.parent, d.Profile)
+	attrs := CommonAttributesMig(d.Parent, d.Profile)
 	attrs["uuid"] = resourceapi.DeviceAttribute{
 		StringValue: &d.UUID,
 	}
@@ -257,7 +281,7 @@ func (d *MigDeviceInfo) GetDevice() resourceapi.Device {
 	device := resourceapi.Device{
 		Name:       d.CanonicalName(),
 		Attributes: attrs,
-		Capacity:   CommonCapacitiesMig(d.giProfileInfo),
+		Capacity:   CommonCapacitiesMig(d.GiProfileInfo),
 	}
 
 	// Note(JP): noted elsewhere; what's the purpose of announcing memory slices
@@ -283,36 +307,36 @@ func (d *VfioDeviceInfo) GetDevice() resourceapi.Device {
 				StringValue: &d.UUID,
 			},
 			"deviceID": {
-				StringValue: &d.deviceID,
+				StringValue: &d.DeviceID,
 			},
 			"vendorID": {
-				StringValue: &d.vendorID,
+				StringValue: &d.VendorID,
 			},
 			"productName": {
-				StringValue: &d.productName,
+				StringValue: &d.ProductName,
 			},
 			"iommuFDEnabled": {
-				BoolValue: ptr.To(d.iommuFDEnabled),
+				BoolValue: ptr.To(d.IommuFDEnabled),
 			},
 		},
 		Capacity: map[resourceapi.QualifiedName]resourceapi.DeviceCapacity{
 			"addressableMemory": {
-				Value: *resource.NewQuantity(int64(d.addressableMemoryBytes), resource.BinarySI),
+				Value: *resource.NewQuantity(int64(d.AddressableMemoryBytes), resource.BinarySI),
 			},
 		},
 	}
 
-	addDeviceAttribute(device.Attributes, d.pciBusIDAttr)
-	addDeviceAttribute(device.Attributes, d.pcieRootAttr)
+	addDeviceAttribute(device.Attributes, d.PciBusIDAttr)
+	addDeviceAttribute(device.Attributes, d.PcieRootAttr)
 
 	if featuregates.Enabled(featuregates.FabricManagerPartitioning) {
-		if d.parent == nil {
+		if d.Parent == nil {
 			klog.V(4).Infof("No parent GPU for %s; skipping Fabric Manager attributes", d.CanonicalName())
 		} else {
-			d.parent.addFabricManagerAttributes(device.Attributes)
+			d.Parent.addFabricManagerAttributes(device.Attributes)
 		}
 	}
-	addDeviceAttribute(device.Attributes, d.numaNodeAttr)
+	addDeviceAttribute(device.Attributes, d.NumaNodeAttr)
 
 	return device
 }
