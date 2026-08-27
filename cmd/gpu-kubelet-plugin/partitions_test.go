@@ -31,9 +31,9 @@ import (
 // newTestGpuInfo fixture.
 func newPartTestGpu(maxCapacities PartCapacityMap, memSliceCount int) *GpuInfo {
 	gpu := newTestGpuInfo(newScalarNumaNodeAttribute(0))
-	gpu.memoryBytes = ptr.To(uint64(4096))
-	gpu.maxCapacities = maxCapacities
-	gpu.memSliceCount = memSliceCount
+	gpu.MemoryBytes = ptr.To(uint64(4096))
+	gpu.MaxCapacities = maxCapacities
+	gpu.MemSliceCount = memSliceCount
 	return gpu
 }
 
@@ -91,7 +91,7 @@ func TestPartCapacities(t *testing.T) {
 
 	t.Run("nil when memory size is unknown too", func(t *testing.T) {
 		gpu := newPartTestGpu(nil, 0)
-		gpu.memoryBytes = nil
+		gpu.MemoryBytes = nil
 
 		require.Nil(t, gpu.PartCapacities())
 	})
@@ -188,7 +188,7 @@ func TestPartGpuInfoGetDevice(t *testing.T) {
 	// only once discovered.
 	require.NotContains(t, dev.Attributes, deviceattribute.StandardDeviceAttributePCIeRoot)
 
-	gpu.pcieRootAttr = &deviceattribute.DeviceAttribute{
+	gpu.PcieRootAttr = &deviceattribute.DeviceAttribute{
 		Name:  deviceattribute.StandardDeviceAttributePCIeRoot,
 		Value: resourceapi.DeviceAttribute{StringValue: ptr.To("pci0000:0d")},
 	}

@@ -29,14 +29,14 @@ import (
 func newTestGpuInfo(numaNodeAttr *deviceattribute.DeviceAttribute) *GpuInfo {
 	return &GpuInfo{
 		UUID:                  "GPU-test",
-		minor:                 0,
-		productName:           "NVIDIA Test GPU",
-		brand:                 "NVIDIA",
-		architecture:          "Test",
-		cudaComputeCapability: "9.0",
-		driverVersion:         "580.0.0",
-		cudaDriverVersion:     "13.0",
-		numaNodeAttr:          numaNodeAttr,
+		Minor:                 0,
+		ProductName:           "NVIDIA Test GPU",
+		Brand:                 "NVIDIA",
+		Architecture:          "Test",
+		CudaComputeCapability: "9.0",
+		DriverVersion:         "580.0.0",
+		CudaDriverVersion:     "13.0",
+		NumaNodeAttr:          numaNodeAttr,
 	}
 }
 
@@ -97,12 +97,12 @@ func TestCommonMigAttributesIncludeStandardNumaNode(t *testing.T) {
 func TestVfioDeviceIncludesStandardNumaNode(t *testing.T) {
 	vfio := &VfioDeviceInfo{
 		UUID:                   "vfio-test",
-		deviceID:               "0x1234",
-		vendorID:               "0x10de",
-		index:                  0,
-		productName:            "NVIDIA Test GPU",
-		numaNodeAttr:           newScalarNumaNodeAttribute(3),
-		addressableMemoryBytes: 1024,
+		DeviceID:               "0x1234",
+		VendorID:               "0x10de",
+		Index:                  0,
+		ProductName:            "NVIDIA Test GPU",
+		NumaNodeAttr:           newScalarNumaNodeAttribute(3),
+		AddressableMemoryBytes: 1024,
 	}
 
 	requireNumaNodeAttribute(t, vfio.GetDevice().Attributes, 3)
@@ -120,7 +120,7 @@ func TestGpuInfoCanonicalName(t *testing.T) {
 
 	for description, tc := range tests {
 		t.Run(description, func(t *testing.T) {
-			gpu := &GpuInfo{minor: tc.minor}
+			gpu := &GpuInfo{Minor: tc.minor}
 			require.Equal(t, tc.want, gpu.CanonicalName())
 		})
 	}
@@ -129,7 +129,7 @@ func TestGpuInfoCanonicalName(t *testing.T) {
 func TestGpuInfoString(t *testing.T) {
 	// String() is used in log messages and combines the canonical name (for
 	// recognizability) with the UUID (for precision).
-	gpu := &GpuInfo{minor: 3, UUID: "GPU-abc123"}
+	gpu := &GpuInfo{Minor: 3, UUID: "GPU-abc123"}
 	require.Equal(t, "gpu-3-GPU-abc123", gpu.String())
 }
 
@@ -144,7 +144,7 @@ func TestVfioDeviceInfoCanonicalName(t *testing.T) {
 
 	for description, tc := range tests {
 		t.Run(description, func(t *testing.T) {
-			vfio := &VfioDeviceInfo{index: tc.index}
+			vfio := &VfioDeviceInfo{Index: tc.index}
 			require.Equal(t, tc.want, vfio.CanonicalName())
 		})
 	}
@@ -251,7 +251,7 @@ func TestGpuInfoAttributesAddressingMode(t *testing.T) {
 
 	t.Run("included when set", func(t *testing.T) {
 		gpu := newTestGpuInfo(nil)
-		gpu.addressingMode = ptr.To("hmm")
+		gpu.AddressingMode = ptr.To("hmm")
 
 		attr, ok := gpu.Attributes()["addressingMode"]
 		require.True(t, ok)
