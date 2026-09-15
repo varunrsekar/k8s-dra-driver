@@ -472,24 +472,28 @@ func queryGPURecoveryAction(device nvml.Device) (nvml.DeviceGpuRecoveryAction, e
 func gpuRecoveryActionString(action nvml.DeviceGpuRecoveryAction) string {
 	switch action {
 	case nvml.GPU_RECOVERY_ACTION_NONE:
-		return "None"
+		return "NONE"
 	case nvml.GPU_RECOVERY_ACTION_GPU_RESET:
-		return "GPU Reset Required"
+		return "GPU RESET"
 	case nvml.GPU_RECOVERY_ACTION_NODE_REBOOT:
-		return "Node Reboot Required"
+		return "NODE REBOOT"
 	case nvml.GPU_RECOVERY_ACTION_DRAIN_P2P:
-		return "Drain P2P"
+		return "DRAIN P2P"
 	case nvml.GPU_RECOVERY_ACTION_DRAIN_AND_RESET:
-		return "Drain and Reset"
+		return "DRAIN AND RESET"
 	case nvml.GPU_RECOVERY_ACTION_RECOVER_IMEX_DOMAIN:
-		return "Recover IMEX Domain"
+		return "RECOVER IMEX DOMAIN"
 	default:
 		return fmt.Sprintf("Unknown (%d)", action)
 	}
 }
 
 // IsEventNonFatal classifies an XID using the parent GPU's current recovery
-// action. An administrator-configured XID remains non-fatal, but the recovery
+// action. Its to identify the device’s current scheduling impact more accurately—
+// whether the XID should be informational or result in a `NoSchedule` taint.
+// The general recommendation is to look up the reported XID in the NVIDIA XID Catalog:
+// https://docs.nvidia.com/deploy/xid-errors/analyzing-xid-catalog.html) for diagnosis and recovery guidance.
+// An administrator-configured XID remains non-fatal, but the recovery
 // action is still queried and logged.
 func (m *nvmlDeviceHealthMonitor) IsEventNonFatal(event *DeviceHealthEvent) bool {
 	if event.EventType != HealthEventXID {
@@ -513,24 +517,24 @@ func (m *nvmlDeviceHealthMonitor) IsEventNonFatal(event *DeviceHealthEvent) bool
 	}
 
 	if ignored {
-		klog.Warningf("XID %d: NVML reported GPU recovery action=%q; treating the event as non-fatal because the XID is configured via --additional-xids-to-ignore", xid, gpuRecoveryActionString(action))
+		klog.V(4).Infof("XID=%d on GPU=%q: NVML reported GPU recovery action=%q; treating the event as non-fatal because the XID is configured via --additional-xids-to-ignore", xid, pciBusID, gpuRecoveryActionString(action))
 		return true
 	}
 
 	switch action {
 	case nvml.GPU_RECOVERY_ACTION_NONE:
-		klog.V(4).Infof("XID %d: NVML reported GPU recovery action=%q; treating the event as non-fatal", xid, gpuRecoveryActionString(action))
+		klog.V(4).Infof("XID=%d on GPU=%q: NVML reported GPU recovery action=%q; treating the event as non-fatal", xid, pciBusID, gpuRecoveryActionString(action))
 		return true
 
 	case nvml.GPU_RECOVERY_ACTION_RECOVER_IMEX_DOMAIN:
 		// RECOVER_IMEX_DOMAIN requests recovery of the IMEX domain rather than
 		// recovery of the local GPU device. Keep the XID informational for GPU
 		// scheduling and surface the recovery requirement in the log.
-		klog.Warningf("XID %d: NVML reports GPU recovery action=%q; the action is scoped to IMEX-domain recovery, so treating the event as non-fatal for GPU scheduling", xid, gpuRecoveryActionString(action))
+		klog.V(4).Infof("XID=%d on GPU=%q: NVML reports GPU recovery action=%q; the action is scoped to IMEX-domain recovery, so treating the event as non-fatal for GPU scheduling", xid, pciBusID, gpuRecoveryActionString(action))
 		return true
 
 	default:
-		klog.Warningf("XID %d: NVML reported GPU recovery action=%q; treating the event as fatal", xid, gpuRecoveryActionString(action))
+		klog.V(4).Infof("XID=%d on GPU=%q: NVML reported GPU recovery action=%q; treating the event as fatal", xid, pciBusID, gpuRecoveryActionString(action))
 		return false
 	}
 }
