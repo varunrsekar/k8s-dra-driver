@@ -27,6 +27,7 @@ import (
 	"strings"
 	"sync"
 
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/klog/v2"
 
 	nvapi "sigs.k8s.io/dra-driver-nvidia-gpu/api/nvidia.com/resource/v1beta1"
@@ -62,17 +63,16 @@ func NewDNSNameManager(cliqueID string, maxNodesPerIMEXDomain int, nodesConfigPa
 }
 
 // computeDomainHash returns a short, deterministic, DNS-label-safe hash of a
-// ComputeDomain UID (8 lowercase hex characters, from FNV-1a 32-bit). Used to
-// fold ComputeDomain identity into generated DNS names without depending on
-// the UID's own format or length.
+// ComputeDomain UID, used to fold ComputeDomain identity into generated DNS
+// names without depending on the UID's own format or length.
 func computeDomainHash(cdUID string) string {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(cdUID))
-	return fmt.Sprintf("%08x", h.Sum32())
+	return rand.SafeEncodeString(fmt.Sprint(h.Sum32()))
 }
 
 // dnsNameFormat returns this manager's per-domain DNS name format string,
-// e.g. "compute-domain-daemon-01a49dc6-%04d".
+// e.g. "compute-domain-daemon-bcs2h4gtp8-%04d".
 func (m *DNSNameManager) dnsNameFormat() string {
 	return dnsNamePrefix + m.domainHash + "-%04d"
 }
