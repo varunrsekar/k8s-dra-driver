@@ -1013,6 +1013,7 @@ func (l deviceLib) createMigDevice(migspec *MigSpec) (*MigDeviceInfo, error) {
 	profileInfo := profile.GetInfo()
 
 	tcgigi0 := time.Now()
+	klog.Infof("Getting GPU instance profile info for '%v': GIProfileID=%d", profile, profileInfo.GIProfileID)
 	giProfileInfo, ret := device.GetGpuInstanceProfileInfo(profileInfo.GIProfileID)
 	if ret != nvml.SUCCESS {
 		return nil, fmt.Errorf("error getting GPU instance profile info for '%v': %w", profile, ret)
@@ -1039,11 +1040,13 @@ func (l deviceLib) createMigDevice(migspec *MigSpec) (*MigDeviceInfo, error) {
 		return nil, fmt.Errorf("error getting GPU instance info for '%s': %w", migspec.CanonicalName(), ret)
 	}
 
+	klog.Infof("Getting Compute instance profile info for '%v': CIProfileID=%d, CIEngProfileID=%d", profile, profileInfo.CIProfileID, profileInfo.CIEngProfileID)
 	ciProfileInfo, ret := gi.GetComputeInstanceProfileInfo(profileInfo.CIProfileID, profileInfo.CIEngProfileID)
 	if ret != nvml.SUCCESS {
 		return nil, fmt.Errorf("error getting Compute instance profile info for '%v': %w", profile, ret)
 	}
 
+	klog.Infof("[%s] Creating Compute instance for %v (%d):", profileInfo, ciProfileInfo, ciProfileInfo.Id)
 	ci, ret := gi.CreateComputeInstance(&ciProfileInfo)
 	if ret != nvml.SUCCESS {
 		return nil, fmt.Errorf("error creating Compute instance for '%v': %w", profile, ret)
@@ -1245,19 +1248,30 @@ func (l deviceLib) inspectMigProfilesAndPlacements(gpuInfo *GpuInfo, device nvde
 	maxMemSlicesConsumed := 0
 
 	err := device.VisitMigProfiles(func(migProfile nvdev.MigProfile) error {
+		info := migProfile.GetInfo()
+		klog.Infof("MIG profile: C=%d, G=%d, GB=%d, attrs=%v, negAttrs=%v, CIProfileID=%d, CIEngProfileID=%d, GIProfileID=%d", info.C, info.G, info.GB, info.Attributes, info.NegAttributes, info.CIProfileID, info.CIEngProfileID, info.GIProfileID)
 		if migProfile.GetInfo().C != migProfile.GetInfo().G {
+			klog.Infof("[%s] Skipping MIG profile %s with C != G: %d != %d", gpuInfo.pciBusID, info.String(), info.C, info.G)
 			return nil
 		}
 
 		if migProfile.GetInfo().CIProfileID == nvml.COMPUTE_INSTANCE_PROFILE_1_SLICE_REV1 {
+			klog.Infof("[%s] Skipping MIG profile %s with rev1 CI profile ID: %d", gpuInfo.pciBusID, info.String(), info.CIProfileID)
+			return nil
+		}
+
+		if migProfile.GetInfo().CIProfileID == nvml.COMPUTE_INSTANCE_PROFILE_7_SLICE_NVL {
+			klog.Infof("[%s] Skipping MIG profile %s with 7-slice NVL CI profile ID: %d", gpuInfo.pciBusID, info.String(), info.CIProfileID)
 			return nil
 		}
 
 		giProfileInfo, ret := device.GetGpuInstanceProfileInfo(migProfile.GetInfo().GIProfileID)
 		if ret == nvml.ERROR_NOT_SUPPORTED {
+			klog.Infof("[%s] Skipping MIG profile %s with not supported GI profile ID: %d", gpuInfo.pciBusID, info.String(), info.GIProfileID)
 			return nil
 		}
 		if ret == nvml.ERROR_INVALID_ARGUMENT {
+			klog.Infof("[%s] Skipping MIG profile %s with invalid GI profile ID: %d", gpuInfo.pciBusID, info.String(), info.GIProfileID)
 			return nil
 		}
 		if ret != nvml.SUCCESS {
@@ -1266,9 +1280,11 @@ func (l deviceLib) inspectMigProfilesAndPlacements(gpuInfo *GpuInfo, device nvde
 
 		giPlacements, ret := device.GetGpuInstancePossiblePlacements(&giProfileInfo)
 		if ret == nvml.ERROR_NOT_SUPPORTED {
+			klog.Infof("[%s] Skipping MIG profile %s with not supported placements for GI profile ID: %d", gpuInfo.pciBusID, info.String(), info.GIProfileID)
 			return nil
 		}
 		if ret == nvml.ERROR_INVALID_ARGUMENT {
+			klog.Infof("[%s] Skipping MIG profile %s with invalid placement arg for GI profile ID: %d", gpuInfo.pciBusID, info.String(), info.GIProfileID)
 			return nil
 		}
 		if ret != nvml.SUCCESS {
@@ -1276,6 +1292,7 @@ func (l deviceLib) inspectMigProfilesAndPlacements(gpuInfo *GpuInfo, device nvde
 		}
 
 		for _, giPlacement := range giPlacements {
+			klog.Infof("[%s] Adding MIG profile %s (gi: %d, ci: %d), placement: %v", gpuInfo.pciBusID, info.String(), info.GIProfileID, info.CIProfileID, giPlacement)
 			mi := &MigSpec{
 				Parent:        gpuInfo,
 				Profile:       migProfile,
