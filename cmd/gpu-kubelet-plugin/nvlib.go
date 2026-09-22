@@ -1255,17 +1255,18 @@ func (l deviceLib) inspectMigProfilesAndPlacements(gpuInfo *GpuInfo, device nvde
 			return nil
 		}
 
-		if migProfile.GetInfo().CIProfileID == nvml.COMPUTE_INSTANCE_PROFILE_1_SLICE_REV1 {
+		// Both rev1 and nvl CI profiles are non-standard profiles that are
+		// not available on all GPUs. These conflict with existing
+		// 1_SLICE and 7_SLICE CI profiles as they have the same number of
+		// slices and will lead to MIG creation failures on hosts that do
+		// not support them. To avoid this, we skip these profiles.
+		// We can revisit these if there's an usecase for them.
+		if info.CIProfileID == nvml.COMPUTE_INSTANCE_PROFILE_1_SLICE_REV1 || info.CIProfileID == nvml.COMPUTE_INSTANCE_PROFILE_7_SLICE_NVL {
 			klog.Infof("[%s] Skipping MIG profile %s with rev1 CI profile ID: %d", gpuInfo.pciBusID, info.String(), info.CIProfileID)
 			return nil
 		}
 
-		if migProfile.GetInfo().CIProfileID == nvml.COMPUTE_INSTANCE_PROFILE_7_SLICE_NVL {
-			klog.Infof("[%s] Skipping MIG profile %s with 7-slice NVL CI profile ID: %d", gpuInfo.pciBusID, info.String(), info.CIProfileID)
-			return nil
-		}
-
-		giProfileInfo, ret := device.GetGpuInstanceProfileInfo(migProfile.GetInfo().GIProfileID)
+		giProfileInfo, ret := device.GetGpuInstanceProfileInfo(info.GIProfileID)
 		if ret == nvml.ERROR_NOT_SUPPORTED {
 			klog.Infof("[%s] Skipping MIG profile %s with not supported GI profile ID: %d", gpuInfo.pciBusID, info.String(), info.GIProfileID)
 			return nil
