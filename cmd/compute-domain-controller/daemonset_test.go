@@ -40,6 +40,37 @@ func baseDaemonSetTemplateData() DaemonSetTemplateData {
 	}
 }
 
+func TestRendersPriorityClass(t *testing.T) {
+	tmpl, err := template.ParseFiles("../../templates/compute-domain-daemon.tmpl.yaml")
+	require.NoError(t, err)
+
+	data := baseDaemonSetTemplateData()
+	data.PriorityClassName = "system-node-critical"
+
+	var out bytes.Buffer
+	require.NoError(t, tmpl.Execute(&out, data))
+
+	require.Contains(t, out.String(), "priorityClassName: system-node-critical")
+	// The resource claim reference for the CD daemon's dynamic
+	// ResourceClaimTemplate must remain untouched.
+	require.Contains(t, out.String(), "claims:")
+	require.Contains(t, out.String(), "- name: compute-domain-daemon")
+}
+
+func TestOmitsPriorityClassWhenUnset(t *testing.T) {
+	tmpl, err := template.ParseFiles("../../templates/compute-domain-daemon.tmpl.yaml")
+	require.NoError(t, err)
+
+	data := baseDaemonSetTemplateData()
+
+	var out bytes.Buffer
+	require.NoError(t, tmpl.Execute(&out, data))
+
+	require.NotContains(t, out.String(), "priorityClassName")
+	// The claims block (unrelated to priorityClassName) must still render.
+	require.Contains(t, out.String(), "claims:")
+}
+
 func TestDaemonSetTemplateRendersIMEXConfigOverrides(t *testing.T) {
 	tmpl, err := template.ParseFiles("../../templates/compute-domain-daemon.tmpl.yaml")
 	require.NoError(t, err)
