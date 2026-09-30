@@ -126,23 +126,20 @@ func newFabricManager(nvdevlib *deviceLib, driver *root.Driver) (*fabricmanager.
 
 func NewDeviceState(ctx context.Context, config *Config) (*DeviceState, error) {
 	driver := root.New(root.WithDriverRoot(config.flags.containerDriverRoot))
+	devRoot := driver.DevRoot
+	klog.Infof("Using devRoot=%v", devRoot)
+
 	nvdevlib, err := newDeviceLib(driver, config.flags.hostRoot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create device library: %w", err)
 	}
 
-	return newDeviceState(ctx, config, driver, nvdevlib)
-}
-
-func newDeviceState(ctx context.Context, config *Config, driver *root.Driver, nvdevlib *deviceLib) (*DeviceState, error) {
-	devRoot := driver.DevRoot
-	klog.Infof("Using devRoot=%v", devRoot)
-	hostDriverRoot := config.flags.hostDriverRoot
-
 	perGPUAllocatable, err := nvdevlib.enumerateAllPossibleDevices()
 	if err != nil {
 		return nil, fmt.Errorf("error enumerating all possible devices: %w", err)
 	}
+
+	hostDriverRoot := config.flags.hostDriverRoot
 
 	// Let nvcdi logs see the light of day (emit to standard streams) when we've
 	// been configured with verbosity level 7 or higher.
@@ -1287,6 +1284,9 @@ func (s *DeviceState) applyConfig(ctx context.Context, config configapi.Interfac
 		return s.applySharingConfig(ctx, castConfig.Sharing, claim, results, cp)
 	case *configapi.VfioDeviceConfig:
 		klog.V(7).Infof("applySharingConfig() for VfioDeviceConfig")
+		if !featuregates.Enabled(featuregates.PassthroughSupport) || !s.nvdevlib.IsVfioEnabled() {
+			return nil, errors.New("VFIO is unavailable on this node")
+		}
 		return s.applyVfioDeviceConfig(ctx, castConfig, claim, results)
 	default:
 		return nil, fmt.Errorf("unknown config type: %T", castConfig)
@@ -1366,10 +1366,6 @@ func (s *DeviceState) applySharingConfig(ctx context.Context, config configapi.S
 }
 
 func (s *DeviceState) applyVfioDeviceConfig(ctx context.Context, config *configapi.VfioDeviceConfig, claim *resourceapi.ResourceClaim, results []*resourceapi.DeviceRequestAllocationResult) (*DeviceConfigState, error) {
-	if !featuregates.Enabled(featuregates.PassthroughSupport) || !s.nvdevlib.IsVfioEnabled() {
-		return nil, errors.New("VFIO is unavailable on this node")
-	}
-
 	configState := DeviceConfigState{
 		Config: config,
 	}

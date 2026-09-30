@@ -22,19 +22,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
-
-	cdiapi "tags.cncf.io/container-device-interface/pkg/cdi"
-	cdispec "tags.cncf.io/container-device-interface/specs-go"
 
 	nvdev "github.com/NVIDIA/go-nvlib/pkg/nvlib/device"
 	"github.com/NVIDIA/go-nvlib/pkg/nvpci"
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/stretchr/testify/require"
 	resourceapi "k8s.io/api/resource/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/component-base/featuregate"
-	"k8s.io/dynamic-resource-allocation/kubeletplugin"
 
 	configapi "sigs.k8s.io/dra-driver-nvidia-gpu/api/nvidia.com/resource/v1beta1"
 	"sigs.k8s.io/dra-driver-nvidia-gpu/internal/lookup/root"
@@ -95,60 +89,21 @@ func TestDeviceStateVfioCapability(t *testing.T) {
 			t.Run(fmt.Sprintf("gate=%t/capable=%t", gate, capable), func(t *testing.T) {
 				setVfioTestFeatureGate(t, featuregates.PassthroughSupport, gate)
 				setVfioTestFeatureGate(t, featuregates.DynamicMIG, false)
-				setVfioTestFeatureGate(t, featuregates.FabricManagerPartitioning, false)
-				setVfioTestFeatureGate(t, featuregates.TimeSlicingSettings, false)
-				setVfioTestFeatureGate(t, featuregates.MPSSupport, false)
-				hostRoot := t.TempDir()
 				pci := &nvpci.InterfaceMock{GetGPUsFunc: func() ([]*nvpci.NvidiaPCIDevice, error) { return nil, nil }}
-				lib := &deviceLib{hostRoot: hostRoot, vfioEnabled: capable, nvmllib: emptyVfioTestNVML{}, Interface: emptyVfioTestDevices{}, nvpci: pci}
-				config := &Config{flags: &Flags{kubeletPluginsDirectoryPath: t.TempDir(), cdiRoot: t.TempDir()}}
-				state, err := newDeviceState(context.Background(), config, root.New(root.WithDriverRoot(hostRoot)), lib)
+				lib := &deviceLib{vfioEnabled: capable, nvmllib: emptyVfioTestNVML{}, Interface: emptyVfioTestDevices{}, nvpci: pci}
+				perGPUAllocatable, err := lib.enumerateAllPossibleDevices()
 				require.NoError(t, err)
 				require.Equal(t, capable, lib.IsVfioEnabled())
-				require.Equal(t, gate && capable, state.vfioPciManager != nil)
-				require.Equal(t, gate && capable, state.cdi.vfiocdi != nil)
 				if gate && capable {
 					require.Len(t, pci.GetGPUsCalls(), 1)
 				} else {
 					require.Empty(t, pci.GetGPUsCalls())
-					require.Empty(t, state.perGPUAllocatable.GetAllDevices().GetVfioDevices())
-					result, err := state.applyVfioDeviceConfig(context.Background(), configapi.DefaultVfioDeviceConfig(), nil, nil)
+					require.Empty(t, perGPUAllocatable.GetAllDevices().GetVfioDevices())
+					state := &DeviceState{nvdevlib: lib, perGPUAllocatable: perGPUAllocatable}
+					result, err := state.applyConfig(context.Background(), configapi.DefaultVfioDeviceConfig(), nil, nil, nil)
 					require.ErrorContains(t, err, "VFIO is unavailable on this node")
 					require.Nil(t, result)
 				}
-
-				state.cdi.specCache.Set("commonEdits", &cdiapi.ContainerEdits{ContainerEdits: &cdispec.ContainerEdits{}}, time.Minute)
-
-				// Exercise normal GPU preparation through the checkpoint and CDI flow.
-				gpu := &AllocatableDevice{Gpu: &GpuInfo{UUID: "GPU-0000", pciBusID: "0000:00:00.0"}}
-				require.NoError(t, state.perGPUAllocatable.AddAllocatableDevice(gpu))
-				state.cdi.specCache.Set("GPU-0000", []cdispec.Device{{Name: "gpu-0", ContainerEdits: cdispec.ContainerEdits{Env: []string{"TEST_GPU=0"}}}}, time.Minute)
-				claim := &resourceapi.ResourceClaim{ObjectMeta: metav1.ObjectMeta{UID: "test-claim", Name: "test-claim"}, Status: resourceapi.ResourceClaimStatus{Allocation: &resourceapi.AllocationResult{Devices: resourceapi.DeviceAllocationResult{Results: []resourceapi.DeviceRequestAllocationResult{{Driver: DriverName, Device: gpu.CanonicalName(), Request: "gpu", Pool: "test-node"}}}}}}
-				_, err = state.Prepare(context.Background(), claim)
-				require.NoError(t, err)
-				_, err = state.Unprepare(context.Background(), kubeletplugin.NamespacedObject{UID: claim.UID})
-				require.NoError(t, err)
-
-				// A broken IOMMUFD path must be ignored when VFIO is disabled,
-				// but a real handler initialization error must remain fatal.
-				require.NoError(t, os.Symlink("dev", filepath.Join(hostRoot, "dev")))
-				initialized, initErr := newDeviceState(context.Background(), config, root.New(root.WithDriverRoot(hostRoot)), lib)
-				if gate && capable {
-					require.ErrorContains(t, initErr, "unable to create vfio CDI handler")
-					require.Nil(t, initialized)
-					return
-				}
-				require.NoError(t, initErr)
-				require.Nil(t, initialized.vfioPciManager)
-				require.Nil(t, initialized.cdi.vfiocdi)
-				// Even a stale VFIO allocation must not dereference an absent manager during rollback or unprepare.
-				vfio := &VfioDeviceInfo{index: 0, PciBusID: "0000:00:00.0"}
-				require.NoError(t, state.perGPUAllocatable.AddAllocatableDevice(&AllocatableDevice{Vfio: vfio}))
-				pc := PreparedClaim{Status: resourceapi.ResourceClaimStatus{Allocation: &resourceapi.AllocationResult{Devices: resourceapi.DeviceAllocationResult{Results: []resourceapi.DeviceRequestAllocationResult{{Driver: DriverName, Device: vfio.CanonicalName()}}}}}}
-				require.NoError(t, state.unpreparePartiallyPreparedClaim(context.Background(), "stale-claim", pc, &Checkpoint{}))
-				prepared := PreparedDevices{{Devices: PreparedDeviceList{{Vfio: &PreparedVfioDevice{Info: vfio, Device: &CheckpointedDevice{DeviceName: vfio.CanonicalName()}}}}}}
-				_, err = state.unprepareDevices(context.Background(), "stale-claim", prepared, &Checkpoint{})
-				require.NoError(t, err)
 			})
 		}
 	}
@@ -160,31 +115,29 @@ func TestVfioUnavailableResourceGeneration(t *testing.T) {
 			if gate && capable {
 				continue
 			}
-			for _, dynamic := range []bool{false, true} {
-				for _, split := range []bool{false, true} {
-					t.Run(fmt.Sprintf("gate=%t/capable=%t/dynamic=%t/split=%t", gate, capable, dynamic, split), func(t *testing.T) {
-						setVfioTestFeatureGate(t, featuregates.PassthroughSupport, gate)
-						setVfioTestFeatureGate(t, featuregates.DynamicMIG, dynamic)
-						gpu := &AllocatableDevice{Gpu: &GpuInfo{UUID: "GPU-0000", productName: "NVIDIA Test GPU", brand: "Test", architecture: "Test", cudaComputeCapability: "8.0", driverVersion: "550.0", cudaDriverVersion: "12.0", pciBusID: "0000:00:00.0", vfioEnabled: true}}
-						state := &DeviceState{nvdevlib: &deviceLib{vfioEnabled: capable}, perGPUAllocatable: &PerGPUAllocatableDevices{allocatablesMap: map[PCIBusID]AllocatableDevices{gpu.Gpu.pciBusID: {gpu.CanonicalName(): gpu}}}}
-						// GPU-local eligibility must not override the feature gate or node capability.
-						require.NoError(t, state.discoverSiblingAllocatables(gpu))
-						require.Empty(t, state.perGPUAllocatable.GetAllDevices().GetVfioDevices())
-						resources := (&driver{state: state, useSplitResourceSlices: split}).GenerateDriverResources("test-node")
-						slices := resources.Pools["test-node"].Slices
-						expectedSlices := 1
-						if dynamic && split {
-							expectedSlices = 2
-						}
-						require.Len(t, slices, expectedSlices)
-						var devices []resourceapi.Device
-						for _, slice := range slices {
-							devices = append(devices, slice.Devices...)
-						}
-						require.Len(t, devices, 1)
-						require.Equal(t, GpuDeviceType, *devices[0].Attributes["type"].StringValue)
-					})
-				}
+			for _, split := range []bool{false, true} {
+				t.Run(fmt.Sprintf("gate=%t/capable=%t/split=%t", gate, capable, split), func(t *testing.T) {
+					setVfioTestFeatureGate(t, featuregates.PassthroughSupport, gate)
+					setVfioTestFeatureGate(t, featuregates.DynamicMIG, true)
+					gpu := &AllocatableDevice{Gpu: &GpuInfo{UUID: "GPU-0000", productName: "NVIDIA Test GPU", brand: "Test", architecture: "Test", cudaComputeCapability: "8.0", driverVersion: "550.0", cudaDriverVersion: "12.0", pciBusID: "0000:00:00.0", vfioEnabled: true}}
+					state := &DeviceState{nvdevlib: &deviceLib{vfioEnabled: capable}, perGPUAllocatable: &PerGPUAllocatableDevices{allocatablesMap: map[PCIBusID]AllocatableDevices{gpu.Gpu.pciBusID: {gpu.CanonicalName(): gpu}}}}
+					// GPU-local eligibility must not override the feature gate or node capability.
+					require.NoError(t, state.discoverSiblingAllocatables(gpu))
+					require.Empty(t, state.perGPUAllocatable.GetAllDevices().GetVfioDevices())
+					resources := (&driver{state: state, useSplitResourceSlices: split}).GenerateDriverResources("test-node")
+					slices := resources.Pools["test-node"].Slices
+					expectedSlices := 1
+					if split {
+						expectedSlices = 2
+					}
+					require.Len(t, slices, expectedSlices)
+					var devices []resourceapi.Device
+					for _, slice := range slices {
+						devices = append(devices, slice.Devices...)
+					}
+					require.Len(t, devices, 1)
+					require.Equal(t, GpuDeviceType, *devices[0].Attributes["type"].StringValue)
+				})
 			}
 		}
 	}

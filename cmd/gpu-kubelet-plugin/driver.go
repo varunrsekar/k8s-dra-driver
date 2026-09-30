@@ -210,15 +210,12 @@ func NewDriver(ctx context.Context, config *Config) (*driver, error) {
 }
 
 // GenerateDriverResources() returns the set of DRA ResourceSlices announced by
-// this DRA driver to the system.
+// this DRA driver to the system, using the Partitionable Devices paradigm.
 func (d *driver) GenerateDriverResources(nodeName string) resourceslice.DriverResources {
-	if featuregates.Enabled(featuregates.DynamicMIG) {
-		if d.useSplitResourceSlices {
-			return d.generateSplitResourceSlices(nodeName)
-		}
-		return d.generateCombinedResourceSlices(nodeName)
+	if d.useSplitResourceSlices {
+		return d.generateSplitResourceSlices(nodeName)
 	}
-	return d.generateLegacyDriverResources(nodeName, d.state.config)
+	return d.generateCombinedResourceSlices(nodeName)
 }
 
 // generateSplitResourceSlices generates ResourceSlices for DynamicMIG for k8s 1.35+.
@@ -440,7 +437,7 @@ func (d *driver) nodePrepareResource(ctx context.Context, claim *resourceapi.Res
 		}
 	}
 
-	if featuregates.Enabled(featuregates.PassthroughSupport) && d.state.nvdevlib.IsVfioEnabled() {
+	if featuregates.Enabled(featuregates.PassthroughSupport) {
 		// Re-advertise updated resourceslice after preparing devices.
 		if err = d.publishResources(ctx, d.state.config); err != nil {
 			drametrics.IncNodePrepareError(DriverName, "publish_resources")
@@ -478,7 +475,7 @@ func (d *driver) nodeUnprepareResource(ctx context.Context, claimRef kubeletplug
 		return fmt.Errorf("error unpreparing devices for claim %v: %w", claimRef.String(), err)
 	}
 
-	if (featuregates.Enabled(featuregates.PassthroughSupport) && d.state.nvdevlib.IsVfioEnabled()) ||
+	if featuregates.Enabled(featuregates.PassthroughSupport) ||
 		(featuregates.Enabled(featuregates.DynamicMIG) &&
 			featuregates.Enabled(featuregates.NVMLDeviceHealthCheck) &&
 			taintRemovedRepublish) {
@@ -504,7 +501,7 @@ func (d *driver) publishResources(ctx context.Context, config *Config) error {
 		//
 		// TODO: implement error handler for bad slices:
 		// https://github.com/kubernetes/kubernetes/commit/a171795e313ee9f407fef4897c1a1e2052120991
-		klog.V(4).Infof("featuregates.DynamicMIG enabled: construct ResourceSlice objects according to KEP 4815 (partitionable devices)")
+		klog.V(1).Infof("featuregates.DynamicMIG enabled: construct ResourceSlice objects according to KEP 4815 (partitionable devices)")
 		resources := d.GenerateDriverResources(config.flags.nodeName)
 		if err := d.pluginhelper.PublishResources(ctx, resources); err != nil {
 			return err
@@ -512,15 +509,6 @@ func (d *driver) publishResources(ctx context.Context, config *Config) error {
 		return nil
 	}
 
-	resources := d.GenerateDriverResources(config.flags.nodeName)
-	if err := d.pluginhelper.PublishResources(ctx, resources); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (d *driver) generateLegacyDriverResources(nodeName string, config *Config) resourceslice.DriverResources {
 	// Enumerate the set of GPU, MIG and VFIO devices and publish them
 	var resourceSlice resourceslice.Slice
 	for _, devices := range d.state.perGPUAllocatable.allocatablesMap {
@@ -530,11 +518,18 @@ func (d *driver) generateLegacyDriverResources(nodeName string, config *Config) 
 		}
 	}
 
-	return resourceslice.DriverResources{
+	resources := resourceslice.DriverResources{
 		Pools: map[string]resourceslice.Pool{
-			nodeName: {Slices: []resourceslice.Slice{resourceSlice}},
+			config.flags.nodeName: {Slices: []resourceslice.Slice{resourceSlice}},
 		},
 	}
+
+	if err := d.pluginhelper.PublishResources(ctx, resources); err != nil {
+		return err
+	}
+
+	return nil
+
 }
 
 func (d *driver) deviceHealthEvents(ctx context.Context) {
