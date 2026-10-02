@@ -523,7 +523,7 @@ func applyIMEXConfigOverrides(config []byte, overrides map[string]string) []byte
 
 	lines := strings.Split(string(config), "\n")
 	for i, line := range lines {
-		if strings.HasPrefix(strings.TrimLeft(line, " \t"), "#") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
 			continue
 		}
 		key, _, found := strings.Cut(line, "=")
