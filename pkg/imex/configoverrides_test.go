@@ -77,3 +77,55 @@ func TestParseConfigOverrides(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateConfigOverrides(t *testing.T) {
+	tests := map[string]struct {
+		overrides map[string]string
+		wantErr   bool
+	}{
+		"nil overrides are fine": {
+			overrides: nil,
+		},
+		"unrelated overrides are fine": {
+			overrides: map[string]string{"IMEX_NODE_DISCONNECTED_GRACE_TIME": "60", "LOG_LEVEL": "3"},
+		},
+		"overriding the command bind address is rejected": {
+			overrides: map[string]string{"IMEX_CMD_BIND_INTERFACE_IP": "10.0.0.1"},
+			wantErr:   true,
+		},
+		"overriding the generated nodes config path is rejected": {
+			overrides: map[string]string{"IMEX_NODE_CONFIG_FILE": "/tmp/evil.cfg"},
+			wantErr:   true,
+		},
+		"a driver-managed key alongside unrelated ones is still rejected": {
+			overrides: map[string]string{"LOG_LEVEL": "3", "IMEX_NODE_CONFIG_FILE": "/tmp/evil.cfg"},
+			wantErr:   true,
+		},
+		"a newline in a value is rejected": {
+			overrides: map[string]string{"LOG_LEVEL": "3\nIMEX_NODE_CONFIG_FILE=/tmp/evil.cfg"},
+			wantErr:   true,
+		},
+		"a carriage return in a value is rejected": {
+			overrides: map[string]string{"LOG_LEVEL": "3\rIMEX_NODE_CONFIG_FILE=/tmp/evil.cfg"},
+			wantErr:   true,
+		},
+		"a newline in a key is rejected": {
+			overrides: map[string]string{"LOG_LEVEL\nIMEX_NODE_CONFIG_FILE": "/tmp/evil.cfg"},
+			wantErr:   true,
+		},
+		"non-snake-case keys are not validated": {
+			overrides: map[string]string{"log_level": "3"},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := ValidateConfigOverrides(tc.overrides)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}

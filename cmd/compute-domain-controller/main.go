@@ -237,6 +237,9 @@ func newApp() *cli.App {
 			if err != nil {
 				return fmt.Errorf("invalid imex-config-overrides: %w", err)
 			}
+			if err := imex.ValidateConfigOverrides(imexConfigOverrides); err != nil {
+				return fmt.Errorf("invalid imex-config-overrides: %w", err)
+			}
 			if imexConfig.EffectiveHostManaged() {
 				// The driver never creates per-ComputeDomain IMEX DaemonSets or
 				// ComputeDomainClique objects in host-managed mode, so these gates
