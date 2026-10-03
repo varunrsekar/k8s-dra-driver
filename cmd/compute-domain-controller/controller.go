@@ -104,6 +104,7 @@ func (c *Controller) Run(ctx context.Context) error {
 		imageName:                 c.config.flags.imageName,
 		maxNodesPerIMEXDomain:     c.config.flags.maxNodesPerIMEXDomain,
 		imexConfig:                c.config.imexConfig,
+		imexConfigOverrides:       c.config.imexConfigOverrides,
 		clientsets:                c.config.clientsets,
 		workQueue:                 workQueue,
 		logVerbosityCDDaemon:      c.config.flags.logVerbosityCDDaemon,
