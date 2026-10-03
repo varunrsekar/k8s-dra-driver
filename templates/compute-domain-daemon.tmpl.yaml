@@ -17,6 +17,9 @@ spec:
       labels:
         {{ .ComputeDomainLabelKey }}: {{ .ComputeDomainLabelValue }}
     spec:
+      {{- if .PriorityClassName }}
+      priorityClassName: {{ .PriorityClassName }}
+      {{- end }}
       serviceAccountName: compute-domain-daemon-service-account
       {{- if .ImagePullSecretNames }}
       imagePullSecrets:
