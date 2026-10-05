@@ -77,19 +77,21 @@ type Flags struct {
 	metricsPath  string
 	profilePath  string
 
-	additionalNamespaces cli.StringSlice
-	imagePullSecretsCSV  string
-	klogVerbosity        int
+	additionalNamespaces      cli.StringSlice
+	imagePullSecretsCSV       string
+	cdDaemonPriorityClassName string
+	klogVerbosity             int
 }
 
 type Config struct {
-	driverName           string
-	flags                *Flags
-	clientsets           pkgflags.ClientSets
-	mux                  *http.ServeMux
-	imagePullSecretNames []string
-	imexConfig           imex.Config
-	imexConfigOverrides  map[string]string
+	driverName                string
+	flags                     *Flags
+	clientsets                pkgflags.ClientSets
+	mux                       *http.ServeMux
+	imagePullSecretNames      []string
+	imexConfig                imex.Config
+	imexConfigOverrides       map[string]string
+	cdDaemonPriorityClassName string
 }
 
 func main() {
@@ -131,6 +133,12 @@ func newApp() *cli.App {
 			Usage:       "Comma-separated imagePullSecret names for compute-domain-daemon DaemonSets (e.g. regcred,other). Empty string means none.",
 			Destination: &flags.imagePullSecretsCSV,
 			EnvVars:     []string{"CD_DAEMON_IMAGE_PULL_SECRET_NAMES"},
+		},
+		&cli.StringFlag{
+			Name:        "cd-daemon-priority-class-name",
+			Usage:       "PriorityClassName applied to dynamically rendered compute-domain-daemon DaemonSet pods.",
+			Destination: &flags.cdDaemonPriorityClassName,
+			EnvVars:     []string{"CD_DAEMON_PRIORITY_CLASS_NAME"},
 		},
 		&cli.IntFlag{
 			Name:        "log-verbosity-cd-daemon",
@@ -260,13 +268,14 @@ func newApp() *cli.App {
 			}
 
 			config := &Config{
-				mux:                  mux,
-				flags:                flags,
-				clientsets:           clientsets,
-				driverName:           DriverName,
-				imagePullSecretNames: strings.Fields(strings.ReplaceAll(strings.TrimSpace(flags.imagePullSecretsCSV), ",", " ")),
-				imexConfig:           imexConfig,
-				imexConfigOverrides:  imexConfigOverrides,
+				mux:                       mux,
+				flags:                     flags,
+				clientsets:                clientsets,
+				driverName:                DriverName,
+				imagePullSecretNames:      strings.Fields(strings.ReplaceAll(strings.TrimSpace(flags.imagePullSecretsCSV), ",", " ")),
+				imexConfig:                imexConfig,
+				imexConfigOverrides:       imexConfigOverrides,
+				cdDaemonPriorityClassName: flags.cdDaemonPriorityClassName,
 			}
 
 			if flags.httpEndpoint != "" {
