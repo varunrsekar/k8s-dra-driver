@@ -52,12 +52,23 @@ type deviceLib struct {
 	hostRoot          string
 	sysfsRoot         string
 	nvidiaSMIPath     string
+	// vfioEnabled records node-local IOMMU capability.
+	vfioEnabled       bool
 	gpuInfosByUUID    map[string]*GpuInfo
 	gpuUUIDbyPCIBusID map[PCIBusID]string
 	devhandleByUUID   map[string]nvml.Device
 }
 
 func newDeviceLib(driver *root.Driver, hostRoot string) (*deviceLib, error) {
+	vfioEnabled := false
+	if featuregates.Enabled(featuregates.PassthroughSupport) {
+		var err error
+		vfioEnabled, err = checkIommuEnabled(hostRoot)
+		if err != nil {
+			return nil, fmt.Errorf("error checking if IOMMU is enabled: %w", err)
+		}
+	}
+
 	driverLibraryPath, err := driver.DriverLibraryPath()
 	if err != nil {
 		return nil, fmt.Errorf("failed to locate driver libraries: %w", err)
@@ -89,6 +100,7 @@ func newDeviceLib(driver *root.Driver, hostRoot string) (*deviceLib, error) {
 		driverLibraryPath: driverLibraryPath,
 		devRoot:           driver.DevRoot,
 		hostRoot:          hostRoot,
+		vfioEnabled:       vfioEnabled,
 		sysfsRoot:         sysfsRoot,
 		nvidiaSMIPath:     nvidiaSMIPath,
 		nvpci:             nvpci,
@@ -108,6 +120,10 @@ func newDeviceLib(driver *root.Driver, hostRoot string) (*deviceLib, error) {
 	}
 
 	return &d, nil
+}
+
+func (d *deviceLib) IsVfioEnabled() bool {
+	return d.vfioEnabled
 }
 
 // prependPathListEnvvar prepends a specified list of strings to a specified envvar and returns its value.
@@ -194,7 +210,7 @@ func (l deviceLib) enumerateAllPossibleDevices() (*PerGPUAllocatableDevices, err
 		return nil, fmt.Errorf("error enumerating allocatable devices: %w", err)
 	}
 
-	if featuregates.Enabled(featuregates.PassthroughSupport) {
+	if featuregates.Enabled(featuregates.PassthroughSupport) && l.IsVfioEnabled() {
 		// Discover passthrough devices and insert them into the
 		// `perGPUAllocatable` devices map
 		err = l.enumerateGpuVfioDevices(perGPUAllocatable)
@@ -310,7 +326,7 @@ func (l deviceLib) GetPerGpuAllocatableDevices(indices ...int) (*PerGPUAllocatab
 			return fmt.Errorf("error discovering MIG devices for GPU %q: %w", gpuInfo.CanonicalName(), err)
 		}
 
-		if featuregates.Enabled(featuregates.PassthroughSupport) {
+		if featuregates.Enabled(featuregates.PassthroughSupport) && l.IsVfioEnabled() {
 			// Only if no MIG devices are found, allow VFIO devices.
 			klog.Infof("PassthroughSupport enabled, and %d MIG devices found", len(migdevs))
 			gpuInfo.vfioEnabled = len(migdevs) == 0
