@@ -1114,9 +1114,15 @@ func (s *DeviceState) prepareDevices(ctx context.Context, claim *resourceapi.Res
 					}
 				}
 			case VfioDeviceType:
+				devices := s.perGPUAllocatable.GetAllDevices(allocatableDevice.GetGPUPCIBusID())
+				devicesSnapshot, err := devices.Snapshot()
+				if err != nil {
+					return nil, fmt.Errorf("error getting devices snapshot: %w", err)
+				}
 				preparedDevice.Vfio = &PreparedVfioDevice{
-					Info:   allocatableDevice.Vfio.LiveTuple(),
-					Device: device,
+					Info:                       allocatableDevice.Vfio.LiveTuple(),
+					Device:                     device,
+					AllocatableDevicesSnapshot: &devicesSnapshot,
 				}
 			}
 

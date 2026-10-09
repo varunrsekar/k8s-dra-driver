@@ -17,6 +17,8 @@ limitations under the License.
 package main
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
@@ -294,10 +296,19 @@ func (d *PerGPUAllocatableDevices) GetAllocatableDevice(deviceName DeviceName) *
 	return nil
 }
 
-func (d *PerGPUAllocatableDevices) GetAllDevices() AllocatableDevices {
+func (d *PerGPUAllocatableDevices) GetAllDevices(pciBusIDs ...string) AllocatableDevices {
 	all := make(AllocatableDevices)
-	for _, devices := range d.allocatablesMap {
-		maps.Copy(all, devices)
+	if len(pciBusIDs) == 0 {
+		for _, devices := range d.allocatablesMap {
+			maps.Copy(all, devices)
+		}
+		return all
+	}
+
+	for _, pciBusID := range pciBusIDs {
+		if devices, ok := d.allocatablesMap[pciBusID]; ok {
+			maps.Copy(all, devices)
+		}
 	}
 	return all
 }
@@ -443,4 +454,15 @@ func (d AllocatableDevices) List() []*AllocatableDevice {
 		deviceList = append(deviceList, device)
 	}
 	return deviceList
+}
+
+// Snapshot returns the allocatable devices as base64-encoded JSON. Restoring
+// MIG profiles requires decoding concrete values for the nvdev.MigProfile interfaces.
+func (d AllocatableDevices) Snapshot() (GPUAllocatableSnapshot, error) {
+	// json.Marshal sorts map keys, keeping snapshots stable across map iteration orders.
+	data, err := json.Marshal(d)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal allocatable devices snapshot: %w", err)
+	}
+	return GPUAllocatableSnapshot(base64.StdEncoding.EncodeToString(data)), nil
 }

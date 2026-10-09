@@ -55,9 +55,12 @@ type PreparedMigDevice struct {
 }
 
 type PreparedVfioDevice struct {
-	Info   *VfioLiveTuple      `json:"info"`
-	Device *CheckpointedDevice `json:"device"`
+	Info                       *VfioLiveTuple          `json:"info"`
+	Device                     *CheckpointedDevice     `json:"device"`
+	AllocatableDevicesSnapshot *GPUAllocatableSnapshot `json:"allocatableDevicesSnapshot,omitempty"`
 }
+
+type GPUAllocatableSnapshot string
 
 type PreparedDeviceGroup struct {
 	Devices     PreparedDeviceList `json:"devices"`
