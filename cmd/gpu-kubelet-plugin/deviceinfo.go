@@ -18,6 +18,8 @@ package main
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
@@ -33,6 +35,7 @@ import (
 // Represents a specific, full, physical GPU device.
 type GpuInfo struct {
 	UUID                  string                           `json:"uuid"`
+	Index                 int                              `json:"index"`
 	Minor                 int                              `json:"minor"`
 	MigCapable            bool                             `json:"migCapable"`
 	MigEnabled            bool                             `json:"migEnabled"`
@@ -65,6 +68,29 @@ type GpuInfo struct {
 	// includes this GPU. Used to publish the `partition1`/`partition2`/
 	// `partition4`/`partition8` device attributes.
 	PartitionsBySize map[int]int `json:"partitionsBySize"`
+}
+
+type GpuSpecTuple struct {
+	Index int `json:"index"`
+}
+
+func NewGpuSpecTupleFromCanonicalName(name DeviceName) (*GpuSpecTuple, error) {
+	parts := strings.Split(name, "-")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid gpu name %q", name)
+	}
+	if parts[0] != "gpu" {
+		return nil, fmt.Errorf("invalid gpu name %q", name)
+	}
+
+	index, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("invalid index %q", parts[1])
+	}
+	gst := &GpuSpecTuple{
+		Index: index,
+	}
+	return gst, nil
 }
 
 type GpuLiveTuple struct {
@@ -119,6 +145,31 @@ type VfioDeviceInfo struct {
 	VfioModule             string                           `json:"vfioModule"`
 }
 
+type VfioSpecTuple struct {
+	Index int `json:"index"`
+}
+
+// NewVfioSpecTupleFromCanonicalName returns a VfioSpecTuple from a canonical name.
+// Format: gpu-vfio-<index>.
+// The index is the only parseable field from the canonical name and it is linked
+// to the PCI Bus ID of the device.
+func NewVfioSpecTupleFromCanonicalName(name DeviceName) (*VfioSpecTuple, error) {
+	parts := strings.Split(name, "-")
+	if len(parts) != 3 || parts[0] != "gpu" || parts[1] != "vfio" {
+		return nil, fmt.Errorf("invalid vfio name %q", name)
+	}
+
+	index, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return nil, fmt.Errorf("invalid index %q", parts[1])
+	}
+
+	vst := &VfioSpecTuple{
+		Index: index,
+	}
+	return vst, nil
+}
+
 type VfioLiveTuple struct {
 	UUID     string `json:"uuid"`
 	PciBusID string `json:"pciBusID"`
@@ -129,7 +180,7 @@ type VfioLiveTuple struct {
 // device announcement. Some context can be found at
 // https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu/issues/563#issuecomment-3345631087.
 func (d *GpuInfo) CanonicalName() DeviceName {
-	return fmt.Sprintf("gpu-%d", d.Minor)
+	return fmt.Sprintf("gpu-%d", d.Index)
 }
 
 // String returns both the GPU minor for easy recognizability, but also the
@@ -147,6 +198,7 @@ func (d *GpuInfo) LiveTuple() *GpuLiveTuple {
 
 func (m *MigDeviceInfo) SpecTuple() *MigSpecTuple {
 	return &MigSpecTuple{
+		ParentIndex:    m.Parent.Index,
 		ParentMinor:    m.ParentMinor,
 		ProfileID:      m.GiProfileID,
 		PlacementStart: m.PlacementStart,

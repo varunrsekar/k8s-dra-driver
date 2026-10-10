@@ -29,6 +29,7 @@ import (
 func newTestGpuInfo(numaNodeAttr *deviceattribute.DeviceAttribute) *GpuInfo {
 	return &GpuInfo{
 		UUID:                  "GPU-test",
+		Index:                 0,
 		Minor:                 0,
 		ProductName:           "NVIDIA Test GPU",
 		Brand:                 "NVIDIA",
@@ -110,17 +111,17 @@ func TestVfioDeviceIncludesStandardNumaNode(t *testing.T) {
 
 func TestGpuInfoCanonicalName(t *testing.T) {
 	tests := map[string]struct {
-		minor int
+		index int
 		want  DeviceName
 	}{
-		"minor zero":      {minor: 0, want: "gpu-0"},
-		"single digit":    {minor: 7, want: "gpu-7"},
-		"multiple digits": {minor: 42, want: "gpu-42"},
+		"minor zero":      {index: 0, want: "gpu-0"},
+		"single digit":    {index: 7, want: "gpu-7"},
+		"multiple digits": {index: 42, want: "gpu-42"},
 	}
 
 	for description, tc := range tests {
 		t.Run(description, func(t *testing.T) {
-			gpu := &GpuInfo{Minor: tc.minor}
+			gpu := &GpuInfo{Index: tc.index}
 			require.Equal(t, tc.want, gpu.CanonicalName())
 		})
 	}
@@ -129,7 +130,7 @@ func TestGpuInfoCanonicalName(t *testing.T) {
 func TestGpuInfoString(t *testing.T) {
 	// String() is used in log messages and combines the canonical name (for
 	// recognizability) with the UUID (for precision).
-	gpu := &GpuInfo{Minor: 3, UUID: "GPU-abc123"}
+	gpu := &GpuInfo{Index: 3, UUID: "GPU-abc123"}
 	require.Equal(t, "gpu-3-GPU-abc123", gpu.String())
 }
 
@@ -152,12 +153,14 @@ func TestVfioDeviceInfoCanonicalName(t *testing.T) {
 
 func TestMigDeviceInfoSpecTuple(t *testing.T) {
 	mig := &MigDeviceInfo{
+		Parent:         &GpuInfo{Index: 2},
 		ParentMinor:    2,
 		GiProfileID:    19,
 		PlacementStart: 4,
 	}
 
 	require.Equal(t, &MigSpecTuple{
+		ParentIndex:    2,
 		ParentMinor:    2,
 		ProfileID:      19,
 		PlacementStart: 4,

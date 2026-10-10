@@ -44,6 +44,7 @@ type GPUMinor = int
 
 type deviceLib struct {
 	nvdev.Interface
+	gpuIndexer        GPUIndexer
 	nvmllib           nvml.Interface
 	nvpci             nvpci.Interface
 	nvpasst           nvpassthrough.Interface
@@ -96,6 +97,7 @@ func newDeviceLib(driver *root.Driver, hostRoot string) (*deviceLib, error) {
 
 	d := deviceLib{
 		Interface:         nvdev.New(nvmllib),
+		gpuIndexer:        NewGPUIndexer(maxIndices),
 		nvmllib:           nvmllib,
 		driverLibraryPath: driverLibraryPath,
 		devRoot:           driver.DevRoot,
@@ -203,9 +205,9 @@ func (l deviceLib) ensureNVML() (func(), nvml.Return) {
 	return func() { l.alwaysShutdown() }, nvml.SUCCESS
 }
 
-// Discover devices that are allocatable, on this node.
-func (l deviceLib) enumerateAllPossibleDevices() (*PerGPUAllocatableDevices, error) {
-	perGPUAllocatable, err := l.GetPerGpuAllocatableDevices()
+// Discover devices that are allocatable on this node.
+func (l deviceLib) enumerateAllPossibleDevices(knownPerGPUAllocatable *PerGPUAllocatableDevices) (*PerGPUAllocatableDevices, error) {
+	perGPUAllocatable, err := l.GetPerGpuAllocatableDevices(knownPerGPUAllocatable)
 	if err != nil {
 		return nil, fmt.Errorf("error enumerating allocatable devices: %w", err)
 	}
@@ -226,7 +228,7 @@ func (l deviceLib) enumerateAllPossibleDevices() (*PerGPUAllocatableDevices, err
 // discovery, and assembles the set of allocatable devices that will be
 // announced by this DRA driver. A list of GPU indices can optionally be
 // provided to limit the discovery to a set of physical GPUs.
-func (l deviceLib) GetPerGpuAllocatableDevices(indices ...int) (*PerGPUAllocatableDevices, error) {
+func (l deviceLib) GetPerGpuAllocatableDevices(knownPerGPUAllocatable *PerGPUAllocatableDevices) (*PerGPUAllocatableDevices, error) {
 	klog.Infof("Traverse GPU devices")
 
 	shutdown, ret := l.ensureNVML()
@@ -238,12 +240,16 @@ func (l deviceLib) GetPerGpuAllocatableDevices(indices ...int) (*PerGPUAllocatab
 	perGPUAllocatable := &PerGPUAllocatableDevices{
 		allocatablesMap: make(map[PCIBusID]AllocatableDevices),
 	}
+	if knownPerGPUAllocatable != nil {
+		for pciBusID, allocatables := range knownPerGPUAllocatable.allocatablesMap {
+			err := perGPUAllocatable.AddGPUAllocatables(pciBusID, allocatables)
+			if err != nil {
+				return nil, fmt.Errorf("failed to add known allocatables for GPU PCI bus ID %q: %w", pciBusID, err)
+			}
+		}
+	}
 
 	err := l.VisitDevices(func(i int, d nvdev.Device) error {
-		if indices != nil && !slices.Contains(indices, i) {
-			return nil
-		}
-
 		// Prepare data structure for conceptually allocatable devices on this
 		// one physical GPU.
 		thisGPUAllocatable := make(AllocatableDevices)
@@ -253,8 +259,46 @@ func (l deviceLib) GetPerGpuAllocatableDevices(indices ...int) (*PerGPUAllocatab
 			return fmt.Errorf("error getting info for GPU %v: %w", i, err)
 		}
 
-		parentdev := &AllocatableDevice{
-			Gpu: gpuInfo,
+		// Check if the GPU index is already known.
+		var parentDev *AllocatableDevice
+		allocatableDevices := perGPUAllocatable.GetAllDevices(gpuInfo.PciBusID)
+		gpuDevs := allocatableDevices.GetGPUs()
+		if len(gpuDevs) > 0 {
+			parentDev = gpuDevs[0]
+		}
+		if parentDev == nil {
+			// Check if there's already a VFIO device for this GPU.
+			// this can happen if its been prepared in passthrough-mode
+			// for an active workload.
+			if featuregates.Enabled(featuregates.PassthroughSupport) {
+				vfioDevs := allocatableDevices.GetVfioDevices()
+				if len(vfioDevs) > 0 {
+					// Pick the index for the GPU from the VFIO device.
+					gpuInfo.Index = vfioDevs[0].Vfio.Index
+				}
+			}
+
+			// We don't have a cached VFIO device nor a GPU device, so we need
+			// to reserve the first available index for this GPU.
+			// Prefer the GPU minor number when discovering the GPU from scratch
+			// for idle or checkpointed in PrepareStarted state. This will
+			// preserve the existing naming convention of the GPU/MIG device as
+			// much as possible.
+			if idx := l.gpuIndexer.Reserve(gpuInfo.Index, gpuInfo.PciBusID); idx == -1 {
+				// Indexer has a max capacity of 16. We're not expected to reach it as
+				// nodes can only have at most 16 GPUs.
+				return fmt.Errorf("no free index found for GPU %v", i)
+			} else {
+				gpuInfo.Index = idx
+			}
+
+			parentDev = &AllocatableDevice{
+				Gpu: gpuInfo,
+			}
+		} else {
+			// If allocatable already exists, then update its gpuInfo object.
+			gpuInfo.Index = parentDev.Gpu.Index
+			parentDev.Gpu = gpuInfo
 		}
 
 		// Store gpuInfo object for later re-use (lookup by UUID).
@@ -302,7 +346,7 @@ func (l deviceLib) GetPerGpuAllocatableDevices(indices ...int) (*PerGPUAllocatab
 				// vGPUs masquerading as full GPUs, so supportsMIGModeToggle(d) here precisely means
 				// "non-vGPU Hopper+".
 				if !gpuInfo.MigEnabled || supportsMIGModeToggle(d) {
-					thisGPUAllocatable[gpuInfo.CanonicalName()] = parentdev
+					thisGPUAllocatable[gpuInfo.CanonicalName()] = parentDev
 				}
 				for name, migspec := range migspecs {
 					dev := &AllocatableDevice{
@@ -337,7 +381,7 @@ func (l deviceLib) GetPerGpuAllocatableDevices(indices ...int) (*PerGPUAllocatab
 			// No static MIG devices prepared for this physical GPU. Announce
 			// physical GPU to be allocatable, and terminate discovery for this
 			// phyical GPU.
-			thisGPUAllocatable[gpuInfo.CanonicalName()] = parentdev
+			thisGPUAllocatable[gpuInfo.CanonicalName()] = parentDev
 			err = perGPUAllocatable.AddGPUAllocatables(gpuInfo.PciBusID, thisGPUAllocatable)
 			if err != nil {
 				return fmt.Errorf("error adding allocatables for PCI bus ID %q: %w", gpuInfo.PciBusID, err)
@@ -423,6 +467,56 @@ func (l deviceLib) discoverGPUByPCIBusID(pciBusID string) (*AllocatableDevice, [
 		return nil, nil, fmt.Errorf("error visiting devices: %w", err)
 	}
 	return gpu, migs, nil
+}
+
+func (l deviceLib) discoverGpuDeviceByUUID(index int, uuid string) (*AllocatableDevice, error) {
+	if err := l.Init(); err != nil {
+		return nil, err
+	}
+	defer l.alwaysShutdown()
+
+	gpuDev, err := l.NewDeviceByUUID(uuid)
+	if err != nil {
+		return nil, fmt.Errorf("error getting device by UUID: %w", err)
+	}
+	gpuInfo, err := l.getGpuInfo(index, gpuDev)
+	if err != nil {
+		return nil, fmt.Errorf("error getting info for GPU %d: %w", index, err)
+	}
+	if idx := l.gpuIndexer.Reserve(index, gpuInfo.PciBusID); idx == -1 {
+		return nil, fmt.Errorf("failed to reserve index %d for GPU %s", index, uuid)
+	} else {
+		gpuInfo.Index = idx
+	}
+
+	// Store gpuInfo object for later re-use (lookup by UUID).
+	l.gpuInfosByUUID[gpuInfo.UUID] = gpuInfo
+	l.gpuUUIDbyPCIBusID[gpuInfo.PciBusID] = gpuInfo.UUID
+
+	allocatable := &AllocatableDevice{
+		Gpu: gpuInfo,
+	}
+	return allocatable, nil
+}
+
+func (l deviceLib) discoverVfioDeviceByPciBusID(index int, pciBusID string) (*AllocatableDevice, error) {
+	device, err := l.nvpci.GetGPUByPciBusID(pciBusID)
+	if err != nil {
+		return nil, fmt.Errorf("error getting GPU by PCI bus ID %q: %w", pciBusID, err)
+	}
+	vfioDeviceInfo, err := l.getVfioDeviceInfo(index, device)
+	if err != nil {
+		return nil, fmt.Errorf("error getting VFIO device info: %w", err)
+	}
+	if idx := l.gpuIndexer.Reserve(index, pciBusID); idx == -1 {
+		return nil, fmt.Errorf("failed to reserve index %d for VFIO device %s", index, pciBusID)
+	} else {
+		vfioDeviceInfo.Index = idx
+	}
+	allocatable := &AllocatableDevice{
+		Vfio: vfioDeviceInfo,
+	}
+	return allocatable, nil
 }
 
 // TODO: Need go-nvlib util for this.
@@ -637,6 +731,7 @@ func (l deviceLib) getGpuInfo(index int, device nvdev.Device) (*GpuInfo, error) 
 
 	gpuInfo := &GpuInfo{
 		UUID:                  uuid,
+		Index:                 index,
 		Minor:                 minor,
 		MigCapable:            migCapable,
 		MigEnabled:            migEnabled,
@@ -1426,7 +1521,7 @@ func (l deviceLib) FindMigDevBySpec(ms *MigSpecTuple) (*MigLiveTuple, error) {
 	// This may be unset if the mig spec was constructed from the
 	// allocated device name.
 	if ms.ParentPCIBusID == "" {
-		gpuInfo, err := l.getGpuInfoByMinor(ms.ParentMinor)
+		gpuInfo, err := l.getGpuInfoByIndex(ms.ParentIndex)
 		if err != nil {
 			return nil, err
 		}
@@ -1516,13 +1611,13 @@ func (l deviceLib) FindMigDevBySpec(ms *MigSpecTuple) (*MigLiveTuple, error) {
 	return nil, nil
 }
 
-func (l deviceLib) getGpuInfoByMinor(minor GPUMinor) (*GpuInfo, error) {
+func (l deviceLib) getGpuInfoByIndex(index int) (*GpuInfo, error) {
 	for _, gpuInfo := range l.gpuInfosByUUID {
-		if gpuInfo.Minor == minor {
+		if gpuInfo.Index == index {
 			return gpuInfo, nil
 		}
 	}
-	return nil, fmt.Errorf("gpu info not found for minor %d", minor)
+	return nil, fmt.Errorf("gpu info not found for index %d", index)
 }
 
 // Mutate map `m` in-place: insert into map if the current QualifiedName does
