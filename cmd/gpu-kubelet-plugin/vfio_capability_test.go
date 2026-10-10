@@ -91,7 +91,7 @@ func TestDeviceStateVfioCapability(t *testing.T) {
 				setVfioTestFeatureGate(t, featuregates.DynamicMIG, false)
 				pci := &nvpci.InterfaceMock{GetGPUsFunc: func() ([]*nvpci.NvidiaPCIDevice, error) { return nil, nil }}
 				lib := &deviceLib{vfioEnabled: capable, nvmllib: emptyVfioTestNVML{}, Interface: emptyVfioTestDevices{}, nvpci: pci}
-				perGPUAllocatable, err := lib.enumerateAllPossibleDevices()
+				perGPUAllocatable, err := lib.enumerateAllPossibleDevices(nil)
 				require.NoError(t, err)
 				require.Equal(t, capable, lib.IsVfioEnabled())
 				if gate && capable {

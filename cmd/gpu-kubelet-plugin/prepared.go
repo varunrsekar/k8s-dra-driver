@@ -60,8 +60,6 @@ type PreparedVfioDevice struct {
 	AllocatableDevicesSnapshot *GPUAllocatableSnapshot `json:"allocatableDevicesSnapshot,omitempty"`
 }
 
-type GPUAllocatableSnapshot string
-
 type PreparedDeviceGroup struct {
 	Devices     PreparedDeviceList `json:"devices"`
 	ConfigState DeviceConfigState  `json:"configState"`
