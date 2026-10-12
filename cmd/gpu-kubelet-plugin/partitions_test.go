@@ -54,6 +54,14 @@ func newPartTestMigSpec(parent *GpuInfo, start, size uint32) *MigSpec {
 	}
 }
 
+func newPartTestVfio(parent *GpuInfo) *VfioDeviceInfo {
+	vfio := newTestVfioDeviceInfo(parent, nil)
+	if parent != nil {
+		vfio.NumaNodeAttr = parent.NumaNodeAttr
+	}
+	return vfio
+}
+
 // resource.Quantity caches a format string, so require.Equal on two logically
 // equal quantities can fail. Compare the int64 values instead.
 func capValue(t *testing.T, m PartCapacityMap, name resourceapi.QualifiedName) int64 {
@@ -209,6 +217,9 @@ func TestPartAllocatableDeviceGetDevice(t *testing.T) {
 			MigDynamic: newPartTestMigSpec(newPartTestGpu(nil, 0), 2, 2),
 		}
 		require.Equal(t, "gpu-0-mig-1g10gb-19-2", mig.PartGetDevice(nil).Name)
+
+		vfio := &AllocatableDevice{Vfio: newPartTestVfio(newPartTestGpu(nil, 0))}
+		require.Equal(t, "gpu-vfio-0", vfio.PartGetDevice(nil).Name)
 	})
 
 	for _, tc := range []struct {
@@ -218,8 +229,6 @@ func TestPartAllocatableDeviceGetDevice(t *testing.T) {
 	}{
 		{"static MIG", &AllocatableDevice{MigStatic: &MigDeviceInfo{}},
 			"PartGetDevice() called for MigStaticDeviceType"},
-		{"VFIO", &AllocatableDevice{Vfio: &VfioDeviceInfo{}},
-			"not yet implemented"},
 		{"an unset device", &AllocatableDevice{},
 			"unexpected type for AllocatableDevice"},
 	} {
