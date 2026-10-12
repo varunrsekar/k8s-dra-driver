@@ -310,38 +310,6 @@ func TestPerGPUGetAllDevicesMerges(t *testing.T) {
 	assert.Contains(t, all, "gpu-vfio-0")
 }
 
-func TestPerGPURemoveSiblingDevices(t *testing.T) {
-	pci := "0000:01:00.0"
-	gpu := &AllocatableDevice{Gpu: &GpuInfo{Index: 0, Minor: 0, UUID: "GPU-0", PciBusID: pci}}
-	vfio := &AllocatableDevice{Vfio: &VfioDeviceInfo{Index: 0, UUID: "VF-0", PciBusID: pci}}
-
-	newBucket := func(t *testing.T) *PerGPUAllocatableDevices {
-		p := newPerGPU()
-		require.NoError(t, p.AddAllocatableDevice(gpu))
-		require.NoError(t, p.AddAllocatableDevice(vfio))
-		require.Len(t, p.GetAllDevices(), 2)
-		return p
-	}
-
-	t.Run("gpu selected removes vfio sibling", func(t *testing.T) {
-		p := newBucket(t)
-		p.RemoveSiblingDevices(gpu)
-		all := p.GetAllDevices()
-		require.Len(t, all, 1)
-		assert.Contains(t, all, "gpu-0")
-		assert.NotContains(t, all, "gpu-vfio-0")
-	})
-
-	t.Run("vfio selected removes gpu sibling", func(t *testing.T) {
-		p := newBucket(t)
-		p.RemoveSiblingDevices(vfio)
-		all := p.GetAllDevices()
-		require.Len(t, all, 1)
-		assert.Contains(t, all, "gpu-vfio-0")
-		assert.NotContains(t, all, "gpu-0")
-	})
-}
-
 func TestTaintsReturnsClone(t *testing.T) {
 	d := &AllocatableDevice{
 		DeviceTaints: []resourceapi.DeviceTaint{

@@ -380,9 +380,6 @@ func (s *DeviceState) Prepare(ctx context.Context, claim *resourceapi.ResourceCl
 				klog.Warningf("allocatable not found for device: %v", device.DeviceName)
 				continue
 			}
-			// Remove all other device types on the parent GPU of the prepared device.
-			// When vfio type is prepared, gpu type should not be advertised and vice versa.
-			s.perGPUAllocatable.RemoveSiblingDevices(allocatableDevice)
 		}
 	}
 
