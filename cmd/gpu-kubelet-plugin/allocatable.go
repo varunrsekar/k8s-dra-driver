@@ -313,45 +313,6 @@ func (d *PerGPUAllocatableDevices) GetAllDevices(pciBusIDs ...string) Allocatabl
 	return all
 }
 
-// TODO: This needs a code comment, clarifying the complexity across device
-// types. This function is tied to PassthroughSuppert and hence for now
-// guaranteed to not be exercised when DynamicMIG is enabled.
-func (d *PerGPUAllocatableDevices) RemoveSiblingDevices(device *AllocatableDevice) {
-	var pciBusID string
-	switch device.Type() {
-	case GpuDeviceType:
-		pciBusID = device.Gpu.PciBusID
-	case VfioDeviceType:
-		pciBusID = device.Vfio.PciBusID
-	case MigStaticDeviceType:
-		// TODO: Implement once/if static MIG is supported in the context of
-		// PassthroughSupport.
-		return
-	case MigDynamicDeviceType:
-		// TODO: Implement once/if dynamic MIG is supported in the context of
-		// PassthroughSupport.
-		return
-	}
-
-	for _, sibling := range d.allocatablesMap[pciBusID] {
-		if sibling.Type() == device.Type() {
-			continue
-		}
-		switch sibling.Type() {
-		case GpuDeviceType:
-			delete(d.allocatablesMap[pciBusID], sibling.Gpu.CanonicalName())
-		case VfioDeviceType:
-			delete(d.allocatablesMap[pciBusID], sibling.Vfio.CanonicalName())
-		case MigStaticDeviceType:
-			// TODO
-			continue
-		case MigDynamicDeviceType:
-			// TODO
-			continue
-		}
-	}
-}
-
 // Taints returns a copy of the device's taints to prevent data races
 // when being read concurrently by the ResourceSlice builder.
 func (d *AllocatableDevice) Taints() []resourceapi.DeviceTaint {
