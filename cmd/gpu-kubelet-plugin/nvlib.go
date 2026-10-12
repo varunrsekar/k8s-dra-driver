@@ -301,6 +301,11 @@ func (l deviceLib) GetPerGpuAllocatableDevices(knownPerGPUAllocatable *PerGPUAll
 			parentDev.Gpu = gpuInfo
 		}
 
+		// Enable VFIO if node has the capability.
+		if featuregates.Enabled(featuregates.PassthroughSupport) && l.IsVfioEnabled() {
+			gpuInfo.VfioEnabled = true
+		}
+
 		// Store gpuInfo object for later re-use (lookup by UUID).
 		l.gpuInfosByUUID[gpuInfo.UUID] = gpuInfo
 		l.gpuUUIDbyPCIBusID[gpuInfo.PciBusID] = gpuInfo.UUID
@@ -373,7 +378,9 @@ func (l deviceLib) GetPerGpuAllocatableDevices(knownPerGPUAllocatable *PerGPUAll
 		if featuregates.Enabled(featuregates.PassthroughSupport) && l.IsVfioEnabled() {
 			// Only if no MIG devices are found, allow VFIO devices.
 			klog.Infof("PassthroughSupport enabled, and %d MIG devices found", len(migdevs))
-			gpuInfo.VfioEnabled = len(migdevs) == 0
+			if len(migdevs) > 0 {
+				gpuInfo.VfioEnabled = false
+			}
 		}
 
 		if !gpuInfo.MigEnabled {
@@ -451,6 +458,70 @@ func (l deviceLib) discoverGPUByPCIBusID(pciBusID string) (*AllocatableDevice, [
 		gpuInfo, err := l.getGpuInfo(i, d)
 		if err != nil {
 			return fmt.Errorf("error getting info for GPU %d: %w", i, err)
+		}
+		// Store gpuInfo object for later re-use (lookup by UUID).
+		l.gpuInfosByUUID[gpuInfo.UUID] = gpuInfo
+		l.gpuUUIDbyPCIBusID[gpuInfo.PciBusID] = gpuInfo.UUID
+
+		// Enable VFIO if node has the capability.
+		if featuregates.Enabled(featuregates.PassthroughSupport) && l.IsVfioEnabled() {
+			gpuInfo.VfioEnabled = true
+		}
+		if featuregates.Enabled(featuregates.DynamicMIG) {
+			dynamicMIGCapable, err := isDynamicMIGCapable(gpuInfo, d)
+			if err != nil {
+				return fmt.Errorf("error determining DynamicMIG support for GPU %v: %w", i, err)
+			}
+
+			// gpuInfo.migEnabled is captured once during enumeration and is
+			// never re-read. The branches below rely on this snapshot:
+			// toggling MIG mode on Ampere requires a GPU reset that this
+			// plugin does not initiate, so within a single plugin lifetime
+			// the value cannot change underneath us. A future refactor that
+			// moves the migEnabled read past enumeration (or starts
+			// re-reading it) must reconsider these branches.
+			if dynamicMIGCapable {
+				// Best-effort handle cache warmup: store mapping between full-GPU
+				// UUID and NVML device handle in a map. Ignore failures.
+				if _, ret := l.DeviceGetHandleByUUID(gpuInfo.UUID); ret != nvml.SUCCESS {
+					klog.Warningf("DeviceGetHandleByUUID failed: %s", ret)
+				}
+
+				// For this full device, inspect all MIG profiles and their possible
+				// placements. Side effect: this enriches `gpuInfo` with additional
+				// properties (such as the memory slice count, and the maximum
+				// capacities as reported by individual MIG profiles).
+				migspecs, err := l.inspectMigProfilesAndPlacements(gpuInfo, d)
+				if err != nil {
+					return fmt.Errorf("error getting MIG info for GPU %v: %w", i, err)
+				}
+
+				// When migEnabled is true, parentdev is intentionally NOT added
+				// to thisGPUAllocatable — the full GPU is not allocatable on
+				// Ampere when MIG cannot be toggled without a GPU reset. The
+				// per-GPU shared CounterSet that MIG partitions reference by
+				// name is still emitted by the ResourceSlice generators in
+				// driver.go, which derive the parent GpuInfo from
+				// MigDynamic.Parent when no full-GPU entry exists.
+
+				// We're inside the dynamicMIGCapable=true branch, which already excludes
+				// vGPUs masquerading as full GPUs, so supportsMIGModeToggle(d) here precisely means
+				// "non-vGPU Hopper+".
+				if !gpuInfo.MigEnabled || supportsMIGModeToggle(d) {
+					gpu = &AllocatableDevice{
+						Gpu: gpuInfo,
+					}
+				}
+				for _, migspec := range migspecs {
+					dev := &AllocatableDevice{
+						MigDynamic: migspec,
+					}
+					migs = append(migs, dev)
+				}
+
+				// Terminate this function -- this is mutually exclusive with static MIG and vfio/passthrough.
+				return nil
+			}
 		}
 		migs, err = l.discoverMigDevicesByGPU(gpuInfo)
 		if err != nil {
