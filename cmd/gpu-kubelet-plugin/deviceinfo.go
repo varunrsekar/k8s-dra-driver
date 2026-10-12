@@ -348,49 +348,55 @@ func (d *MigDeviceInfo) GetDevice() resourceapi.Device {
 	return device
 }
 
-func (d *VfioDeviceInfo) GetDevice() resourceapi.Device {
-	device := resourceapi.Device{
-		Name: d.CanonicalName(),
-		Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-			"type": {
-				StringValue: ptr.To(VfioDeviceType),
-			},
-			"uuid": {
-				StringValue: &d.UUID,
-			},
-			"deviceID": {
-				StringValue: &d.DeviceID,
-			},
-			"vendorID": {
-				StringValue: &d.VendorID,
-			},
-			"productName": {
-				StringValue: &d.ProductName,
-			},
-			"iommuFDEnabled": {
-				BoolValue: ptr.To(d.IommuFDEnabled),
-			},
+func (d *VfioDeviceInfo) Attributes() map[resourceapi.QualifiedName]resourceapi.DeviceAttribute {
+	attrs := map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+		"type": {
+			StringValue: ptr.To(VfioDeviceType),
 		},
-		Capacity: map[resourceapi.QualifiedName]resourceapi.DeviceCapacity{
-			"addressableMemory": {
-				Value: *resource.NewQuantity(int64(d.AddressableMemoryBytes), resource.BinarySI),
-			},
+		"uuid": {
+			StringValue: &d.UUID,
+		},
+		"deviceID": {
+			StringValue: &d.DeviceID,
+		},
+		"vendorID": {
+			StringValue: &d.VendorID,
+		},
+		"productName": {
+			StringValue: &d.ProductName,
+		},
+		"iommuFDEnabled": {
+			BoolValue: ptr.To(d.IommuFDEnabled),
 		},
 	}
-
-	addDeviceAttribute(device.Attributes, d.PciBusIDAttr)
-	addDeviceAttribute(device.Attributes, d.PcieRootAttr)
+	addDeviceAttribute(attrs, d.PciBusIDAttr)
+	addDeviceAttribute(attrs, d.PcieRootAttr)
+	addDeviceAttribute(attrs, d.NumaNodeAttr)
 
 	if featuregates.Enabled(featuregates.FabricManagerPartitioning) {
 		if d.Parent == nil {
 			klog.V(4).Infof("No parent GPU for %s; skipping Fabric Manager attributes", d.CanonicalName())
 		} else {
-			d.Parent.addFabricManagerAttributes(device.Attributes)
+			d.Parent.addFabricManagerAttributes(attrs)
 		}
 	}
-	addDeviceAttribute(device.Attributes, d.NumaNodeAttr)
+	return attrs
+}
 
-	return device
+func (d *VfioDeviceInfo) Capacities() map[resourceapi.QualifiedName]resourceapi.DeviceCapacity {
+	return map[resourceapi.QualifiedName]resourceapi.DeviceCapacity{
+		"addressableMemory": {
+			Value: *resource.NewQuantity(int64(d.AddressableMemoryBytes), resource.BinarySI),
+		},
+	}
+}
+
+func (d *VfioDeviceInfo) GetDevice() resourceapi.Device {
+	return resourceapi.Device{
+		Name:       d.CanonicalName(),
+		Attributes: d.Attributes(),
+		Capacity:   d.Capacities(),
+	}
 }
 
 func addDeviceAttribute(attrs map[resourceapi.QualifiedName]resourceapi.DeviceAttribute, attr *deviceattribute.DeviceAttribute) {

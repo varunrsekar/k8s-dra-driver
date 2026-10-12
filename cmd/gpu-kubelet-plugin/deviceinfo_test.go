@@ -38,6 +38,48 @@ func newTestGpuInfo(numaNodeAttr *deviceattribute.DeviceAttribute) *GpuInfo {
 		DriverVersion:         "580.0.0",
 		CudaDriverVersion:     "13.0",
 		NumaNodeAttr:          numaNodeAttr,
+		PciBusID:              "0000:01:00.0",
+		PciBusIDAttr: &deviceattribute.DeviceAttribute{
+			Name: deviceattribute.StandardDeviceAttributePCIBusID,
+			Value: resourceapi.DeviceAttribute{
+				StringValue: ptr.To("0000:01:00.0"),
+			},
+		},
+	}
+}
+
+func newTestVfioDeviceInfo(parent *GpuInfo, numaNodeAttr *deviceattribute.DeviceAttribute) *VfioDeviceInfo {
+	if parent == nil {
+		return &VfioDeviceInfo{
+			UUID:                   "VFIO-test",
+			DeviceID:               "0x1234",
+			VendorID:               "0x10de",
+			Index:                  0,
+			ProductName:            "NVIDIA Test GPU",
+			AddressableMemoryBytes: 1024,
+			NumaNodeAttr:           numaNodeAttr,
+			PciBusID:               "0000:01:00.0",
+			PciBusIDAttr: &deviceattribute.DeviceAttribute{
+				Name: deviceattribute.StandardDeviceAttributePCIBusID,
+				Value: resourceapi.DeviceAttribute{
+					StringValue: ptr.To("0000:01:00.0"),
+				},
+			},
+		}
+	}
+
+	return &VfioDeviceInfo{
+		Parent:                 parent,
+		UUID:                   "VFIO-test",
+		DeviceID:               "0x1234",
+		VendorID:               "0x10de",
+		Index:                  parent.Index,
+		ProductName:            "NVIDIA Test GPU",
+		AddressableMemoryBytes: 1024,
+		NumaNodeAttr:           parent.NumaNodeAttr,
+		PciBusID:               parent.PciBusID,
+		PciBusIDAttr:           parent.PciBusIDAttr,
+		PcieRootAttr:           parent.PcieRootAttr,
 	}
 }
 
@@ -96,17 +138,9 @@ func TestCommonMigAttributesIncludeStandardNumaNode(t *testing.T) {
 }
 
 func TestVfioDeviceIncludesStandardNumaNode(t *testing.T) {
-	vfio := &VfioDeviceInfo{
-		UUID:                   "vfio-test",
-		DeviceID:               "0x1234",
-		VendorID:               "0x10de",
-		Index:                  0,
-		ProductName:            "NVIDIA Test GPU",
-		NumaNodeAttr:           newScalarNumaNodeAttribute(3),
-		AddressableMemoryBytes: 1024,
-	}
+	vfio := newTestVfioDeviceInfo(nil, newScalarNumaNodeAttribute(3))
 
-	requireNumaNodeAttribute(t, vfio.GetDevice().Attributes, 3)
+	requireNumaNodeAttribute(t, vfio.Attributes(), 3)
 }
 
 func TestGpuInfoCanonicalName(t *testing.T) {
