@@ -38,8 +38,11 @@ const (
 )
 
 type Manager struct {
-	client         Client
-	partitionsByID map[int]Partition
+	client               Client
+	partitionsByID       map[int]Partition
+	physicalIDByUUID     map[string]int
+	physicalIDByPCI      map[string]int
+	identityByPhysicalID map[int]gpuIdentity
 }
 
 // Open builds a Manager for the caller to subsequently activate and deactivate
@@ -115,9 +118,12 @@ func (m *Manager) Close() error {
 
 // recordsPartitions records the FM-supplied partition topology, validating
 // that every partition is well-formed (unique id, non-empty, no duplicate GPU
-// members).
+// members) and consistent GPU identities across partitions.
 func (m *Manager) recordsPartitions(parts []Partition) error {
 	byID := make(map[int]Partition, len(parts))
+	byUUID := make(map[string]int)
+	byPCI := make(map[string]int)
+	identities := make(map[int]gpuIdentity)
 
 	for _, p := range parts {
 		if _, dup := byID[p.ID]; dup {
@@ -133,10 +139,45 @@ func (m *Manager) recordsPartitions(parts []Partition) error {
 					p.ID, g.PhysicalID)
 			}
 			seen[g.PhysicalID] = struct{}{}
+
+			pci, err := normalizePCIBusID(g.PCIBusID)
+			if err != nil {
+				return fmt.Errorf("fabricmanager: partition %d physical ID %d: %w", p.ID, g.PhysicalID, err)
+			}
+			// Some FM versions represent an unavailable BDF as all zeroes.
+			if g.UUID == "" && pci == "0000:00:00.0" {
+				pci = ""
+			}
+			identity := identities[g.PhysicalID]
+			if g.UUID != "" {
+				if id, exists := byUUID[g.UUID]; exists && id != g.PhysicalID {
+					return fmt.Errorf("fabricmanager: GPU UUID %q maps to multiple physical IDs (%d and %d)", g.UUID, id, g.PhysicalID)
+				}
+				if identity.uuid != "" && identity.uuid != g.UUID {
+					return fmt.Errorf("fabricmanager: physical ID %d has conflicting UUIDs (%q and %q)", g.PhysicalID, identity.uuid, g.UUID)
+				}
+				byUUID[g.UUID] = g.PhysicalID
+				identity.uuid = g.UUID
+			}
+			if pci != "" {
+				if id, exists := byPCI[pci]; exists && id != g.PhysicalID {
+					return fmt.Errorf("fabricmanager: GPU PCI %q maps to multiple physical IDs (%d and %d)", pci, id, g.PhysicalID)
+				}
+				if identity.pci != "" && identity.pci != pci {
+					return fmt.Errorf("fabricmanager: physical ID %d has conflicting PCI addresses (%q and %q)", g.PhysicalID, identity.pci, pci)
+				}
+				byPCI[pci] = g.PhysicalID
+				identity.pci = pci
+			}
+			// Keep entries even when FM omits both identifiers, for module-ID fallback.
+			identities[g.PhysicalID] = identity
 		}
 		byID[p.ID] = p
 	}
 	m.partitionsByID = byID
+	m.physicalIDByUUID = byUUID
+	m.physicalIDByPCI = byPCI
+	m.identityByPhysicalID = identities
 	return nil
 }
 

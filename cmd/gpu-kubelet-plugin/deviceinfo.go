@@ -209,9 +209,9 @@ func (d *GpuInfo) Attributes() map[resourceapi.QualifiedName]resourceapi.DeviceA
 	return attrs
 }
 
-// addFabricManagerAttributes publishes the Fabric Manager-derived attributes
-// (`gpuModuleID` and `partitionN`) for this physical GPU. The values are
-// resolved from NVML / FM at discovery time (see attachFabricManagerPartitions).
+// addFabricManagerAttributes publishes the NVML-reported gpuModuleID and
+// Fabric Manager partitionN attributes for this physical GPU. Partition
+// membership is resolved at discovery time (see attachFabricManagerPartitions).
 func (d *GpuInfo) addFabricManagerAttributes(attrs map[resourceapi.QualifiedName]resourceapi.DeviceAttribute) {
 	if d == nil {
 		return

@@ -32,28 +32,30 @@ func TestPhysicalIDForGPU(t *testing.T) {
 		wantFound bool
 		wantError string
 	}{
-		"UUID and normalized PCI":         {uuid: "GPU-a", pci: "0000:0f:00.0", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a", PCIBusID: "00000000:0F:00.0"}}, wantID: 15, wantFound: true},
-		"UUID only":                       {uuid: "GPU-a", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a"}}, wantID: 15, wantFound: true},
-		"PCI only":                        {pci: "0000:0f:00.0", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a", PCIBusID: "00000000:0F:00.0"}}, wantID: 15, wantFound: true},
-		"FM UUID unavailable":             {uuid: "GPU-a", pci: "0000:0f:00.0", members: []PartitionGPU{{PhysicalID: 15, PCIBusID: "00000000:0F:00.0"}}, wantID: 15, wantFound: true},
-		"same GPU in multiple partitions": {uuid: "GPU-a", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a"}, {PhysicalID: 15, UUID: "GPU-a"}}, wantID: 15, wantFound: true},
-		"physical ID zero is valid":       {uuid: "GPU-a", members: []PartitionGPU{{PhysicalID: 0, UUID: "GPU-a"}}, wantFound: true},
-		"unknown GPU":                     {uuid: "GPU-b", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a"}}},
-		"missing identity":                {members: []PartitionGPU{{PhysicalID: 15}}},
-		"significant domain bits":         {pci: "00010000:0f:00.0", members: []PartitionGPU{{PhysicalID: 15, PCIBusID: "00000000:0F:00.0"}}},
-		"UUID conflicts":                  {uuid: "GPU-a", pci: "0000:0f:00.0", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-b", PCIBusID: "0000:0f:00.0"}}, wantError: "conflicts"},
-		"PCI conflicts":                   {uuid: "GPU-a", pci: "0000:0f:00.0", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a", PCIBusID: "0000:50:00.0"}}, wantError: "conflicts"},
-		"ambiguous UUID":                  {uuid: "GPU-a", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a"}, {PhysicalID: 16, UUID: "GPU-a"}}, wantError: "multiple physical IDs"},
-		"ambiguous PCI":                   {pci: "0000:0f:00.0", members: []PartitionGPU{{PhysicalID: 15, PCIBusID: "0000:0f:00.0"}, {PhysicalID: 16, PCIBusID: "00000000:0F:00.0"}}, wantError: "multiple physical IDs"},
-		"FM omits identities":             {uuid: "GPU-a", pci: "0000:0f:00.0", moduleID: 3, members: []PartitionGPU{{PhysicalID: 3}}, wantID: 3, wantFound: true},
-		"FM uses zero BDF":                {uuid: "GPU-a", pci: "0000:0f:00.0", moduleID: 3, members: []PartitionGPU{{PhysicalID: 3, PCIBusID: "00000000:00:00.0"}}, wantID: 3, wantFound: true},
-		"missing module ID":               {uuid: "GPU-a", pci: "0000:0f:00.0", members: []PartitionGPU{{PhysicalID: 3}}},
-		"unknown module ID":               {moduleID: 4, members: []PartitionGPU{{PhysicalID: 3}}},
+		"UUID and normalized PCI":                          {uuid: "GPU-a", pci: "0000:0f:00.0", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a", PCIBusID: "00000000:0F:00.0"}}, wantID: 15, wantFound: true},
+		"UUID only":                                        {uuid: "GPU-a", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a"}}, wantID: 15, wantFound: true},
+		"PCI only":                                         {pci: "0000:0f:00.0", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a", PCIBusID: "00000000:0F:00.0"}}, wantID: 15, wantFound: true},
+		"FM UUID unavailable":                              {uuid: "GPU-a", pci: "0000:0f:00.0", members: []PartitionGPU{{PhysicalID: 15, PCIBusID: "00000000:0F:00.0"}}, wantID: 15, wantFound: true},
+		"same GPU in multiple partitions":                  {uuid: "GPU-a", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a"}, {PhysicalID: 15, UUID: "GPU-a"}}, wantID: 15, wantFound: true},
+		"partial identities across partitions":             {uuid: "GPU-a", pci: "0000:0f:00.0", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a"}, {PhysicalID: 15, PCIBusID: "00000000:0F:00.0"}, {PhysicalID: 15}}, wantID: 15, wantFound: true},
+		"normalized PCI across partitions":                 {uuid: "GPU-a", pci: "0000:0f:00.0", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a", PCIBusID: "0000:0f:00.0"}, {PhysicalID: 15, UUID: "GPU-a", PCIBusID: "00000000:0F:00.0"}}, wantID: 15, wantFound: true},
+		"UUID and PCI identify different GPUs":             {uuid: "GPU-a", pci: "0000:50:00.0", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a", PCIBusID: "0000:0f:00.0"}, {PhysicalID: 16, UUID: "GPU-b", PCIBusID: "0000:50:00.0"}}, wantError: "conflicts"},
+		"physical ID zero is valid":                        {uuid: "GPU-a", members: []PartitionGPU{{PhysicalID: 0, UUID: "GPU-a"}}, wantFound: true},
+		"unknown GPU":                                      {uuid: "GPU-b", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a"}}},
+		"empty topology":                                   {moduleID: 3},
+		"zero module ID cannot use fallback":               {members: []PartitionGPU{{PhysicalID: 0}}},
+		"missing identity":                                 {members: []PartitionGPU{{PhysicalID: 15}}},
+		"significant domain bits":                          {pci: "00010000:0f:00.0", members: []PartitionGPU{{PhysicalID: 15, PCIBusID: "00000000:0F:00.0"}}},
+		"UUID conflicts":                                   {uuid: "GPU-a", pci: "0000:0f:00.0", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-b", PCIBusID: "0000:0f:00.0"}}, wantError: "conflicts"},
+		"PCI conflicts":                                    {uuid: "GPU-a", pci: "0000:0f:00.0", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a", PCIBusID: "0000:50:00.0"}}, wantError: "conflicts"},
+		"FM omits identities":                              {uuid: "GPU-a", pci: "0000:0f:00.0", moduleID: 3, members: []PartitionGPU{{PhysicalID: 3}}, wantID: 3, wantFound: true},
+		"FM uses zero BDF":                                 {uuid: "GPU-a", pci: "0000:0f:00.0", moduleID: 3, members: []PartitionGPU{{PhysicalID: 3, PCIBusID: "00000000:00:00.0"}}, wantID: 3, wantFound: true},
+		"missing module ID":                                {uuid: "GPU-a", pci: "0000:0f:00.0", members: []PartitionGPU{{PhysicalID: 3}}},
+		"unknown module ID":                                {moduleID: 4, members: []PartitionGPU{{PhysicalID: 3}}},
 		"module ID must not override unknown identity":     {uuid: "GPU-other", pci: "0000:50:00.0", moduleID: 15, members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a", PCIBusID: "0000:0f:00.0"}}},
 		"module ID must not override conflicting identity": {uuid: "GPU-other", pci: "0000:0f:00.0", moduleID: 15, members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a", PCIBusID: "0000:0f:00.0"}}, wantError: "conflicts"},
 		"mixed topology must not use module fallback":      {uuid: "GPU-a", moduleID: 3, members: []PartitionGPU{{PhysicalID: 3}, {PhysicalID: 4, UUID: "GPU-b"}}},
-		"malformed query":      {pci: "0f:00.0", wantError: "invalid PCI bus ID"},
-		"malformed FM address": {uuid: "GPU-a", members: []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a", PCIBusID: "bad"}}, wantError: "invalid PCI bus ID"},
+		"malformed query":                                  {pci: "0f:00.0", wantError: "invalid PCI bus ID"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var partitions []Partition
@@ -72,6 +74,47 @@ func TestPhysicalIDForGPU(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tc.wantFound, found)
 			require.Equal(t, tc.wantID, id)
+		})
+	}
+}
+
+// Invalid FM topology must fail discovery, before any GPU lookup is attempted.
+func TestOpenValidatesGPUIdentities(t *testing.T) {
+	for name, tc := range map[string]struct {
+		members   []PartitionGPU
+		wantError string
+	}{
+		"ambiguous UUID": {
+			members:   []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a"}, {PhysicalID: 16, UUID: "GPU-a"}},
+			wantError: "multiple physical IDs",
+		},
+		"ambiguous normalized PCI": {
+			members:   []PartitionGPU{{PhysicalID: 15, PCIBusID: "0000:0f:00.0"}, {PhysicalID: 16, PCIBusID: "00000000:0F:00.0"}},
+			wantError: "multiple physical IDs",
+		},
+		"inconsistent UUID for physical ID": {
+			members:   []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a"}, {PhysicalID: 15, UUID: "GPU-b"}},
+			wantError: "conflicting UUIDs",
+		},
+		"inconsistent PCI for physical ID": {
+			members:   []PartitionGPU{{PhysicalID: 15, PCIBusID: "0000:0f:00.0"}, {PhysicalID: 15, PCIBusID: "0000:50:00.0"}},
+			wantError: "conflicting PCI addresses",
+		},
+		"malformed FM address": {
+			members:   []PartitionGPU{{PhysicalID: 15, UUID: "GPU-a", PCIBusID: "bad"}},
+			wantError: "partition 0 physical ID 15: invalid PCI bus ID",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var partitions []Partition
+			for i, gpu := range tc.members {
+				partitions = append(partitions, Partition{ID: i, GPUs: []PartitionGPU{gpu}})
+			}
+			client := &fakeClient{partitions: partitions}
+			manager, err := Open(client)
+			require.ErrorContains(t, err, tc.wantError)
+			require.Nil(t, manager)
+			require.Equal(t, []string{"init", "list", "shutdown"}, client.calls)
 		})
 	}
 }

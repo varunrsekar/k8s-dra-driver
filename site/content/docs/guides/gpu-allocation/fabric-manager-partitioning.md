@@ -161,7 +161,9 @@ that these two numeric identifiers are equal. When FM omits UUID and PCI
 identity across the entire topology, the driver uses the documented H100-and-later
 mapping where FM physical IDs equal NVML module IDs. An all-zero PCI address
 with an empty UUID is treated as unavailable. Numeric matching never overrides
-conflicting identity information.
+conflicting identity information. The driver builds UUID and PCI lookup indexes
+at startup and rejects malformed or inconsistent FM identities before serving
+claims.
 See the [FM API data structures](https://docs.nvidia.com/datacenter/tesla/fabric-manager-user-guide/index.html#data-structures).
 `partitionN` is the ID of the reported N-GPU partition containing that device.
 The driver publishes a `partitionN` attribute only when Fabric Manager reports

@@ -42,10 +42,15 @@ func normalizePCIBusID(pci string) (string, error) {
 	return fmt.Sprintf("%04x:%s:%s.%s", domain, parts[2], parts[3], parts[4]), nil
 }
 
-// PhysicalIDForGPU resolves a GPU's identity to FM's physical ID. NVML's
-// platform module ID is a different identifier on some systems, including
-// HGX A100. Either UUID or PCI address may identify a member, but when both
-// are available they must agree. Repeated members across partitions are normal.
+// gpuIdentity holds the available identifiers for a physical GPU, combining
+// consistent information from its appearances in different FM partitions.
+type gpuIdentity struct {
+	uuid string
+	pci  string
+}
+
+// PhysicalIDForGPU resolves a GPU's identity using indexes validated when the
+// FM topology was recorded. UUID and PCI address must agree when both are known.
 // When FM omits identities for the entire topology (H100 and later), use its
 // documented physical ID == NVML module ID contract instead.
 // https://docs.nvidia.com/datacenter/tesla/fabric-manager-user-guide/index.html#data-structures
@@ -54,46 +59,30 @@ func (m *Manager) PhysicalIDForGPU(uuid, pciBusID string, moduleID int) (int, bo
 	if err != nil {
 		return 0, false, err
 	}
-	var physicalID int
-	found := false
-	hasIdentities := false
-	moduleFound := false
-	for _, partition := range m.partitionsByID {
-		for _, gpu := range partition.GPUs {
-			memberPCI, err := normalizePCIBusID(gpu.PCIBusID)
-			if err != nil {
-				return 0, false, fmt.Errorf("fabricmanager: partition %d physical ID %d: %w", partition.ID, gpu.PhysicalID, err)
-			}
-			// Some FM versions represent an unavailable BDF as all zeroes.
-			if gpu.UUID == "" && memberPCI == "0000:00:00.0" {
-				memberPCI = ""
-			}
-			if gpu.UUID != "" || memberPCI != "" {
-				hasIdentities = true
-			}
-			if moduleID > 0 && gpu.PhysicalID == moduleID {
-				moduleFound = true
-			}
-			uuidMatch := uuid != "" && uuid == gpu.UUID
-			pciMatch := pci != "" && pci == memberPCI
-			if !uuidMatch && !pciMatch {
-				continue
-			}
-			if (uuid != "" && gpu.UUID != "" && !uuidMatch) || (pci != "" && memberPCI != "" && !pciMatch) {
-				return 0, false, fmt.Errorf("fabricmanager: GPU UUID %q PCI %q conflicts with partition %d member UUID %q PCI %q",
-					uuid, pciBusID, partition.ID, gpu.UUID, gpu.PCIBusID)
-			}
-			if found && physicalID != gpu.PhysicalID {
-				return 0, false, fmt.Errorf("fabricmanager: GPU UUID %q PCI %q maps to multiple physical IDs (%d and %d)",
-					uuid, pciBusID, physicalID, gpu.PhysicalID)
-			}
-			physicalID, found = gpu.PhysicalID, true
-		}
-	}
 	// Do not use numeric coincidence to override missing or conflicting
 	// identities in an identity-bearing topology such as HGX A100.
-	if !hasIdentities && moduleFound {
-		return moduleID, true, nil
+	if len(m.physicalIDByUUID) == 0 && len(m.physicalIDByPCI) == 0 {
+		if _, found := m.identityByPhysicalID[moduleID]; moduleID > 0 && found {
+			return moduleID, true, nil
+		}
+		return 0, false, nil
 	}
-	return physicalID, found, nil
+
+	uuidID, uuidFound := m.physicalIDByUUID[uuid]
+	pciID, pciFound := m.physicalIDByPCI[pci]
+	if uuidFound && pciFound && uuidID != pciID {
+		return 0, false, fmt.Errorf("fabricmanager: GPU UUID %q PCI %q conflicts: physical IDs %d and %d", uuid, pciBusID, uuidID, pciID)
+	}
+	physicalID := uuidID
+	if !uuidFound {
+		if !pciFound {
+			return 0, false, nil
+		}
+		physicalID = pciID
+	}
+	identity := m.identityByPhysicalID[physicalID]
+	if (uuid != "" && identity.uuid != "" && uuid != identity.uuid) || (pci != "" && identity.pci != "" && pci != identity.pci) {
+		return 0, false, fmt.Errorf("fabricmanager: GPU UUID %q PCI %q conflicts with physical ID %d UUID %q PCI %q", uuid, pciBusID, physicalID, identity.uuid, identity.pci)
+	}
+	return physicalID, true, nil
 }
