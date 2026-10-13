@@ -28,6 +28,40 @@ import (
 	"sigs.k8s.io/dra-driver-nvidia-gpu/pkg/featuregates"
 )
 
+type mockNVMLLibrary struct {
+	nvml.Interface
+	devices                        map[string]nvml.Device
+	deviceGetHandleByPciBusIdFunc  func(string) (nvml.Device, nvml.Return)
+	deviceGetHandleByPciBusIdCalls int
+	deviceGetHandleByUUIDFunc      func(string) (nvml.Device, nvml.Return)
+	deviceGetHandleByUUIDCalls     int
+}
+
+func (*mockNVMLLibrary) InitWithFlags(uint32) nvml.Return {
+	return nvml.SUCCESS
+}
+
+func (*mockNVMLLibrary) Shutdown() nvml.Return {
+	return nvml.SUCCESS
+}
+
+func (l *mockNVMLLibrary) DeviceGetHandleByPciBusId(busID string) (nvml.Device, nvml.Return) {
+	l.deviceGetHandleByPciBusIdCalls++
+	return l.deviceGetHandleByPciBusIdFunc(busID)
+}
+
+func (l *mockNVMLLibrary) DeviceGetHandleByUUID(uuid string) (nvml.Device, nvml.Return) {
+	l.deviceGetHandleByUUIDCalls++
+	if l.deviceGetHandleByUUIDFunc != nil {
+		return l.deviceGetHandleByUUIDFunc(uuid)
+	}
+	device, ok := l.devices[uuid]
+	if !ok {
+		return nil, nvml.ERROR_NOT_FOUND
+	}
+	return device, nvml.SUCCESS
+}
+
 type fakeNVMLDeviceLib struct {
 	nvdev.Interface
 	device nvdev.Device
@@ -237,7 +271,7 @@ func TestDeviceLibGetMigDevices(t *testing.T) {
 		MigEnabled:  true,
 		MigProfiles: []*MigProfileInfo{{Profile: testMigProfile()}},
 	}
-	l := deviceLib{devhandleByUUID: map[string]nvml.Device{gpuInfo.UUID: gpu}}
+	l := deviceLib{nvmllib: &mockNVMLLibrary{devices: map[string]nvml.Device{gpuInfo.UUID: gpu}}}
 
 	got, err := l.getMigDevices(gpuInfo)
 	require.NoError(t, err)
@@ -277,11 +311,11 @@ func TestDeviceLibCreateMigDevice(t *testing.T) {
 	ci.info.Device = gpu
 	parent := &GpuInfo{UUID: "GPU-1", Minor: 1}
 	l := deviceLib{
-		Interface:       fakeNVMLDeviceLib{device: fakeNVDevice{}},
-		devhandleByUUID: map[string]nvml.Device{parent.UUID: gpu},
+		Interface: fakeNVMLDeviceLib{device: fakeNVDevice{}},
+		nvmllib:   &mockNVMLLibrary{devices: map[string]nvml.Device{parent.UUID: gpu}},
 	}
 
-	got, err := l.createMigDevice(&MigSpec{
+	got, err := l.CreateMigDevice(&MigSpec{
 		Parent:            parent,
 		CandidateProfiles: []nvdev.MigProfile{testMigProfile(), &alternate},
 		Placement:         nvml.GpuInstancePlacement{Start: 2, Size: 1},
@@ -324,21 +358,13 @@ func TestDeviceStateRollbackAfterComputeInstanceCreationFailure(t *testing.T) {
 		giProfile: nvml.GpuInstanceProfileInfo{Id: 19},
 		events:    &events,
 	}
-	parent := &GpuInfo{UUID: "GPU-1", Minor: 1, PciBusID: "0000:01:00.0"}
-	nvmllib := &mockNVMLLibrary{
-		deviceGetHandleByUUIDFunc: func(uuid string) (nvml.Device, nvml.Return) {
-			if uuid != parent.UUID {
-				return nil, nvml.ERROR_NOT_FOUND
-			}
-			return gpu, nvml.SUCCESS
-		},
-	}
+	parent := &GpuInfo{UUID: "GPU-1", Index: 1, Minor: 1, PciBusID: "0000:01:00.0"}
+	nvmllib := &mockNVMLLibrary{devices: map[string]nvml.Device{parent.UUID: gpu}}
 	l := &deviceLib{
 		Interface:         fakeNVMLDeviceLib{device: fakeNVDevice{migEnabled: true}},
 		nvmllib:           nvmllib,
 		gpuInfosByUUID:    map[string]*GpuInfo{parent.UUID: parent},
 		gpuUUIDbyPCIBusID: map[PCIBusID]string{parent.PciBusID: parent.UUID},
-		devhandleByUUID:   make(map[string]nvml.Device),
 	}
 	migSpec := &MigSpec{
 		Parent:            parent,
@@ -347,7 +373,7 @@ func TestDeviceStateRollbackAfterComputeInstanceCreationFailure(t *testing.T) {
 		Placement:         nvml.GpuInstancePlacement{Start: 2, Size: 1},
 	}
 
-	_, err := l.createMigDevice(migSpec)
+	_, err := l.CreateMigDevice(migSpec)
 	require.ErrorContains(t, err, "error creating Compute instance")
 
 	deviceName := migSpec.CanonicalName()
@@ -380,7 +406,7 @@ func TestDeviceStateRollbackAfterComputeInstanceCreationFailure(t *testing.T) {
 	err = state.rollbackPartiallyPreparedClaim(context.Background(), "claim-uid", preparedClaim, checkpoint)
 	require.NoError(t, err)
 	require.Equal(t, []string{"destroy-gi", "set-mig-mode"}, events)
-	require.Equal(t, 1, nvmllib.deviceGetHandleByUUIDCalls)
+	require.Equal(t, 3, nvmllib.deviceGetHandleByUUIDCalls)
 }
 
 func TestDeviceLibDeleteMigDevice(t *testing.T) {
@@ -392,11 +418,11 @@ func TestDeviceLibDeleteMigDevice(t *testing.T) {
 	gpu := &fakeNVMLGPU{gi: gi, events: &events}
 	parent := &GpuInfo{UUID: "GPU-1", Minor: 1}
 	l := deviceLib{
-		devhandleByUUID: map[string]nvml.Device{parent.UUID: gpu},
-		gpuInfosByUUID:  map[string]*GpuInfo{parent.UUID: parent},
+		nvmllib:        &mockNVMLLibrary{devices: map[string]nvml.Device{parent.UUID: gpu}},
+		gpuInfosByUUID: map[string]*GpuInfo{parent.UUID: parent},
 	}
 
-	err := l.deleteMigDevice(&MigLiveTuple{ParentUUID: parent.UUID, GIID: 3, CIID: 4})
+	err := l.DeleteMigDevice(&MigLiveTuple{ParentUUID: parent.UUID, GIID: 3, CIID: 4})
 	require.NoError(t, err)
 	require.Equal(t, []string{"destroy-ci", "destroy-gi", "set-mig-mode"}, events)
 	require.Equal(t, []int{nvml.DEVICE_MIG_DISABLE}, gpu.setMigModeCalls)

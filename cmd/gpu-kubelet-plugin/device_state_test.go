@@ -883,14 +883,11 @@ func TestRollbackPartiallyPreparedMIGDevicesIgnoresOtherDrivers(t *testing.T) {
 			migDevice: &fakeNVMLMigDevice{giID: 3},
 			gi:        &fakeNVMLGpuInstance{info: nvml.GpuInstanceInfo{Id: 3, ProfileId: 9, Placement: nvml.GpuInstancePlacement{Start: 4, Size: 3}}},
 		}
-		nvmllib := &mockNVMLLibrary{
-			deviceGetHandleByUUIDFunc: func(string) (nvml.Device, nvml.Return) { return gpu, nvml.SUCCESS },
-		}
+		nvmllib := &mockNVMLLibrary{devices: map[string]nvml.Device{parent.UUID: gpu}}
 		state := &DeviceState{nvdevlib: &deviceLib{
 			nvmllib:           nvmllib,
 			gpuInfosByUUID:    map[string]*GpuInfo{parent.UUID: parent},
 			gpuUUIDbyPCIBusID: map[PCIBusID]string{parent.PciBusID: parent.UUID},
-			devhandleByUUID:   map[string]nvml.Device{},
 		}}
 		return state, nvmllib
 	}
