@@ -487,8 +487,8 @@ func (s *DeviceState) DestroyUnknownMIGDevices(ctx context.Context) {
 
 	// For now, let this be best-effort. Upon error, proceed with the program,
 	// do not crash it. TODO: maybe this should be timeout-controlled.
-	if err := s.nvdevlib.obliterateStaleMIGDevices(expectedDeviceNames); err != nil {
-		klog.Errorf("%s: obliterateStaleMIGDevices failed: %s", logpfx, err)
+	if err := s.nvdevlib.ObliterateStaleMIGDevices(expectedDeviceNames); err != nil {
+		klog.Errorf("%s: ObliterateStaleMIGDevices failed: %s", logpfx, err)
 	}
 
 	klog.Infof("%s: done", logpfx)
@@ -872,7 +872,7 @@ func (s *DeviceState) getPerGPUAllocatableDevicesFromCheckpoint(deviceCheckpoint
 					// Check if the GPU device is already discovered.
 					// This can happen if there are a mix of admin and non-admin claims.
 					if gpuDev == nil {
-						allocatable, err := s.nvdevlib.discoverGpuDeviceByUUID(gst.Index, glt.UUID)
+						allocatable, err := s.nvdevlib.DiscoverGpuDeviceByUUID(gst.Index, glt.UUID)
 						if err != nil {
 							return nil, fmt.Errorf("failed to discover gpu device (uuid: %q) %q: %w", glt.UUID, gpuDevName, err)
 						}
@@ -891,7 +891,7 @@ func (s *DeviceState) getPerGPUAllocatableDevicesFromCheckpoint(deviceCheckpoint
 					// This can happen if there are a mix of admin and non-admin claims or
 					// another MIG device on the same parent GPU exists.
 					if gpuDev == nil {
-						allocatable, err := s.nvdevlib.discoverGpuDeviceByUUID(mst.ParentIndex, mlt.ParentUUID)
+						allocatable, err := s.nvdevlib.DiscoverGpuDeviceByUUID(mst.ParentIndex, mlt.ParentUUID)
 						if err != nil {
 							return nil, fmt.Errorf("failed to discover gpu device (uuid: %q) for mig %q: %w", mlt.ParentUUID, migDevName, err)
 						}
@@ -1197,7 +1197,7 @@ func (s *DeviceState) prepareDevices(ctx context.Context, claim *resourceapi.Res
 					// persist data to disk that may be useful for cleaning up a
 					// partial prepare more reliably (such as the MIG device UUID).
 					tcmig0 := time.Now()
-					migdev, err := s.nvdevlib.createMigDevice(migspec)
+					migdev, err := s.nvdevlib.CreateMigDevice(migspec)
 					klog.V(6).Infof("t_prep_create_mig_dev %.3f s (claim %s)", time.Since(tcmig0).Seconds(), ResourceClaimToString(claim))
 					if err != nil {
 						return nil, fmt.Errorf("error creating MIG device: %w", err)
@@ -1267,7 +1267,7 @@ func (s *DeviceState) unprepareDevices(ctx context.Context, claimUID string, dev
 					// client' and resolve itself soon; when the conflicting
 					// party goes away. Log an explicit warning, in addition to
 					// returning an error.
-					err := s.nvdevlib.deleteMigDevice(mig)
+					err := s.nvdevlib.DeleteMigDevice(mig)
 					if err != nil {
 						klog.Warningf("Error deleting MIG device %s (UUID %s): %s", device.Mig.Device.DeviceName, mig.MigUUID, err)
 						return false, fmt.Errorf("failed to delete MIG device %s (UUID %s): %w", device.Mig.Device.DeviceName, mig.MigUUID, err)
@@ -1357,7 +1357,7 @@ func (s *DeviceState) discoverSiblingAllocatables(device *AllocatableDevice) err
 			return fmt.Errorf("error adding allocatable device: %w", err)
 		}
 	case VfioDeviceType:
-		gpu, _, err := s.nvdevlib.discoverGPUByPCIBusID(device.Vfio.PciBusID)
+		gpu, _, err := s.nvdevlib.DiscoverGPUByPCIBusID(device.Vfio.PciBusID)
 		if err != nil {
 			return fmt.Errorf("error discovering gpu by pci bus id: %w", err)
 		}
@@ -2039,7 +2039,7 @@ func (s *DeviceState) deleteMigDevIfExistsAndNotUsedByCompletedClaim(ms *MigSpec
 	}
 
 	klog.V(1).Infof("MIG device corresponding to name %s found with UUID %s -- attempt to tear down", dname, mlt.MigUUID)
-	if err := s.nvdevlib.deleteMigDevice(mlt); err != nil {
+	if err := s.nvdevlib.DeleteMigDevice(mlt); err != nil {
 		return fmt.Errorf("failed to delete MIG device %s (deleteMigDevice): %w", dname, err)
 	}
 

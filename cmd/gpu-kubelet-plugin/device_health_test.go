@@ -40,24 +40,6 @@ func (m *mockNVMLDevice) GetFieldValues(values []nvml.FieldValue) nvml.Return {
 	return m.getFieldValuesFunc(values)
 }
 
-type mockNVMLLibrary struct {
-	nvml.Interface
-	deviceGetHandleByPciBusIdFunc  func(string) (nvml.Device, nvml.Return)
-	deviceGetHandleByPciBusIdCalls int
-	deviceGetHandleByUUIDFunc      func(string) (nvml.Device, nvml.Return)
-	deviceGetHandleByUUIDCalls     int
-}
-
-func (m *mockNVMLLibrary) DeviceGetHandleByPciBusId(busID string) (nvml.Device, nvml.Return) {
-	m.deviceGetHandleByPciBusIdCalls++
-	return m.deviceGetHandleByPciBusIdFunc(busID)
-}
-
-func (m *mockNVMLLibrary) DeviceGetHandleByUUID(uuid string) (nvml.Device, nvml.Return) {
-	m.deviceGetHandleByUUIDCalls++
-	return m.deviceGetHandleByUUIDFunc(uuid)
-}
-
 // mockHealthMonitor implements deviceHealthMonitor for testing healthEventToTaint.
 type mockHealthMonitor struct {
 	nonFatalXids map[uint64]bool
