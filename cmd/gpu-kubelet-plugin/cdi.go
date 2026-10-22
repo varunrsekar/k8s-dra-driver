@@ -168,6 +168,10 @@ func (cdi *CDIHandler) GetDeviceSpecsByUUIDCached(uuid string) ([]cdispec.Device
 	return clone, nil
 }
 
+func (cdi *CDIHandler) InvalidateDeviceSpecsCachedByUUID(uuid string) {
+	cdi.specCache.Delete(uuid)
+}
+
 // Note(JP): for a regular GPU, this canonical name is for example `gpu-0`, with
 // the numerical suffix as of the time of writing reflecting the device minor.
 // NVMLs' DeviceSetMigMode() is documented with 'This API may unbind or reset

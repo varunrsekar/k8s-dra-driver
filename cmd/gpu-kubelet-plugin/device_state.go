@@ -1503,6 +1503,13 @@ func (s *DeviceState) applyVfioDeviceConfig(ctx context.Context, config *configa
 	}
 
 	for i, r := range results {
+		// Invalidate the cached device specs of the parent GPU. We're
+		// releasing the GPU's device minor here. So it may come back
+		// with a different device minor when this vfio device is
+		// unprepared.
+		if s.vfioPciManager.nvidiaEnabled && infos[i].Parent != nil {
+			s.cdi.InvalidateDeviceSpecsCachedByUUID(infos[i].Parent.UUID)
+		}
 		if err := s.vfioPciManager.Configure(ctx, infos[i]); err != nil {
 			return nil, fmt.Errorf("error configuring vfio device %q: %w", r.Device, err)
 		}
