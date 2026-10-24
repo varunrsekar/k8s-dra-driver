@@ -267,8 +267,15 @@ e2e-gcp-nvkind:
 # Run the Go/Ginkgo e2e suite against the current kubectl context. Assumes
 # the cluster already has GPU Operator (minimal mode) + the DRA driver
 # installed. The -tags=e2e build tag keeps this out of `make test`.
+E2E_LABEL_FILTER ?= !vfio
 .PHONY: test-e2e
 test-e2e:
 	ARTIFACTS=$${ARTIFACTS:-/tmp/test-e2e-artifacts}; mkdir -p $$ARTIFACTS; \
 	go test -mod=vendor -tags=e2e -v -timeout=30m ./test/e2e/... \
-	  -ginkgo.v -ginkgo.junit-report=$$ARTIFACTS/junit_01.xml
+	  -ginkgo.v -ginkgo.label-filter='$(E2E_LABEL_FILTER)' -ginkgo.junit-report=$$ARTIFACTS/junit_01.xml
+
+# Run only the VFIO passthrough e2e specs (requires IOMMU-capable GPUs and the
+# PassthroughSupport feature gate enabled on the driver).
+.PHONY: test-e2e-vfio
+test-e2e-vfio:
+	$(MAKE) test-e2e E2E_LABEL_FILTER=vfio
