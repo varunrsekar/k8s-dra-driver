@@ -25,17 +25,16 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	resourceapi "k8s.io/api/resource/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	"sigs.k8s.io/dra-driver-nvidia-gpu/test/e2e/framework"
 )
 
 // End-to-end coverage for the PassthroughSupport (VFIO) feature. Every spec
-// skips unless the deployed driver publishes at least one vfio device, so the
-// suite stays green on GPU-only clusters and CI lanes without IOMMU. The
+// uses the GPU node detected by the suite and skips unless that node publishes
+// at least one vfio device, so the suite stays green on GPU-only clusters
+// and CI lanes without IOMMU. The
 // container never uses the passthrough GPU directly (it is bound to vfio-pci
 // for VM consumption); the assertion is that DRA schedules the pod and the
 // claim is allocated end to end.
@@ -55,13 +54,13 @@ var _ = Describe("VFIO Allocation", Serial, Label("vfio"), func() {
 	})
 
 	It("[vfio] 1-GPU passthrough claim is allocated", func(ctx SpecContext) {
-		applyVfio(ctx, "vfio-single", map[string]any{"Namespace": ns})
+		applyYAML(ctx, "vfio-single", map[string]any{"Namespace": ns})
 		expectPodRunning(ctx, ns, "pod1")
 		expectAllocatedClaims(ctx, ns, 1)
 	})
 
 	It("[vfio] passthrough is injected into the container", func(ctx SpecContext) {
-		applyVfio(ctx, "vfio-single", map[string]any{"Namespace": ns})
+		applyYAML(ctx, "vfio-single", map[string]any{"Namespace": ns})
 		expectPodRunning(ctx, ns, "pod1")
 		expectAllocatedClaims(ctx, ns, 1)
 		expectPassthroughInPod(ctx, ns, "pod1", "ctr")
@@ -70,7 +69,7 @@ var _ = Describe("VFIO Allocation", Serial, Label("vfio"), func() {
 	It("[vfio] gpu view remains published during passthrough and after release", func(ctx SpecContext) {
 		before := countGPUDevices(ctx)
 
-		applyVfio(ctx, "vfio-single", map[string]any{"Namespace": ns})
+		applyYAML(ctx, "vfio-single", map[string]any{"Namespace": ns})
 		expectPodRunning(ctx, ns, "pod1")
 		expectAllocatedClaims(ctx, ns, 1)
 
@@ -87,7 +86,7 @@ var _ = Describe("VFIO Allocation", Serial, Label("vfio"), func() {
 		const replicas = 2
 		requireVfioDevices(ctx, replicas)
 
-		applyVfio(ctx, "vfio-multi", map[string]any{"Namespace": ns, "Replicas": replicas})
+		applyYAML(ctx, "vfio-multi", map[string]any{"Namespace": ns, "Replicas": replicas, "NodeName": gpu.NodeName})
 		got, err := framework.WaitForPodsReady(ctx, cs, ns, "app=vfio-test", replicas, 5*time.Minute)
 		Expect(err).NotTo(HaveOccurred(), "only %d/%d vfio pods Ready", got, replicas)
 
@@ -96,7 +95,7 @@ var _ = Describe("VFIO Allocation", Serial, Label("vfio"), func() {
 	})
 
 	It("[vfio/config] opaque VfioDeviceConfig claim is allocated", func(ctx SpecContext) {
-		applyVfio(ctx, "vfio-config", map[string]any{
+		applyYAML(ctx, "vfio-config", map[string]any{
 			"Namespace":       ns,
 			"BackendPolicy":   "LegacyOnly",
 			"EnableAPIDevice": true,
@@ -112,11 +111,11 @@ var _ = Describe("VFIO Allocation", Serial, Label("vfio"), func() {
 
 		// The VFIO claim consumes the physical GPU's shared counter capacity,
 		// so the GPU workload must be allocated to another physical GPU.
-		applyVfio(ctx, "vfio-single", map[string]any{"Namespace": ns})
+		applyYAML(ctx, "vfio-single", map[string]any{"Namespace": ns})
 		expectPodRunning(ctx, ns, "pod1")
 		expectAllocatedClaims(ctx, ns, 1)
 
-		applyVfio(ctx, "gpu-workload", map[string]any{"Namespace": ns})
+		applyYAML(ctx, "gpu-workload", map[string]any{"Namespace": ns, "NodeName": podNode(ctx, ns, "pod1")})
 		expectPodRunning(ctx, ns, "pod-gpu")
 		expectAllocatedClaims(ctx, ns, 2)
 	})
@@ -124,7 +123,7 @@ var _ = Describe("VFIO Allocation", Serial, Label("vfio"), func() {
 	It("[vfio] 1-GPU passthrough claim survives a plugin restart", func(ctx SpecContext) {
 		before := countGPUDevices(ctx)
 
-		applyVfio(ctx, "vfio-single", map[string]any{"Namespace": ns})
+		applyYAML(ctx, "vfio-single", map[string]any{"Namespace": ns})
 		expectPodRunning(ctx, ns, "pod1")
 		expectAllocatedClaims(ctx, ns, 1)
 		expectGPUDeviceCount(ctx, before)
@@ -149,12 +148,12 @@ var _ = Describe("VFIO Allocation", Serial, Label("vfio"), func() {
 		const replicas = 2
 		requireVfioDevices(ctx, replicas)
 
-		applyVfio(ctx, "vfio-multi", map[string]any{"Namespace": ns, "Replicas": replicas})
+		applyYAML(ctx, "vfio-multi", map[string]any{"Namespace": ns, "Replicas": replicas, "NodeName": gpu.NodeName})
 		got, err := framework.WaitForPodsReady(ctx, cs, ns, "app=vfio-test", replicas, 5*time.Minute)
 		Expect(err).NotTo(HaveOccurred(), "only %d/%d vfio pods Ready", got, replicas)
 		expectAllocatedClaims(ctx, ns, replicas)
 
-		Expect(framework.RestartKubeletPlugin(ctx, cs, firstPodNode(ctx, ns, "app=vfio-test"), 5*time.Minute)).To(Succeed())
+		Expect(framework.RestartKubeletPlugin(ctx, cs, gpu.NodeName, 5*time.Minute)).To(Succeed())
 
 		got, err = framework.WaitForPodsReady(ctx, cs, ns, "app=vfio-test", replicas, 5*time.Minute)
 		Expect(err).NotTo(HaveOccurred(), "only %d/%d vfio pods Ready after restart", got, replicas)
@@ -178,7 +177,7 @@ var _ = Describe("VFIO Allocation", Serial, Label("vfio"), func() {
 				if vfioFirst {
 					first, second = second, first
 				}
-				applyVfioPinnedWorkload(ctx, ns, "first", pair, first)
+				applyYAMLPinnedWorkload(ctx, ns, "first", pair, first)
 				expectPodRunning(ctx, ns, "first")
 				claim := expectVfioPinnedAllocation(ctx, ns, "first", pair, first)
 				expectVfioPairPublished(ctx, pair)
@@ -186,7 +185,7 @@ var _ = Describe("VFIO Allocation", Serial, Label("vfio"), func() {
 					expectVfioAllocatableSnapshot(ctx, claim, pair)
 				}
 
-				applyVfioPinnedWorkload(ctx, ns, "second", pair, second)
+				applyYAMLPinnedWorkload(ctx, ns, "second", pair, second)
 				expectVfioConflictPending(ctx, ns)
 				expectVfioPairPublished(ctx, pair)
 			},
@@ -198,35 +197,22 @@ var _ = Describe("VFIO Allocation", Serial, Label("vfio"), func() {
 	})
 })
 
-type vfioResourcePool struct {
-	nodeName, name string
-	devices        []resourceapi.Device
-	counterSets    map[string]resourceapi.CounterSet
-}
-
 type vfioDevicePair struct {
 	nodeName, poolName, pciBusID string
 	vfio, sibling                resourceapi.Device
 	counterSets                  map[string]resourceapi.CounterSet
 }
 
-func vfioAttribute(device resourceapi.Device, name resourceapi.QualifiedName) string {
-	if attr := device.Attributes[name]; attr.StringValue != nil {
-		return *attr.StringValue
-	}
-	return ""
-}
-
-// Read complete pools at their latest generation: counters and devices can
+// Read complete pools on the test node at their latest generation: counters and devices can
 // live in separate slices, and publication can temporarily mix generations.
-func readVfioResourcePools(ctx context.Context) ([]vfioResourcePool, error) {
+func readVfioResourcePools(ctx context.Context) ([][]resourceapi.ResourceSlice, error) {
 	list, err := cs.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list GPU ResourceSlices: %w", err)
 	}
 	groups := make(map[string][]resourceapi.ResourceSlice)
 	for _, slice := range list.Items {
-		if slice.Spec.Driver != "gpu.nvidia.com" || slice.Spec.NodeName == nil {
+		if slice.Spec.Driver != "gpu.nvidia.com" || slice.Spec.NodeName == nil || *slice.Spec.NodeName != gpu.NodeName {
 			continue
 		}
 		key := *slice.Spec.NodeName + "/" + slice.Spec.Pool.Name
@@ -242,32 +228,20 @@ func readVfioResourcePools(ctx context.Context) ([]vfioResourcePool, error) {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	var pools []vfioResourcePool
+	var pools [][]resourceapi.ResourceSlice
 	for _, key := range keys {
 		group := groups[key]
 		if int64(len(group)) != group[0].Spec.Pool.ResourceSliceCount {
 			return nil, fmt.Errorf("pool %s generation %d is incomplete: got %d/%d slices",
 				key, group[0].Spec.Pool.Generation, len(group), group[0].Spec.Pool.ResourceSliceCount)
 		}
-		pool := vfioResourcePool{
-			nodeName:    *group[0].Spec.NodeName,
-			name:        group[0].Spec.Pool.Name,
-			counterSets: make(map[string]resourceapi.CounterSet),
-		}
-		for _, slice := range group {
-			pool.devices = append(pool.devices, slice.Spec.Devices...)
-			for _, set := range slice.Spec.SharedCounters {
-				pool.counterSets[set.Name] = set
-			}
-		}
-		slices.SortFunc(pool.devices, func(a, b resourceapi.Device) int { return strings.Compare(a.Name, b.Name) })
-		pools = append(pools, pool)
+		pools = append(pools, group)
 	}
 	return pools, nil
 }
 
-func waitForVfioResourcePools(ctx context.Context) []vfioResourcePool {
-	var pools []vfioResourcePool
+func waitForVfioResourcePools(ctx context.Context) [][]resourceapi.ResourceSlice {
+	var pools [][]resourceapi.ResourceSlice
 	Eventually(func() error {
 		var err error
 		pools, err = readVfioResourcePools(ctx)
@@ -278,20 +252,29 @@ func waitForVfioResourcePools(ctx context.Context) []vfioResourcePool {
 
 func requireVfioDevicePair(ctx context.Context, siblingType string) vfioDevicePair {
 	for _, pool := range waitForVfioResourcePools(ctx) {
-		for _, vfio := range pool.devices {
-			if vfioAttribute(vfio, "type") != "vfio" {
+		var devices []resourceapi.Device
+		counterSets := make(map[string]resourceapi.CounterSet)
+		for _, slice := range pool {
+			devices = append(devices, slice.Spec.Devices...)
+			for _, set := range slice.Spec.SharedCounters {
+				counterSets[set.Name] = set
+			}
+		}
+		slices.SortFunc(devices, func(a, b resourceapi.Device) int { return strings.Compare(a.Name, b.Name) })
+		for _, vfio := range devices {
+			if framework.DRADeviceAttributeString(vfio, "type") != "vfio" {
 				continue
 			}
-			pciBusID := vfioAttribute(vfio, "resource.kubernetes.io/pciBusID")
+			pciBusID := framework.DRADeviceAttributeString(vfio, "resource.kubernetes.io/pciBusID")
 			Expect(pciBusID).NotTo(BeEmpty(), "VFIO device %s has no PCI bus ID", vfio.Name)
 			var sibling resourceapi.Device
-			for _, device := range pool.devices {
-				if vfioAttribute(device, "type") != siblingType || vfioAttribute(device, "resource.kubernetes.io/pciBusID") != pciBusID {
+			for _, device := range devices {
+				if framework.DRADeviceAttributeString(device, "type") != siblingType || framework.DRADeviceAttributeString(device, "resource.kubernetes.io/pciBusID") != pciBusID {
 					continue
 				}
 				// Static MIG devices have a concrete UUID. These scenarios need
 				// abstract dynamic MIG devices and their shared counter contract.
-				if siblingType == "mig" && vfioAttribute(device, "uuid") != "" {
+				if siblingType == "mig" && framework.DRADeviceAttributeString(device, "uuid") != "" {
 					continue
 				}
 				memory, hasMemory := device.Capacity["memory"]
@@ -303,12 +286,12 @@ func requireVfioDevicePair(ctx context.Context, siblingType string) vfioDevicePa
 			}
 			if sibling.Name != "" {
 				return vfioDevicePair{
-					nodeName:    pool.nodeName,
-					poolName:    pool.name,
+					nodeName:    *pool[0].Spec.NodeName,
+					poolName:    pool[0].Spec.Pool.Name,
 					pciBusID:    pciBusID,
 					vfio:        vfio,
 					sibling:     sibling,
-					counterSets: pool.counterSets,
+					counterSets: counterSets,
 				}
 			}
 		}
@@ -333,7 +316,7 @@ func expectVfioSharedCounters(pair vfioDevicePair) {
 		Expect(ok).To(BeTrue(), "device %s has no gpu-share consumption", device.Name)
 		Expect(used.Value.Sign()).To(Equal(1), "device %s must consume positive GPU capacity", device.Name)
 		Expect(used.Value.Cmp(share.Value)).To(BeNumerically("<=", 0))
-		if vfioAttribute(device, "type") != "mig" {
+		if framework.DRADeviceAttributeString(device, "type") != "mig" {
 			Expect(used.Value.Cmp(share.Value)).To(BeZero(), "GPU and VFIO must consume the full GPU share")
 		}
 		for name, used := range consumption.Counters {
@@ -344,16 +327,16 @@ func expectVfioSharedCounters(pair vfioDevicePair) {
 	}
 }
 
-func applyVfioPinnedWorkload(ctx context.Context, ns, name string, pair vfioDevicePair, device resourceapi.Device) {
-	deviceType := vfioAttribute(device, "type")
+func applyYAMLPinnedWorkload(ctx context.Context, ns, name string, pair vfioDevicePair, device resourceapi.Device) {
+	deviceType := framework.DRADeviceAttributeString(device, "type")
 	classes := map[string]string{"gpu": "gpu.nvidia.com", "mig": "mig.nvidia.com", "vfio": "vfio.gpu.nvidia.com"}
-	applyVfio(ctx, "vfio-exclusion", map[string]any{
+	applyYAML(ctx, "vfio-exclusion", map[string]any{
 		"Namespace":       ns,
 		"Name":            name,
 		"NodeName":        pair.nodeName,
 		"PCIBusID":        pair.pciBusID,
 		"DeviceClassName": classes[deviceType],
-		"Profile":         vfioAttribute(device, "profile"),
+		"Profile":         framework.DRADeviceAttributeString(device, "profile"),
 		"Vfio":            deviceType == "vfio",
 	})
 }
@@ -368,15 +351,17 @@ func expectVfioPinnedAllocation(ctx context.Context, ns, name string, pair vfioD
 	Expect(result.Driver).To(Equal("gpu.nvidia.com"))
 	Expect(result.Pool).To(Equal(pair.poolName))
 	for _, pool := range waitForVfioResourcePools(ctx) {
-		if pool.nodeName != pair.nodeName || pool.name != pair.poolName {
+		if *pool[0].Spec.NodeName != pair.nodeName || pool[0].Spec.Pool.Name != pair.poolName {
 			continue
 		}
-		for _, allocated := range pool.devices {
-			if allocated.Name == result.Device {
-				Expect(vfioAttribute(allocated, "resource.kubernetes.io/pciBusID")).To(Equal(pair.pciBusID))
-				Expect(vfioAttribute(allocated, "type")).To(Equal(vfioAttribute(device, "type")))
-				Expect(vfioAttribute(allocated, "profile")).To(Equal(vfioAttribute(device, "profile")))
-				return claim
+		for _, slice := range pool {
+			for _, allocated := range slice.Spec.Devices {
+				if allocated.Name == result.Device {
+					Expect(framework.DRADeviceAttributeString(allocated, "resource.kubernetes.io/pciBusID")).To(Equal(pair.pciBusID))
+					Expect(framework.DRADeviceAttributeString(allocated, "type")).To(Equal(framework.DRADeviceAttributeString(device, "type")))
+					Expect(framework.DRADeviceAttributeString(allocated, "profile")).To(Equal(framework.DRADeviceAttributeString(device, "profile")))
+					return claim
+				}
 			}
 		}
 	}
@@ -390,9 +375,12 @@ func expectVfioPairPublished(ctx context.Context, pair vfioDevicePair) {
 		g.Expect(err).NotTo(HaveOccurred())
 		var names []string
 		for _, pool := range pools {
-			if pool.nodeName == pair.nodeName && pool.name == pair.poolName {
-				for _, device := range pool.devices {
-					if vfioAttribute(device, "resource.kubernetes.io/pciBusID") == pair.pciBusID {
+			if *pool[0].Spec.NodeName != pair.nodeName || pool[0].Spec.Pool.Name != pair.poolName {
+				continue
+			}
+			for _, slice := range pool {
+				for _, device := range slice.Spec.Devices {
+					if framework.DRADeviceAttributeString(device, "resource.kubernetes.io/pciBusID") == pair.pciBusID {
 						names = append(names, device.Name)
 					}
 				}
@@ -525,30 +513,29 @@ func expectVfioAllocatableSnapshot(ctx context.Context, claim *resourceapi.Resou
 	vfio := snapshot[pair.vfio.Name].Vfio
 	Expect(vfio).NotTo(BeNil())
 	Expect(vfio.PCIBusID).To(Equal(pair.pciBusID))
-	Expect(vfio.UUID).To(Equal(vfioAttribute(pair.vfio, "uuid")))
+	Expect(vfio.UUID).To(Equal(framework.DRADeviceAttributeString(pair.vfio, "uuid")))
 	Expect(snapshot).To(HaveKey(pair.sibling.Name))
 	sibling := snapshot[pair.sibling.Name]
-	if vfioAttribute(pair.sibling, "type") == "gpu" {
+	if framework.DRADeviceAttributeString(pair.sibling, "type") == "gpu" {
 		Expect(sibling.GPU).NotTo(BeNil())
 		Expect(sibling.GPU.PCIBusID).To(Equal(pair.pciBusID))
-		Expect(sibling.GPU.UUID).To(Equal(vfioAttribute(pair.sibling, "uuid")))
+		Expect(sibling.GPU.UUID).To(Equal(framework.DRADeviceAttributeString(pair.sibling, "uuid")))
 	} else {
 		Expect(sibling.MigDynamic).NotTo(BeNil())
 		Expect(sibling.MigDynamic.Parent).NotTo(BeNil())
 		Expect(sibling.MigDynamic.Parent.PCIBusID).To(Equal(pair.pciBusID))
-		Expect(sibling.MigDynamic.Parent.UUID).To(Equal(vfioAttribute(pair.sibling, "parentUUID")))
+		Expect(sibling.MigDynamic.Parent.UUID).To(Equal(framework.DRADeviceAttributeString(pair.sibling, "parentUUID")))
 	}
 }
 
-// countVfioDevices returns the number of published vfio devices across all
-// gpu.nvidia.com ResourceSlices.
+// countVfioDevices returns the number of published vfio devices on the test node.
 func countVfioDevices(ctx context.Context) int {
 	slices, err := cs.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
 	count := 0
 	for _, s := range slices.Items {
-		if s.Spec.Driver != "gpu.nvidia.com" {
+		if s.Spec.Driver != "gpu.nvidia.com" || s.Spec.NodeName == nil || *s.Spec.NodeName != gpu.NodeName {
 			continue
 		}
 		for _, d := range s.Spec.Devices {
@@ -560,30 +547,32 @@ func countVfioDevices(ctx context.Context) int {
 	return count
 }
 
-// requireVfio skips the spec unless the deployed driver publishes at least one
+// requireVfio skips the spec unless the test node publishes at least one
 // vfio device (PassthroughSupport enabled + IOMMU-capable hardware).
 func requireVfio(ctx context.Context) {
+	if gpu.NodeName == "" {
+		Skip("the detected GPU has no node name")
+	}
 	if countVfioDevices(ctx) == 0 {
-		Skip("PassthroughSupport (vfio) is not enabled or no vfio device is published on the deployed cluster")
+		Skip(fmt.Sprintf("PassthroughSupport (vfio) is not enabled or no vfio device is published on node %s", gpu.NodeName))
 	}
 }
 
-// requireVfioDevices skips the spec unless at least n vfio devices are published.
+// requireVfioDevices skips the spec unless the test node publishes at least n vfio devices.
 func requireVfioDevices(ctx context.Context, n int) {
 	if got := countVfioDevices(ctx); got < n {
-		Skip(fmt.Sprintf("need %d vfio devices, cluster publishes %d", n, got))
+		Skip(fmt.Sprintf("need %d vfio devices on node %s, node publishes %d", n, gpu.NodeName, got))
 	}
 }
 
-// countGPUDevices returns the number of published gpu-type devices across all
-// gpu.nvidia.com ResourceSlices.
+// countGPUDevices returns the number of published gpu-type devices on the test node.
 func countGPUDevices(ctx context.Context) int {
 	slices, err := cs.ResourceV1().ResourceSlices().List(ctx, metav1.ListOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
 	count := 0
 	for _, s := range slices.Items {
-		if s.Spec.Driver != "gpu.nvidia.com" {
+		if s.Spec.Driver != "gpu.nvidia.com" || s.Spec.NodeName == nil || *s.Spec.NodeName != gpu.NodeName {
 			continue
 		}
 		for _, d := range s.Spec.Devices {
@@ -595,10 +584,10 @@ func countGPUDevices(ctx context.Context) int {
 	return count
 }
 
-// requireGPUs skips the spec unless at least n gpu-type devices are published.
+// requireGPUs skips the spec unless the test node publishes at least n gpu-type devices.
 func requireGPUs(ctx context.Context, n int) {
 	if got := countGPUDevices(ctx); got < n {
-		Skip(fmt.Sprintf("need %d gpu devices, cluster publishes %d", n, got))
+		Skip(fmt.Sprintf("need %d gpu devices on node %s, node publishes %d", n, gpu.NodeName, got))
 	}
 }
 
@@ -608,54 +597,6 @@ func requireGPUs(ctx context.Context, n int) {
 func expectGPUDeviceCount(ctx context.Context, want int) {
 	Eventually(func() int { return countGPUDevices(ctx) }, 2*time.Minute, 5*time.Second).
 		Should(Equal(want), "expected %d gpu-type devices published", want)
-}
-
-// podNode returns the node a pod landed on. Preferred over gpu.NodeName for
-// node-targeted actions: the pod's placement is authoritative, whereas
-// gpu.NodeName is just the first GPU DetectGPU happened to report.
-func podNode(ctx context.Context, ns, name string) string {
-	pod, err := cs.CoreV1().Pods(ns).Get(ctx, name, metav1.GetOptions{})
-	Expect(err).NotTo(HaveOccurred(), "get pod %s/%s", ns, name)
-	Expect(pod.Spec.NodeName).NotTo(BeEmpty(), "pod %s/%s not scheduled", ns, name)
-	return pod.Spec.NodeName
-}
-
-// firstPodNode returns the node of the first pod matching labelSelector.
-func firstPodNode(ctx context.Context, ns, labelSelector string) string {
-	pods, err := cs.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
-	Expect(err).NotTo(HaveOccurred())
-	Expect(pods.Items).NotTo(BeEmpty(), "no pods match %q in %s", labelSelector, ns)
-	node := pods.Items[0].Spec.NodeName
-	Expect(node).NotTo(BeEmpty(), "pod %s/%s not scheduled", ns, pods.Items[0].Name)
-	return node
-}
-
-// deletePod deletes a pod and waits for it to be gone, which also releases its
-// generated ResourceClaim (owned by the pod).
-func deletePod(ctx context.Context, ns, name string) {
-	Expect(cs.CoreV1().Pods(ns).Delete(ctx, name, metav1.DeleteOptions{})).To(Succeed())
-	Eventually(func() bool {
-		_, err := cs.CoreV1().Pods(ns).Get(ctx, name, metav1.GetOptions{})
-		return apierrors.IsNotFound(err)
-	}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "pod %s/%s never deleted", ns, name)
-}
-
-// deleteNamespace deletes a namespace and waits for it to be fully gone.
-// Deletion blocks on vfio claim unpreparation (driver switch is slow), so a
-// leftover claim could otherwise race into the next spec.
-func deleteNamespace(ctx context.Context, name string) {
-	_ = cs.CoreV1().Namespaces().Delete(ctx, name, metav1.DeleteOptions{})
-	err := wait.PollUntilContextTimeout(
-		ctx, 2*time.Second, 5*time.Minute, true,
-		func(ctx context.Context) (bool, error) {
-			_, err := cs.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
-			if apierrors.IsNotFound(err) {
-				return true, nil
-			}
-			return false, err
-		},
-	)
-	Expect(err).NotTo(HaveOccurred(), "waiting for namespace %q to be deleted", name)
 }
 
 // vfioGroupNode matches a VFIO group node name in the output of `ls /dev/vfio`:
@@ -688,12 +629,6 @@ func expectPassthroughInPod(ctx context.Context, ns, pod, container string) {
 	Expect(err).NotTo(HaveOccurred(), "exec ls /dev/vfio in %s/%s: stdout=%q stderr=%q", ns, pod, groups, groupsErr)
 	Expect(vfioGroupNode.MatchString(groups)).To(BeTrue(),
 		"no /dev/vfio/<group> node present: stdout=%q stderr=%q", groups, groupsErr)
-}
-
-func applyVfio(ctx context.Context, tmpl string, vars map[string]any) {
-	yaml, err := framework.Render(tmpl, vars)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(framework.ApplyYAML(ctx, yaml)).To(Succeed())
 }
 
 func expectPodRunning(ctx context.Context, ns, name string) {
